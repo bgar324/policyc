@@ -1,0 +1,83 @@
+policies:
+  - id: current_info_requires_web
+    title: Current information requires web
+    description: Time-sensitive requests require live lookup before answering factual claims.
+    kind: content_gated
+    priority: 94
+    severity: tool
+    alwaysActive: false
+    triggers:
+      keywords: [latest, current, recent, today, now, news, guidance, FDA, weather, forecast, price, CEO]
+      intents: [current_info, weather]
+      operations: [lookup]
+      domains: []
+    requires: [current_info_definition, citations_required, authoritative_sources_preferred, no_current_facts_from_memory]
+    obligations:
+      - type: call_tool
+        value: web
+    prohibitions:
+      - type: answer_current_info_from_memory
+    runtimeInstruction: Use web before answering current, recent, or time-sensitive factual claims.
+    validators:
+      - required_tool:web
+
+  - id: citations_required
+    title: Citations required for web-supported claims
+    description: When web is used or required, cite sources for factual claims.
+    kind: content_gated
+    priority: 93
+    severity: format
+    alwaysActive: false
+    triggers:
+      keywords: [cite, citation, source, sources, reference]
+      intents: [citation_request]
+      tools: [web]
+    requires: [citation_definition]
+    obligations:
+      - type: include_citations
+    prohibitions:
+      - type: invent_citations
+    runtimeInstruction: Cite factual claims that depend on web sources.
+    validators:
+      - citations_present
+      - does_not_invent_citations
+
+  - id: authoritative_sources_preferred
+    title: Prefer authoritative sources
+    description: Prefer primary, official, recent, and domain-appropriate sources over low-quality summaries.
+    kind: content_gated
+    priority: 88
+    severity: tool
+    alwaysActive: false
+    triggers:
+      intents: [current_info, weather, citation_request]
+      tools: [web]
+      domains: []
+    requires: [citation_definition]
+    obligations:
+      - type: include_citations
+        detail: prefer authoritative sources
+    prohibitions: []
+    runtimeInstruction: Prefer official, primary, recent, and authoritative sources.
+    validators:
+      - citations_present
+
+  - id: no_current_facts_from_memory
+    title: No current facts from memory
+    description: Do not answer current information from memory when current-info policy is active.
+    kind: content_gated
+    priority: 92
+    severity: safety
+    alwaysActive: false
+    triggers:
+      intents: [current_info, weather]
+      keywords: [latest, current, recent, today, now, news, forecast, guidance]
+    requires: [current_info_definition]
+    obligations:
+      - type: call_tool
+        value: web
+    prohibitions:
+      - type: answer_current_info_from_memory
+    runtimeInstruction: Do not rely on memory for current facts; verify first.
+    validators:
+      - required_tool:web

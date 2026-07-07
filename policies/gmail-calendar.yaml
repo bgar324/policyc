@@ -1,0 +1,124 @@
+policies:
+  - id: destructive_email_calendar_confirm
+    title: Confirm destructive email or calendar actions
+    description: Destructive Gmail or calendar actions require explicit confirmation before execution.
+    kind: content_gated
+    priority: 91
+    severity: safety
+    alwaysActive: false
+    triggers:
+      keywords: [delete, archive, trash, cancel, remove all, move meeting]
+      intents: [destructive_action]
+      tools: []
+      operations: [delete, archive, update]
+    requires: [destructive_action_definition, email_calendar_privacy]
+    obligations:
+      - type: ask_confirmation
+    prohibitions:
+      - type: destructive_action_without_confirmation
+    runtimeInstruction: Ask for explicit confirmation before destructive email or calendar actions.
+    validators:
+      - asks_confirmation_before_destructive_action
+
+  - id: send_email_requires_explicit_request
+    title: Sending email requires explicit request
+    description: Send email only when the user explicitly asks to send, not merely to draft or prepare.
+    kind: content_gated
+    priority: 89
+    severity: safety
+    alwaysActive: false
+    triggers:
+      keywords: [send email, send this email, email it, forward]
+      intents: [send_email]
+      tools: []
+      operations: [send]
+    requires: [destructive_action_definition]
+    obligations:
+      - type: ask_confirmation
+    prohibitions:
+      - type: destructive_action_without_confirmation
+    runtimeInstruction: Treat sending email as externally visible and require explicit send intent plus confirmation.
+    validators:
+      - asks_confirmation_before_destructive_action
+
+  - id: creating_drafts_safer_than_sending
+    title: Creating drafts is safer than sending
+    description: Prefer creating a draft when the user asks to prepare or draft an email.
+    kind: content_gated
+    priority: 70
+    severity: tool
+    alwaysActive: false
+    triggers:
+      keywords: [draft email, prepare email, compose email]
+      intents: [draft_email]
+      tools: []
+      operations: [draft]
+    requires: []
+    obligations:
+      - type: use_output_format
+        value: writing
+    prohibitions: []
+    runtimeInstruction: For email preparation, create or present a draft instead of sending.
+    validators:
+      - uses_writing_format
+
+  - id: email_calendar_privacy
+    title: Email and calendar privacy
+    description: Email and calendar contents are private and should be summarized minimally.
+    kind: content_gated
+    priority: 87
+    severity: privacy
+    alwaysActive: false
+    triggers:
+      keywords: [email, emails, inbox, calendar, meeting]
+      tools: [gmail, calendar]
+      artifactTypes: [email, calendar_event]
+    requires: []
+    obligations: []
+    prohibitions:
+      - type: infer_sensitive_attributes
+    runtimeInstruction: Minimize quoted private email/calendar content and avoid unnecessary disclosure.
+    validators:
+      - does_not_infer_sensitive_attributes
+
+  - id: archive_delete_distinction
+    title: Archive and delete distinction
+    description: Archive and delete are distinct actions and must not be conflated.
+    kind: content_gated
+    priority: 78
+    severity: safety
+    alwaysActive: false
+    triggers:
+      keywords: [archive, delete, trash]
+      intents: [destructive_action]
+      operations: [archive, delete]
+    requires: [destructive_action_definition]
+    obligations:
+      - type: ask_confirmation
+    prohibitions:
+      - type: destructive_action_without_confirmation
+    runtimeInstruction: Distinguish archive from delete/trash and confirm the exact action.
+    validators:
+      - asks_confirmation_before_destructive_action
+
+  - id: calendar_event_mutation_policies
+    title: Calendar event mutation policies
+    description: Creating, updating, canceling, or deleting calendar events changes external state and needs confirmation.
+    kind: content_gated
+    priority: 88
+    severity: safety
+    alwaysActive: false
+    triggers:
+      keywords: [schedule, reschedule, cancel meeting, create event, delete event, move meeting]
+      intents: [calendar_mutation]
+      tools: []
+      artifactTypes: [calendar_event]
+      operations: [create, update, delete]
+    requires: [destructive_action_definition]
+    obligations:
+      - type: ask_confirmation
+    prohibitions:
+      - type: destructive_action_without_confirmation
+    runtimeInstruction: Confirm details before creating, updating, canceling, or deleting calendar events.
+    validators:
+      - asks_confirmation_before_destructive_action

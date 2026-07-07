@@ -1,0 +1,120 @@
+policies:
+  - id: pdf_handling
+    title: PDF handling
+    description: PDF tasks require inspecting relevant pages before making document-specific claims.
+    kind: content_gated
+    priority: 82
+    severity: tool
+    alwaysActive: false
+    triggers:
+      keywords: [pdf, document]
+      intents: [pdf_summary]
+      artifactTypes: [pdf]
+      operations: [summarize, extract, analyze]
+    requires: [artifact_inspection_definition]
+    obligations:
+      - type: inspect_artifact
+    prohibitions: []
+    runtimeInstruction: Inspect relevant PDF pages before summarizing or extracting document-specific information.
+    validators:
+      - inspects_artifact
+
+  - id: pdf_specific_claims_cite_pages
+    title: Cite pages for specific PDF claims
+    description: Specific claims about PDF content should cite page or section locations.
+    kind: content_gated
+    priority: 81
+    severity: format
+    alwaysActive: false
+    triggers:
+      artifactTypes: [pdf]
+      artifactFeatures: [tables, charts, figures]
+    requires: [citation_definition, pdf_handling]
+    obligations:
+      - type: cite_page_or_section
+    prohibitions:
+      - type: invent_citations
+    runtimeInstruction: Cite page or section locations for specific PDF claims.
+    validators:
+      - cites_page_or_section
+      - does_not_invent_citations
+
+  - id: spreadsheet_handling
+    title: Spreadsheet handling
+    description: Spreadsheet work should preserve structure and be careful with formulas, tables, and derived data.
+    kind: content_gated
+    priority: 80
+    severity: tool
+    alwaysActive: false
+    triggers:
+      keywords: [spreadsheet, sheet, excel, csv, formulas]
+      intents: [spreadsheet_edit]
+      artifactTypes: [spreadsheet]
+      operations: [edit, extract, summarize]
+    requires: [artifact_inspection_definition]
+    obligations:
+      - type: inspect_artifact
+      - type: preserve_data_structure
+    prohibitions: []
+    runtimeInstruction: Preserve spreadsheet structure and inspect relevant cells before summarizing or editing.
+    validators:
+      - inspects_artifact
+
+  - id: preserve_spreadsheet_formulas
+    title: Preserve spreadsheet formulas
+    description: When spreadsheets contain formulas, do not overwrite or flatten them unless explicitly requested.
+    kind: content_gated
+    priority: 84
+    severity: safety
+    alwaysActive: false
+    triggers:
+      artifactFeatures: [formulas, formula]
+      risks: [data_integrity]
+    requires: [spreadsheet_handling]
+    obligations:
+      - type: preserve_formulas
+      - type: preserve_data_structure
+    prohibitions: []
+    runtimeInstruction: Preserve formulas and derived-data structure unless explicitly asked to change them.
+    validators:
+      - preserves_spreadsheet_formulas
+
+  - id: chart_table_extraction_caution
+    title: Chart and table extraction caution
+    description: Chart and table extraction from artifacts requires uncertainty and no fake precision.
+    kind: content_gated
+    priority: 83
+    severity: safety
+    alwaysActive: false
+    triggers:
+      artifactTypes: [pdf]
+      artifactFeatures: [chart, charts, table, tables, figures]
+      risks: [numeric_accuracy]
+    requires: [artifact_inspection_definition, numeric_accuracy_definition]
+    obligations:
+      - type: inspect_artifact
+      - type: state_uncertainty
+    prohibitions:
+      - type: fake_precision
+    runtimeInstruction: For charts and tables, avoid exact values unless the data is explicit and inspected.
+    validators:
+      - inspects_artifact
+      - no_fake_precision
+
+  - id: inspect_visual_pages_or_charts
+    title: Inspect visual pages or charts
+    description: Visual pages, charts, and tables must be inspected when they are relevant to a summary.
+    kind: content_gated
+    priority: 82
+    severity: tool
+    alwaysActive: false
+    triggers:
+      artifactTypes: [pdf]
+      artifactFeatures: [chart, charts, table, tables, figures, images]
+    requires: [artifact_inspection_definition]
+    obligations:
+      - type: inspect_artifact
+    prohibitions: []
+    runtimeInstruction: Inspect relevant visual pages, charts, and tables before summarizing them.
+    validators:
+      - inspects_artifact

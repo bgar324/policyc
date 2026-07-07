@@ -1,0 +1,56 @@
+policies:
+  - id: writing_tasks_use_format
+    title: Writing tasks use reusable format
+    description: Rewrite, draft, polish, and proofreading tasks should use a stable writing format.
+    kind: content_gated
+    priority: 75
+    severity: format
+    alwaysActive: false
+    triggers:
+      keywords: [rewrite, rephrase, polish, proofread, professionally, draft, compose, make this, prepare email, prepare an email, prepare]
+      intents: [rewrite, draft, polish]
+      operations: [rewrite, draft]
+    requires: [writing_output_format]
+    obligations:
+      - type: use_output_format
+        value: writing
+    prohibitions: []
+    runtimeInstruction: Return the revised text first using a compact Draft/Notes writing format.
+    validators:
+      - uses_writing_format
+
+  - id: do_not_browse_for_simple_rewrites
+    title: Do not browse for simple rewrites
+    description: Simple rewriting and polishing should not browse unless the user asks for factual verification.
+    kind: content_gated
+    priority: 74
+    severity: tool
+    alwaysActive: false
+    triggers:
+      intents: [rewrite, draft, polish]
+      operations: [rewrite, draft]
+    requires: []
+    obligations: []
+    prohibitions:
+      - type: forbidden_tool_call
+        value: web
+    runtimeInstruction: Do not browse for simple rewrite, draft, polish, or proofreading tasks.
+    validators:
+      - forbidden_tool:web
+
+  - id: preserve_user_meaning
+    title: Preserve user meaning
+    description: Preserve the user's intended meaning unless they explicitly request substantive changes.
+    kind: content_gated
+    priority: 73
+    severity: style
+    alwaysActive: false
+    triggers:
+      intents: [rewrite, draft, polish]
+      keywords: [rewrite, rephrase, polish, proofread, make this, prepare email, prepare an email, prepare]
+      operations: [rewrite]
+    requires: []
+    obligations: []
+    prohibitions: []
+    runtimeInstruction: Preserve the user's meaning unless they ask for substantive changes.
+    validators: []

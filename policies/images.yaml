@@ -1,0 +1,100 @@
+policies:
+  - id: image_generation_requires_tool
+    title: Image generation requires image tool
+    description: Requests to create images must use the image generation tool.
+    kind: content_gated
+    priority: 90
+    severity: tool
+    alwaysActive: false
+    triggers:
+      keywords: [generate image, create image, edit image, modify image, draw, illustration, picture]
+      intents: [image_generation]
+      artifactTypes: [generated_image]
+      operations: [create, edit]
+    requires: []
+    obligations:
+      - type: call_tool
+        value: image
+    prohibitions: []
+    runtimeInstruction: Use the image tool for image generation requests.
+    validators:
+      - required_tool:image
+
+  - id: image_interpretation_requires_inspection
+    title: Image interpretation requires inspection
+    description: Image description or analysis requires inspecting the image before making claims.
+    kind: content_gated
+    priority: 84
+    severity: tool
+    alwaysActive: false
+    triggers:
+      intents: [image_interpretation]
+      artifactTypes: [image]
+      operations: [describe, analyze, summarize]
+    requires: [artifact_inspection_definition]
+    obligations:
+      - type: inspect_artifact
+    prohibitions: []
+    runtimeInstruction: Inspect the image before describing or analyzing it.
+    validators:
+      - inspects_artifact
+
+  - id: unknown_person_no_identification
+    title: Do not identify unknown people
+    description: Do not identify a person in an image unless the identity was provided by the user.
+    kind: content_gated
+    priority: 86
+    severity: safety
+    alwaysActive: false
+    triggers:
+      intents: [identification]
+      artifactFeatures: [person, face, people]
+    requires: [sensitive_attributes_no_inference]
+    obligations: []
+    prohibitions:
+      - type: identify_unknown_person
+    runtimeInstruction: Do not identify unknown people in images.
+    validators:
+      - does_not_identify_unknown_person
+
+  - id: sensitive_attributes_no_inference
+    title: Do not infer sensitive attributes
+    description: Do not infer sensitive demographic, health, religious, political, or similar traits from images.
+    kind: content_gated
+    priority: 85
+    severity: privacy
+    alwaysActive: false
+    triggers:
+      intents: [sensitive_attribute]
+      artifactFeatures: [person, face, people]
+      risks: [sensitive_attributes]
+    requires: [sensitive_attribute_definition]
+    obligations: []
+    prohibitions:
+      - type: infer_sensitive_attributes
+    runtimeInstruction: Do not infer sensitive attributes from appearance or ambiguous context.
+    validators:
+      - does_not_infer_sensitive_attributes
+
+  - id: chart_image_numeric_caution
+    title: Chart-in-image numeric caution
+    description: Use caution with chart or graph values in images and avoid fake exact values.
+    kind: content_gated
+    priority: 83
+    severity: safety
+    alwaysActive: false
+    triggers:
+      intents: [chart_interpretation]
+      artifactTypes: [image]
+      artifactFeatures: [chart, charts, graph, plot]
+      risks: [numeric_accuracy]
+    requires: [artifact_inspection_definition, numeric_accuracy_definition]
+    obligations:
+      - type: inspect_artifact
+      - type: state_uncertainty
+    prohibitions:
+      - type: fake_precision
+    runtimeInstruction: For chart values in images, describe trends and approximate values unless exact data is available.
+    validators:
+      - inspects_artifact
+      - no_fake_precision
