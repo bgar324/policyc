@@ -136,7 +136,7 @@ pnpm policyc experiment \
   --provider openai \
   --model gpt-5-mini-2025-08-07 \
   --samples 1 --concurrency 1 \
-  --max-output-tokens 256 --max-calls 2 \
+  --max-output-tokens 1024 --max-calls 2 \
   --max-cost-usd 0.02 --retries 0 \
   --run-label smoke-1 \
   --output runs/openai-smoke --dry-run
@@ -157,7 +157,7 @@ pnpm policyc experiment \
   --provider openai \
   --model gpt-5-mini-2025-08-07 \
   --samples 3 --concurrency 2 \
-  --max-output-tokens 256 --max-calls 120 \
+  --max-output-tokens 1024 --max-calls 120 \
   --max-cost-usd 0.50 --retries 0 \
   --output runs/openai-pilot --dry-run
 ```

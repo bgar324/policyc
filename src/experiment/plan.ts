@@ -7,6 +7,7 @@ import { loadPolicies } from "../policy/loader.js";
 import { loadBehavioralCases } from "./cases.js";
 
 const STRATEGIES: CompilationStrategy[] = ["full_policy", "compiler_slice", "kernel_only", "direct_matches", "conservative_expanded"];
+const INPUT_TOKEN_OVERHEAD_PER_CALL = 64;
 type Options = {
   cases: string; strategies: CompilationStrategy[]; provider: "fake" | "openai"; model: string;
   samples: number; concurrency: number; maxOutputTokens: number; maxCalls: number; maxInputTokens?: number;
@@ -41,7 +42,7 @@ export function runExperimentCommand(argv: string[]): void {
   });
   const logicalTrials = casePlans.length * options.strategies.length * options.samples;
   const maxAttempts = options.retries + 1;
-  const estimatedInputTokens = pendingArtifacts.reduce((sum, item) => sum + item.artifact.tokenCount.tokens * options.samples, 0);
+  const estimatedInputTokens = pendingArtifacts.reduce((sum, item) => sum + item.artifact.tokenCount.tokens * options.samples, 0) + logicalTrials * INPUT_TOKEN_OVERHEAD_PER_CALL;
   const derivedInputLimit = options.maxInputTokens ?? estimatedInputTokens * maxAttempts;
   const derivedOutputLimit = options.maxOutputTokensTotal ?? logicalTrials * options.maxOutputTokens * maxAttempts;
   if (options.provider === "openai" && options.maxCalls < logicalTrials) throw new Error(`--max-calls ${options.maxCalls} is below ${logicalTrials} logical trials`);
@@ -51,6 +52,7 @@ export function runExperimentCommand(argv: string[]): void {
     ...(options.runLabel ? { runLabel: options.runLabel } : {}),
     compilerHash, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
     modelParameters: { max_output_tokens: options.maxOutputTokens, store: false }, sampleCount: options.samples,
+    inputTokenOverheadPerCall: INPUT_TOKEN_OVERHEAD_PER_CALL,
     maxConcurrency: options.concurrency, timeoutSeconds: 60,
     retryPolicy: { maxAttempts, initialBackoffSeconds: 1, maxBackoffSeconds: 30, jitterFraction: 0.1, retryAmbiguous: options.retryAmbiguous },
     rateLimit: { requestsPerWindow: 60, windowSeconds: 60, maxConcurrentRequests: options.concurrency },

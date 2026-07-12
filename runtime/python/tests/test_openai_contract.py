@@ -102,6 +102,32 @@ async def test_non_success_outcomes(tmp_path, body, outcome) -> None:  # type: i
 
 
 @pytest.mark.asyncio
+async def test_incomplete_response_retains_usage_and_metadata(tmp_path) -> None:
+    body = {
+        **response_body(),
+        "status": "incomplete",
+        "incomplete_details": {"reason": "max_output_tokens"},
+        "output": [{"type": "reasoning"}],
+    }
+    provider = OpenAIResponsesProvider(
+        api_key="test",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json=body, headers={"x-request-id": "req_incomplete"})
+        ),
+    )
+    with pytest.raises(ProviderError) as caught:
+        await provider.invoke(request(tmp_path))
+    partial = caught.value.partial_response
+    assert partial is not None
+    assert partial.status == "incomplete"
+    assert partial.input_tokens == 100
+    assert partial.cached_input_tokens == 40
+    assert partial.output_tokens == 20
+    assert partial.reasoning_tokens == 5
+    assert partial.provider_request_id == "req_incomplete"
+
+
+@pytest.mark.asyncio
 async def test_refusal_and_tool_normalization(tmp_path) -> None:
     body = response_body(
         output=[

@@ -1,17 +1,22 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import subprocess
 from pathlib import Path
 
+import httpx
 import pytest
 
 from policyc_runtime.blind_grading import build_blind_packets
 from policyc_runtime.budget import BudgetExceeded, BudgetLedger
 from policyc_runtime.case_evaluator import evaluate_case
 from policyc_runtime.experiment_models import BehavioralCase, BudgetConfig, PairedRunManifest
+from policyc_runtime.paired_manifest import load_paired_run
 from policyc_runtime.paired_report import _cached_savings, _sum_known, build_paired_report
+from policyc_runtime.paired_runtime import PairedExperimentRuntime
 from policyc_runtime.pricing import ModelPrice, calculate_cost
-from policyc_runtime.providers import ProviderResponse
+from policyc_runtime.providers import OpenAIResponsesProvider, ProviderResponse
 
 
 def price() -> ModelPrice:
@@ -65,6 +70,81 @@ async def test_missing_usage_makes_accounting_unknown() -> None:
     assert snapshot["actualInputTokens"] is None
     assert snapshot["actualOutputTokens"] is None
     assert snapshot["actualCostUsd"] is None
+
+
+@pytest.mark.asyncio
+async def test_incomplete_usage_is_costed_and_persisted(tmp_path: Path, monkeypatch) -> None:
+    root = Path(__file__).parents[3]
+    output = tmp_path / "incomplete-run"
+    await asyncio.to_thread(
+        subprocess.run,
+        [
+            "node",
+            "dist/cli.js",
+            "experiment",
+            "--cases",
+            "eval/behavioral/smoke-v1.jsonl",
+            "--strategies",
+            "full_policy,compiler_slice",
+            "--provider",
+            "openai",
+            "--model",
+            "gpt-5-mini-2025-08-07",
+            "--samples",
+            "1",
+            "--concurrency",
+            "1",
+            "--max-output-tokens",
+            "256",
+            "--max-calls",
+            "2",
+            "--max-cost-usd",
+            "0.02",
+            "--retries",
+            "0",
+            "--run-label",
+            "incomplete-test",
+            "--output",
+            str(output),
+            "--dry-run",
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    body = {
+        "id": "resp_incomplete",
+        "model": "gpt-5-mini-2025-08-07",
+        "status": "incomplete",
+        "incomplete_details": {"reason": "max_output_tokens"},
+        "output": [{"type": "reasoning"}],
+        "usage": {
+            "input_tokens": 100,
+            "input_tokens_details": {"cached_tokens": 0},
+            "output_tokens": 256,
+            "output_tokens_details": {"reasoning_tokens": 256},
+            "total_tokens": 356,
+        },
+    }
+    provider = OpenAIResponsesProvider(
+        api_key="offline-test",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(200, json=body, headers={"x-request-id": "req_incomplete"})
+        ),
+    )
+    monkeypatch.setenv("POLICYC_CATALOG", str(tmp_path / "catalog.sqlite"))
+    report = await PairedExperimentRuntime(load_paired_run(output / "manifest.v2.json"), provider).run()
+    budget = json.loads((output / "budget.json").read_text())
+    assert report["outcomes"] == {"completed": 0, "failed": 2, "ambiguous": 0}
+    assert budget["accountingComplete"] is True
+    assert budget["actualInputTokens"] == 200
+    assert budget["actualOutputTokens"] == 512
+    assert budget["actualCostUsd"] == pytest.approx(0.001074)
+    assert len(list((output / "provider").glob("*.json"))) == 2
+    trials = [json.loads(path.read_text()) for path in (output / "trials").glob("*.json")]
+    assert all(item["inputTokens"] == 100 and item["outputTokens"] == 256 for item in trials)
+    assert all(item["costUsd"] is not None for item in trials)
 
 
 def test_cached_cost_is_not_zero() -> None:

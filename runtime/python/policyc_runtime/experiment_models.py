@@ -138,6 +138,7 @@ class PairedRunManifest(StrictModel):
     model: str
     modelParameters: dict[str, Any]
     sampleCount: int = Field(ge=1)
+    inputTokenOverheadPerCall: int = Field(default=0, ge=0)
     maxConcurrency: int = Field(ge=1)
     timeoutSeconds: float = Field(gt=0)
     retryPolicy: RetryPolicyV2

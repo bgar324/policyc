@@ -51,12 +51,19 @@ class RawProviderResponse:
 
 class ProviderError(Exception):
     def __init__(
-        self, message: str, *, retryable: bool, retry_after: float | None = None, outcome: str = "terminal_error"
+        self,
+        message: str,
+        *,
+        retryable: bool,
+        retry_after: float | None = None,
+        outcome: str = "terminal_error",
+        partial_response: ProviderResponse | None = None,
     ) -> None:
         super().__init__(message)
         self.retryable = retryable
         self.retry_after = retry_after
         self.outcome = outcome
+        self.partial_response = partial_response
 
 
 class AmbiguousProviderError(ProviderError):

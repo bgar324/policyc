@@ -39,11 +39,11 @@ def build_paired_report(
             "severeFailureRate": _proportion(severe, len(rows)),
             "violationRate": _proportion(violations, len(rows)),
             "meanAnswerQuality": _mean_nested(rows, "evaluation", "qualityScore"),
-            "inputTokens": _sum_known(rows, "inputTokens"),
-            "cachedInputTokens": _sum_known(rows, "cachedInputTokens"),
-            "outputTokens": _sum_known(rows, "outputTokens"),
-            "costUsd": _sum_known(rows, "costUsd"),
-            "meanLatencyMs": _mean_known(rows, "latencyMs"),
+            "inputTokens": _sum_known(all_rows, "inputTokens"),
+            "cachedInputTokens": _sum_known(all_rows, "cachedInputTokens"),
+            "outputTokens": _sum_known(all_rows, "outputTokens"),
+            "costUsd": _sum_known(all_rows, "costUsd"),
+            "meanLatencyMs": _mean_known(all_rows, "latencyMs"),
         }
     indexed = {(row["caseId"], row["sampleIndex"], row["strategy"]): row for row in completed}
     pairs: list[dict[str, Any]] = []
@@ -123,7 +123,7 @@ def build_paired_report(
             "totalGenerationCostUsd": budget["actualCostUsd"],
             "graderCostUsd": None,
             "ambiguousAttemptExposureUsd": budget["ambiguousCostExposureUsd"],
-            "cachedTokenSavingsUsd": _cached_savings(completed, price),
+            "cachedTokenSavingsUsd": _cached_savings(trials, price),
         },
         "limitations": [
             "Confidence intervals and paired tests are descriptive at small sample sizes.",

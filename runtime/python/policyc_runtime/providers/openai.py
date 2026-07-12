@@ -109,77 +109,108 @@ class OpenAIResponsesProvider:
             details = body.get("incomplete_details") or body.get("error") or {}
             reason = details.get("reason") if isinstance(details, dict) else None
             outcome = "content_filtered" if reason == "content_filter" else "incomplete"
-            raise ProviderError(f"OpenAI response status {status}: {details}", retryable=False, outcome=outcome)
-        usage = body.get("usage")
-        if (
-            not isinstance(usage, dict)
-            or not isinstance(usage.get("input_tokens"), int)
-            or not isinstance(usage.get("output_tokens"), int)
-        ):
-            raise ProviderError(
-                "OpenAI response is missing required usage metadata", retryable=False, outcome="missing_usage"
-            )
-        input_details = usage.get("input_tokens_details") or {}
-        output_details = usage.get("output_tokens_details") or {}
-        texts: list[str] = []
-        refusals: list[str] = []
-        tools: list[dict[str, Any]] = []
-        for item in body.get("output", []):
-            if not isinstance(item, dict):
-                continue
-            item_type = item.get("type")
-            if item_type == "web_search_call":
-                tools.append({"name": "web", "type": "web_search", "id": item.get("id"), "status": item.get("status")})
-            elif item_type == "function_call":
-                tools.append(
-                    {
-                        "name": item.get("name"),
-                        "type": "function",
-                        "id": item.get("id"),
-                        "arguments": item.get("arguments"),
-                        "status": item.get("status"),
-                    }
+            partial_response = None
+            try:
+                partial_response = _parse_response_body(
+                    body,
+                    raw,
+                    requested_model,
+                    status=str(status),
+                    outcome=outcome,
+                    allow_empty=True,
                 )
-            for content in item.get("content", []):
-                if not isinstance(content, dict):
-                    continue
-                if content.get("type") == "output_text" and isinstance(content.get("text"), str):
-                    texts.append(content["text"])
-                if content.get("type") == "refusal" and isinstance(content.get("refusal"), str):
-                    refusals.append(content["refusal"])
-        top_level_text = body.get("output_text")
-        text: str = top_level_text if isinstance(top_level_text, str) else "\n".join(texts)
-        refusal = "\n".join(refusals) or None
-        if not text and refusal:
-            text = refusal
-        if not text and not tools:
+            except ProviderError:
+                pass
             raise ProviderError(
-                "OpenAI completed response contains no text or refusal", retryable=False, outcome="malformed_response"
+                f"OpenAI response status {status}: {details}",
+                retryable=False,
+                outcome=outcome,
+                partial_response=partial_response,
             )
-        return ProviderResponse(
-            text=text,
-            input_tokens=usage["input_tokens"],
-            output_tokens=usage["output_tokens"],
-            cached_input_tokens=_optional_int(input_details.get("cached_tokens")),
-            reasoning_tokens=_optional_int(output_details.get("reasoning_tokens")),
-            total_tokens=_optional_int(usage.get("total_tokens")),
-            tool_calls=tools,
-            metadata={"requested_model": requested_model},
-            response_id=_optional_str(body.get("id")),
-            actual_model=_optional_str(body.get("model")),
-            status="completed",
-            outcome="refused" if refusal else "completed",
-            refusal=refusal,
-            service_tier=_optional_str(body.get("service_tier")),
-            provider_request_id=raw.headers.get("x-request-id"),
-            created_at=_optional_int(body.get("created_at")),
-            completed_at=_optional_int(body.get("completed_at")),
-            request_duration_ms=raw.duration_ms,
+        return _parse_response_body(
+            body, raw, requested_model, status="completed", outcome="completed", allow_empty=False
         )
 
     async def invoke(self, request: ProviderRequest) -> ProviderResponse:
         raw = await self.send(request)
         return self.parse(raw, request.model)
+
+
+def _parse_response_body(
+    body: dict[str, Any],
+    raw: RawProviderResponse,
+    requested_model: str,
+    *,
+    status: str,
+    outcome: str,
+    allow_empty: bool,
+) -> ProviderResponse:
+    usage = body.get("usage")
+    if (
+        not isinstance(usage, dict)
+        or not isinstance(usage.get("input_tokens"), int)
+        or not isinstance(usage.get("output_tokens"), int)
+    ):
+        raise ProviderError(
+            "OpenAI response is missing required usage metadata", retryable=False, outcome="missing_usage"
+        )
+    input_details = usage.get("input_tokens_details") or {}
+    output_details = usage.get("output_tokens_details") or {}
+    texts: list[str] = []
+    refusals: list[str] = []
+    tools: list[dict[str, Any]] = []
+    for item in body.get("output", []):
+        if not isinstance(item, dict):
+            continue
+        item_type = item.get("type")
+        if item_type == "web_search_call":
+            tools.append({"name": "web", "type": "web_search", "id": item.get("id"), "status": item.get("status")})
+        elif item_type == "function_call":
+            tools.append(
+                {
+                    "name": item.get("name"),
+                    "type": "function",
+                    "id": item.get("id"),
+                    "arguments": item.get("arguments"),
+                    "status": item.get("status"),
+                }
+            )
+        for content in item.get("content", []):
+            if not isinstance(content, dict):
+                continue
+            if content.get("type") == "output_text" and isinstance(content.get("text"), str):
+                texts.append(content["text"])
+            if content.get("type") == "refusal" and isinstance(content.get("refusal"), str):
+                refusals.append(content["refusal"])
+    top_level_text = body.get("output_text")
+    text: str = top_level_text if isinstance(top_level_text, str) else "\n".join(texts)
+    refusal = "\n".join(refusals) or None
+    if not text and refusal:
+        text = refusal
+    if not allow_empty and not text and not tools:
+        raise ProviderError(
+            "OpenAI completed response contains no text or refusal", retryable=False, outcome="malformed_response"
+        )
+    return ProviderResponse(
+        text=text,
+        input_tokens=usage["input_tokens"],
+        output_tokens=usage["output_tokens"],
+        cached_input_tokens=_optional_int(input_details.get("cached_tokens")),
+        reasoning_tokens=_optional_int(output_details.get("reasoning_tokens")),
+        total_tokens=_optional_int(usage.get("total_tokens")),
+        tool_calls=tools,
+        metadata={"requested_model": requested_model, "incomplete_details": body.get("incomplete_details")},
+        response_id=_optional_str(body.get("id")),
+        actual_model=_optional_str(body.get("model")),
+        status=status,
+        outcome="refused" if refusal else outcome,
+        refusal=refusal,
+        service_tier=_optional_str(body.get("service_tier")),
+        provider_request_id=raw.headers.get("x-request-id"),
+        created_at=_optional_int(body.get("created_at")),
+        completed_at=_optional_int(body.get("completed_at")),
+        request_duration_ms=raw.duration_ms,
+    )
 
 
 def parse_retry_after(value: str | None, now: datetime | None = None) -> float | None:

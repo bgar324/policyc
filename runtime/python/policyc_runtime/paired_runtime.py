@@ -194,7 +194,8 @@ class PairedExperimentRuntime:
         start_attempt = int(previous.get("attemptCount", 0)) + 1
         for attempt in range(start_attempt, manifest.retryPolicy.maxAttempts + 1):
             try:
-                reservation = await self.ledger.reserve(artifact.tokenCount.tokens, output_cap, spec.trial_id)
+                estimated_input = artifact.tokenCount.tokens + manifest.inputTokenOverheadPerCall
+                reservation = await self.ledger.reserve(estimated_input, output_cap, spec.trial_id)
             except BudgetExceeded as error:
                 result = self._failed_result(spec, "failed", attempt - 1, error)
                 result["stopReason"] = "hard_budget_reached_before_attempt"
@@ -210,7 +211,7 @@ class PairedExperimentRuntime:
             )
             started = perf_counter()
             try:
-                async with self.rate_limiter.limit(artifact.tokenCount.tokens):
+                async with self.rate_limiter.limit(estimated_input):
                     response = await asyncio.wait_for(
                         self._call_and_persist_raw(request, spec, attempt), timeout=manifest.timeoutSeconds
                     )
@@ -237,6 +238,44 @@ class PairedExperimentRuntime:
                 if not manifest.retryPolicy.retryAmbiguous or attempt >= manifest.retryPolicy.maxAttempts:
                     return result
             except ProviderError as error:
+                if error.partial_response is not None:
+                    response = error.partial_response
+                    cached = response.cached_input_tokens if response.cached_input_tokens is not None else 0
+                    cost = await self.ledger.complete(
+                        reservation, response.input_tokens, cached, response.output_tokens, spec.trial_id
+                    )
+                    response.estimated_cost_usd = cost
+                    latency = response.request_duration_ms or (perf_counter() - started) * 1000
+                    record = {
+                        "trialId": spec.trial_id,
+                        "attemptCount": attempt,
+                        "latencyMs": latency,
+                        "costUsd": cost,
+                        "response": asdict(response),
+                    }
+                    self.store.write_json_atomic(self.root / "provider" / f"{spec.trial_id}.json", record)
+                    result = self._failed_result(spec, "failed", attempt, error)
+                    result.update(
+                        {
+                            "requestedModel": manifest.model,
+                            "actualModel": response.actual_model,
+                            "responseId": response.response_id,
+                            "providerRequestId": response.provider_request_id,
+                            "responseOutcome": response.outcome,
+                            "responseText": response.text,
+                            "refusal": response.refusal,
+                            "toolCalls": response.tool_calls,
+                            "inputTokens": response.input_tokens,
+                            "cachedInputTokens": response.cached_input_tokens,
+                            "outputTokens": response.output_tokens,
+                            "reasoningTokens": response.reasoning_tokens,
+                            "totalTokens": response.total_tokens,
+                            "latencyMs": latency,
+                            "costUsd": cost,
+                        }
+                    )
+                    self.store.write_json_atomic(self.root / "trials" / f"{spec.trial_id}.json", result)
+                    return result
                 await self.ledger.fail_definitive(reservation, spec.trial_id)
                 if not error.retryable or attempt >= manifest.retryPolicy.maxAttempts:
                     result = self._failed_result(spec, "failed", attempt, error)
@@ -375,12 +414,19 @@ def spend_plan(loaded: LoadedPairedRun) -> dict[str, Any]:
     manifest = loaded.manifest
     registry = load_pricing(manifest.pricing.registryPath, manifest.pricing.registryVersion)
     price = registry.lookup(manifest.model)
-    logical_input = sum(artifact.tokenCount.tokens for artifact in loaded.artifacts.values()) * manifest.sampleCount
+    logical_trials = len(loaded.artifacts) * manifest.sampleCount
+    logical_input = (
+        sum(artifact.tokenCount.tokens for artifact in loaded.artifacts.values()) * manifest.sampleCount
+        + logical_trials * manifest.inputTokenOverheadPerCall
+    )
     input_by_strategy = {
         strategy: sum(
             artifact.tokenCount.tokens for key, artifact in loaded.artifacts.items() if key.endswith(f":{strategy}")
         )
         * manifest.sampleCount
+        + len([key for key in loaded.artifacts if key.endswith(f":{strategy}")])
+        * manifest.sampleCount
+        * manifest.inputTokenOverheadPerCall
         for strategy in manifest.strategies
     }
     logical_output_cap = (
@@ -394,10 +440,11 @@ def spend_plan(loaded: LoadedPairedRun) -> dict[str, Any]:
         "runId": manifest.runId,
         "provider": manifest.provider,
         "model": manifest.model,
-        "logicalTrials": len(loaded.artifacts) * manifest.sampleCount,
-        "maximumProviderCalls": len(loaded.artifacts) * manifest.sampleCount * retry_factor,
+        "logicalTrials": logical_trials,
+        "maximumProviderCalls": logical_trials * retry_factor,
         "logicalInputTokens": logical_input,
         "inputTokensByStrategy": input_by_strategy,
+        "inputTokenOverheadPerCall": manifest.inputTokenOverheadPerCall,
         "logicalOutputTokenCap": logical_output_cap,
         "estimatedMinimumCostUsd": calculate_cost(price, logical_input, 0, 0),
         "estimatedExpectedCostUsd": calculate_cost(price, logical_input, 0, logical_output_cap // 2),
