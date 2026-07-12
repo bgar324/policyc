@@ -167,7 +167,7 @@ pnpm policyc experiment \
 
 Use `development-v1.jsonl` for iteration, freeze compiler and cases, then run a versioned evaluation set once. `pilot-v2.jsonl` is a development-informed pilot, not a held-out set; its preregistration and the rejected v1 audit live under `eval/`. Every manifest persists the split, version, and canonical hash; edits or relabeling cause validation failure. Export discovered failures to a separate development file rather than rewriting evaluated inputs. `adversarial-template-v1.jsonl` is intentionally non-executable until independently authored cases replace its template row.
 
-Confirmed compiler 0.5 held-out failures were copied—not moved or edited—into `eval/behavioral/compiler-v0.6-regression-v1.jsonl` as a nine-case development-only regression set. It is suitable for offline validation and a separately authorized paid development smoke, but never as fresh held-out evidence.
+Confirmed compiler 0.5 held-out failures were copied—not moved or edited—into `eval/behavioral/compiler-v0.6-regression-v1.jsonl` as a nine-case development-only regression set. Its 18-call compiler 0.6 smoke produced eight both-pass pairs and one compiler-only pass under strategy-blind grading, with no compiler regressions. This is targeted development evidence, never fresh held-out evidence; the complete audit is in `eval/audits/compiler-v0.6-development-smoke.md`.
 
 ### Blinded grading
 
@@ -210,6 +210,8 @@ Completed responses can be regraded offline after a versioned evaluator correcti
 ```bash
 .venv/bin/python -m policyc_runtime.regrade runs/<run-directory>
 ```
+
+Evaluator 2.4 recognizes semantically equivalent unavailable-source disclosures and distinguishes visual references to an image “background” from first-person promises of asynchronous work. Derived regrades remain separate and hash-linked; original manifests, trials, raw responses, evaluations, and reports are immutable.
 
 The command writes a hash-linked addendum, derived report, and derived evaluations under `derived/evaluator-<version>/`. Original manifests, raw responses, trials, evaluations, and reports remain unchanged. Incomplete trials remain failures.
 

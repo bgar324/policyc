@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from .case_evaluator import evaluate_case
+from .case_evaluator import EVALUATOR_VERSION, evaluate_case
 from .experiment_models import EvaluatorRef
 from .hashing import canonical_json, sha256
 from .paired_manifest import load_paired_run
@@ -14,7 +14,6 @@ from .pricing import load_pricing
 from .providers import ProviderResponse
 
 EVALUATOR_ID = "independent-rules"
-EVALUATOR_VERSION = "2.3.0"
 
 
 def regrade_run(run_directory: Path) -> dict[str, Any]:

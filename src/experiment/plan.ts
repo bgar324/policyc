@@ -62,7 +62,7 @@ export function runExperimentCommand(argv: string[]): void {
     maxConcurrency: options.concurrency, timeoutSeconds: 60,
     retryPolicy: { maxAttempts, initialBackoffSeconds: 1, maxBackoffSeconds: 30, jitterFraction: 0.1, retryAmbiguous: options.retryAmbiguous },
     rateLimit: { requestsPerWindow: 60, windowSeconds: 60, maxConcurrentRequests: options.concurrency },
-    evaluator: { id: "independent-rules", version: "2.3.0" }, grader: { type: "manual", version: "1.0.0", blind: true },
+    evaluator: { id: "independent-rules", version: "2.4.0" }, grader: { type: "manual", version: "1.0.0", blind: true },
     budget: { maxLogicalTrials: logicalTrials, maxCalls: options.maxCalls, maxInputTokens: derivedInputLimit, maxOutputTokens: derivedOutputLimit, maxCostUsd: options.maxCostUsd },
     pricing: { registryPath: resolve("pricing/openai-v1.json"), registryVersion: "openai-2026-07-11" },
     outputDirectory: ".", rawResponseRetention: "full"

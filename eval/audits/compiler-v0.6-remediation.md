@@ -2,7 +2,7 @@
 
 ## Status
 
-Compiler 0.6 is offline-ready for a small development smoke. It is not yet behaviorally validated and does not change the compiler 0.5 held-out result.
+Compiler 0.6 passed its nine-case paired development smoke under strategy-blind semantic grading. This result is targeted development evidence, not a new held-out result, and does not change the compiler 0.5 held-out estimate.
 
 The frozen `held-out-v1` cases and their recorded responses remain unchanged. The nine confirmed regression cases were copied into `eval/behavioral/compiler-v0.6-regression-v1.jsonl` with new IDs and a `development` split.
 
@@ -31,4 +31,6 @@ Focused prompt tests assert that unavailable-tool directives do not leak, publis
 
 ## Interpretation and next gate
 
-These checks establish selector and emitter behavior, not model-level obligation preservation. The next justified spend is a small paired development smoke over the nine-case regression set. It must use a new output directory, explicit call/cost ceilings, and separate authorization. If that smoke passes manual or blinded review, freeze compiler 0.6 and evaluate it on a newly authored held-out set; do not rerun `held-out-v1` as held-out evidence.
+The paired development smoke completed 18/18 calls for $0.0557272. Strategy-blind grading found eight both-pass pairs and one compiler-only pass, with no compiler regressions. Evaluator 2.4 independently reproduced those paired counts in a zero-cost offline regrade after correcting three demonstrated semantic false negatives in evaluator 2.3.
+
+Compiler 0.6 is now frozen at Git commit `8672787a68061d1065472200e61927290c86fe40`. The next evidence-producing step is a newly authored held-out set; do not rerun `held-out-v1` as held-out evidence. Full development-smoke evidence is recorded in `eval/audits/compiler-v0.6-development-smoke.md`.
