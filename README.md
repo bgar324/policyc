@@ -186,6 +186,14 @@ The database persists across process restarts and is ignored by Git. Back up `.p
 
 Repeated invocations with the same experiment configuration and output directory reuse the same run ID and completed trials. Reusing an output directory with an incompatible configuration is rejected instead of silently starting a different run.
 
+Completed responses can be regraded offline after a versioned evaluator correction without changing source evidence or making provider calls:
+
+```bash
+.venv/bin/python -m policyc_runtime.regrade runs/<run-directory>
+```
+
+The command writes a hash-linked addendum, derived report, and derived evaluations under `derived/evaluator-<version>/`. Original manifests, raw responses, trials, evaluations, and reports remain unchanged. Incomplete trials remain failures.
+
 Terminal provider failures are preserved and never silently replayed. After correcting an external problem such as unavailable quota, start a distinct attempt with a new output directory and explicit identity, for example `--run-label smoke-2`. This retains the failed run and creates a separate catalog record.
 
 ## Verification
