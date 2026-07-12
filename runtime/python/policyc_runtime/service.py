@@ -35,7 +35,7 @@ class RunManager:
 
 
 manager = RunManager()
-app = FastAPI(title="PolicyC Runtime", version="0.2.0")
+app = FastAPI(title="PolicyC Runtime", version="0.3.0")
 
 
 @app.post("/runs", status_code=202)

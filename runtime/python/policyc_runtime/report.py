@@ -38,10 +38,14 @@ def build_report(
                 "samplesFailed": len(by_candidate[candidate_id]) - len(completed),
                 "compliance": summarize([item.compliance for item in evaluations]),
                 "answerQuality": summarize([item.answerQuality for item in evaluations]),
-                "latencyMs": summarize([item.latencyMs or 0 for item in completed]),
-                "inputTokens": summarize([float(item.inputTokens or 0) for item in completed]),
-                "outputTokens": summarize([float(item.outputTokens or 0) for item in completed]),
-                "estimatedCostUsd": summarize([item.estimatedCostUsd or 0 for item in completed]),
+                "latencyMs": summarize_optional([item.latencyMs for item in completed]),
+                "inputTokens": summarize_optional(
+                    [float(item.inputTokens) if item.inputTokens is not None else None for item in completed]
+                ),
+                "outputTokens": summarize_optional(
+                    [float(item.outputTokens) if item.outputTokens is not None else None for item in completed]
+                ),
+                "estimatedCostUsd": summarize_optional([item.estimatedCostUsd for item in completed]),
                 "violationRate": sum(bool(item.policyViolations) for item in completed) / len(completed)
                 if completed
                 else None,
@@ -87,8 +91,8 @@ def build_report(
             -item["compliance"]["mean"],
             -item["answerQuality"]["mean"],
             artifact_by_id[item["candidateId"]].tokenCount.tokens,
-            item["latencyMs"]["mean"],
-            item["estimatedCostUsd"]["mean"],
+            item["latencyMs"]["mean"] if item["latencyMs"]["mean"] is not None else math.inf,
+            item["estimatedCostUsd"]["mean"] if item["estimatedCostUsd"]["mean"] is not None else math.inf,
         ),
     )
     return {
@@ -124,6 +128,15 @@ def summarize(values: list[float]) -> dict[str, Any]:
         "standardDeviation": std,
         "confidenceInterval95": [mean - half, mean + half],
     }
+
+
+def summarize_optional(values: list[float | None]) -> dict[str, Any]:
+    known = [value for value in values if value is not None]
+    summary = summarize(known)
+    summary["unknownCount"] = len(values) - len(known)
+    if len(known) != len(values):
+        summary.update({"mean": None, "median": None, "standardDeviation": None, "confidenceInterval95": None})
+    return summary
 
 
 def compare(candidate: dict[str, Any], baseline: dict[str, Any]) -> dict[str, float | None]:

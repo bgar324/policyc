@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { emitRuntimePrompt } from "./compiler/emitter.js";
-import { canonicalJson, createArtifact, sha256 } from "./compiler/artifact.js";
-import { generateCandidateSelections } from "./compiler/candidates.js";
 import { countTokens, tokenReduction } from "./compiler/tokenCounter.js";
 import { runEval } from "./eval/runner.js";
 import { compareModels } from "./model/compare.js";
@@ -12,6 +11,8 @@ import { getPolicyById, loadPolicies } from "./policy/loader.js";
 import type { ArtifactContext } from "./policy/types.js";
 import { selectPolicies } from "./policy/selector.js";
 import { formatJson, formatMetrics, formatModelComparison, formatPolicySummary, formatSelection } from "./util/format.js";
+import { runExperimentCommand } from "./experiment/plan.js";
+import { loadBehavioralCases } from "./experiment/cases.js";
 
 type ParsedArgs = {
   command?: string;
@@ -38,6 +39,29 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (command === "experiment") {
+    runExperimentCommand(process.argv.slice(3));
+    return;
+  }
+
+  if (command === "runs") {
+    const runtime = resolve(".venv/bin/policyc-runtime");
+    const result = spawnSync(runtime, ["runs", ...process.argv.slice(3)], { stdio: "inherit", env: process.env });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`runs command exited with status ${result.status}`);
+    return;
+  }
+
+  if (command === "cases") {
+    const action = process.argv[3];
+    const caseFlag = process.argv.indexOf("--cases");
+    const path = caseFlag >= 0 ? process.argv[caseFlag + 1] : undefined;
+    if (!path || !["validate", "freeze"].includes(action)) throw new Error("usage: policyc cases <validate|freeze> --cases <jsonl>");
+    const loaded = loadBehavioralCases(path);
+    console.log(JSON.stringify({ action, path, caseCount: loaded.cases.length, datasetVersion: loaded.datasetVersion, split: loaded.split, datasetHash: loaded.datasetHash }, null, 2));
+    return;
+  }
+
   if (command === "compare-models" || command === "eval-model") {
     const strategies = args.strategy ? [args.strategy] : undefined;
     console.log(formatModelComparison(await compareModels({ limit: args.limit, strategies })));
@@ -47,29 +71,7 @@ async function main(): Promise<void> {
   const policies = loadPolicies();
 
   if (command === "compile-candidates") {
-    if (!args.input) throw new Error("compile-candidates requires --input");
-    const output = resolve(args.output ?? "experiment");
-    const artifactDir = resolve(output, "artifacts");
-    mkdirSync(artifactDir, { recursive: true });
-    const sourcePolicyId = "synthetic-enterprise-agent";
-    const sourcePolicyText = readFileSync("prompts/synthetic-enterprise-agent.md", "utf8");
-    const createdAt = new Date().toISOString();
-    const artifacts = generateCandidateSelections(policies, args.input, args.context).map(({ strategy, selection }) =>
-      createArtifact({ policies, selection, request: args.input!, context: args.context, strategy, sourcePolicyId, sourcePolicyText, model: args.model, createdAt })
-    );
-    for (const artifact of artifacts) writeFileSync(resolve(artifactDir, `${artifact.candidateId}.json`), `${canonicalJson(artifact)}\n`);
-    const full = artifacts.find((artifact) => artifact.compilationStrategy === "full_policy")!;
-    const runId = `run_${sha256(canonicalJson({ candidates: artifacts.map((artifact) => artifact.candidateId), model: args.model ?? "fake-v1", request: args.input })).slice(0, 16)}`;
-    const manifest = {
-      schemaVersion: "1.0.0", runId, experimentName: "policy-slice-non-inferiority", candidates: artifacts.map((artifact) => `artifacts/${artifact.candidateId}.json`),
-      fullPolicyCandidateId: full.candidateId, provider: "fake", model: args.model ?? "fake-v1", modelParameters: { temperature: 0 }, sampleCount: 3,
-      maxConcurrency: 4, timeoutSeconds: 10, retryPolicy: { maxAttempts: 3, initialBackoffSeconds: 0.05, maxBackoffSeconds: 0.5, jitterFraction: 0 },
-      rateLimit: { requestsPerWindow: 100, windowSeconds: 1, maxConcurrentRequests: 4 }, evaluator: { id: "rule-based", version: "1.0.0", nonInferiorityMargin: 0.05 },
-      seed: 0, outputDirectory: ".", rawResponseRetention: "text"
-    };
-    writeFileSync(resolve(output, "manifest.json"), `${canonicalJson(manifest)}\n`);
-    console.log(`wrote ${artifacts.length} candidate artifacts and manifest to ${output}`);
-    return;
+    throw new Error("compile-candidates is deprecated; use policyc experiment with explicit strategies, samples, provider, model, and budgets");
   }
 
   if (command === "inspect") {
@@ -164,7 +166,13 @@ Commands:
   policyc eval
   policyc compare-models --limit 20
   policyc eval-model --strategy compiled_prompt --limit 20
-  policyc compile-candidates --input "what's the latest news?" --output experiment
+  policyc compile-candidates  # deprecated; use experiment
+  policyc experiment --cases eval/behavioral/smoke-v1.jsonl --strategies full_policy,compiler_slice --provider openai --model gpt-5-mini-2025-08-07 --samples 1 --concurrency 1 --max-output-tokens 256 --max-calls 2 --max-cost-usd 0.02 --retries 0 --output runs/openai-smoke --dry-run
+  policyc cases validate --cases eval/behavioral/smoke-v1.jsonl
+  policyc cases freeze --cases eval/behavioral/held-out-pilot-v1.jsonl
+  policyc runs list
+  policyc runs show <run-id>
+  policyc runs rebuild --root runs
 
 Options:
   --input <text>

@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -6,6 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from policyc_runtime.manifest import load_run
+from policyc_runtime.paired_manifest import load_paired_run
 
 from .conftest import write_run
 
@@ -42,25 +44,80 @@ def test_typescript_compiled_artifacts_are_accepted_by_python(tmp_path):
         [
             "node",
             "dist/cli.js",
-            "compile-candidates",
-            "--input",
-            "latest news",
+            "experiment",
+            "--cases",
+            "eval/behavioral/smoke-v1.jsonl",
+            "--strategies",
+            "full_policy,compiler_slice",
+            "--provider",
+            "fake",
             "--output",
             str(tmp_path),
             "--model",
-            "fake-v1",
+            "gpt-5-mini-2025-08-07",
+            "--samples",
+            "1",
+            "--concurrency",
+            "1",
+            "--max-output-tokens",
+            "256",
+            "--max-calls",
+            "2",
+            "--max-cost-usd",
+            "0.02",
+            "--retries",
+            "0",
+            "--dry-run",
         ],
         cwd=root,
         check=True,
         capture_output=True,
         text=True,
     )
-    loaded = load_run(tmp_path / "manifest.json")
-    assert len(loaded.artifacts) == 5
-    assert {item.compilationStrategy for item in loaded.artifacts} == {
-        "full_policy",
-        "compiler_slice",
-        "kernel_only",
-        "direct_matches",
-        "conservative_expanded",
-    }
+    loaded = load_paired_run(tmp_path / "manifest.v2.json")
+    assert len(loaded.artifacts) == 2
+    assert {item.compilationStrategy for item in loaded.artifacts.values()} == {"full_policy", "compiler_slice"}
+
+
+def test_repeating_top_level_command_resumes_without_new_provider_calls(tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    output = tmp_path / "run"
+    command = [
+        "node",
+        "dist/cli.js",
+        "experiment",
+        "--cases",
+        "eval/behavioral/smoke-v1.jsonl",
+        "--strategies",
+        "full_policy,compiler_slice",
+        "--provider",
+        "fake",
+        "--model",
+        "gpt-5-mini-2025-08-07",
+        "--samples",
+        "1",
+        "--concurrency",
+        "1",
+        "--max-output-tokens",
+        "256",
+        "--max-calls",
+        "2",
+        "--max-cost-usd",
+        "0.02",
+        "--retries",
+        "0",
+        "--output",
+        str(output),
+        "--yes",
+    ]
+    environment = {**os.environ, "POLICYC_CATALOG": str(tmp_path / "catalog.sqlite")}
+    subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+    first = json.loads((output / "manifest.v2.json").read_text())
+    subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+    second = json.loads((output / "manifest.v2.json").read_text())
+
+    assert first["runId"] == second["runId"]
+    assert first["createdAt"] == second["createdAt"]
+    assert len(list((output / "raw").glob("*/attempt-*.json"))) == 2
+    budget = json.loads((output / "budget.json").read_text())
+    assert budget["calls"] == 2

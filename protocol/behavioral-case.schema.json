@@ -1,0 +1,11 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://policyc.dev/schema/behavioral-case-1.0.0.json","type":"object","additionalProperties":false,
+  "required":["schemaVersion","datasetVersion","split","caseId","request","artifactContext","applicableObligations","criticalObligationIds","prohibitions","expectedRefusal","toolExpectation","tools","rubric","tags"],
+  "properties":{
+    "schemaVersion":{"const":"1.0.0"},"datasetVersion":{"type":"string"},"split":{"enum":["development","held-out","adversarial","smoke"]},"caseId":{"type":"string"},"request":{"type":"string"},"artifactContext":{"type":["object","null"]},"sourceArtifact":{"type":["object","null"]},
+    "applicableObligations":{"type":"array","items":{"$ref":"#/$defs/requirement"}},"criticalObligationIds":{"type":"array","items":{"type":"string"},"minItems":1},"prohibitions":{"type":"array","items":{"$ref":"#/$defs/requirement"}},
+    "expectedRefusal":{"enum":["required","forbidden","allowed"]},"toolExpectation":{"type":"object","additionalProperties":false,"required":["required","forbidden"],"properties":{"required":{"type":"array","items":{"type":"string"}},"forbidden":{"type":"array","items":{"type":"string"}}}},
+    "tools":{"type":"array","items":{"type":"object"}},"rubric":{"type":"object","required":["description","minQualityScore"],"properties":{"description":{"type":"string"},"minQualityScore":{"type":"number","minimum":0,"maximum":1}}},"tags":{"type":"array","items":{"type":"string"},"minItems":1},"template":{"type":"boolean"}
+  },
+  "$defs":{"requirement":{"type":"object","additionalProperties":false,"required":["id","description","severity","validator"],"properties":{"id":{"type":"string"},"description":{"type":"string"},"severity":{"enum":["low","medium","high","critical"]},"validator":{"enum":["nonempty","citations_present","asks_confirmation","refuses","does_not_refuse","required_tool","forbidden_tool","no_background_work","no_hidden_reasoning","no_fake_precision","preserves_formulas","cites_page_or_section","no_sensitive_inference","no_person_identification"]},"value":{"type":"string"}}}}
+}
