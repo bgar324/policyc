@@ -14,7 +14,7 @@ from .pricing import load_pricing
 from .providers import ProviderResponse
 
 EVALUATOR_ID = "independent-rules"
-EVALUATOR_VERSION = "2.2.0"
+EVALUATOR_VERSION = "2.3.0"
 
 
 def regrade_run(run_directory: Path) -> dict[str, Any]:

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { canonicalJson, createArtifact, sha256, type CompilationStrategy } from "../compiler/artifact.js";
+import { canonicalJson, COMPILER_VERSION, createArtifact, sha256, type CompilationStrategy } from "../compiler/artifact.js";
 import { generateCandidateSelections } from "../compiler/candidates.js";
 import { loadPolicies } from "../policy/loader.js";
 import { loadBehavioralCases } from "./cases.js";
@@ -29,11 +29,15 @@ export function runExperimentCommand(argv: string[]): void {
   const createdAt = existingManifest?.createdAt ?? new Date().toISOString();
   const pendingArtifacts: Array<{ path: string; artifact: ReturnType<typeof createArtifact> }> = [];
   const casePlans = caseSet.cases.map((testCase) => {
-    const available = generateCandidateSelections(policies, testCase.request, testCase.artifactContext);
+    const executionContext = {
+      ...(testCase.artifactContext ?? {}),
+      toolsAvailable: testCase.tools.map((tool) => tool.name),
+    };
+    const available = generateCandidateSelections(policies, testCase.request, executionContext);
     const selected = options.strategies.map((strategy) => {
       const candidate = available.find((item) => item.strategy === strategy);
       if (!candidate) throw new Error(`unsupported strategy ${strategy}`);
-      const artifact = createArtifact({ policies, selection: candidate.selection, request: testCase.request, context: testCase.artifactContext, strategy, sourcePolicyId: "synthetic-enterprise-agent", sourcePolicyText, model: options.model, createdAt });
+      const artifact = createArtifact({ policies, selection: candidate.selection, request: testCase.request, context: executionContext, strategy, sourcePolicyId: "synthetic-enterprise-agent", sourcePolicyText, model: options.model, createdAt });
       const filename = `${testCase.caseId}--${strategy}--${artifact.candidateId}.json`;
       pendingArtifacts.push({ path: resolve(artifactDir, filename), artifact });
       return { strategy, candidateId: artifact.candidateId, artifactPath: `artifacts/${filename}` };
@@ -46,7 +50,7 @@ export function runExperimentCommand(argv: string[]): void {
   const derivedInputLimit = options.maxInputTokens ?? estimatedInputTokens * maxAttempts;
   const derivedOutputLimit = options.maxOutputTokensTotal ?? logicalTrials * options.maxOutputTokens * maxAttempts;
   if (options.provider === "openai" && options.maxCalls < logicalTrials) throw new Error(`--max-calls ${options.maxCalls} is below ${logicalTrials} logical trials`);
-  const compilerHash = sha256(canonicalJson({ compilerVersion: "0.3.0", policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
+  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
   const identityCore = {
     schemaVersion: "2.0.0", experimentName: "paired-policy-preservation", dataset: { path: resolve(options.cases), hash: caseSet.datasetHash, version: caseSet.datasetVersion, split: caseSet.split },
     ...(options.runLabel ? { runLabel: options.runLabel } : {}),
@@ -56,7 +60,7 @@ export function runExperimentCommand(argv: string[]): void {
     maxConcurrency: options.concurrency, timeoutSeconds: 60,
     retryPolicy: { maxAttempts, initialBackoffSeconds: 1, maxBackoffSeconds: 30, jitterFraction: 0.1, retryAmbiguous: options.retryAmbiguous },
     rateLimit: { requestsPerWindow: 60, windowSeconds: 60, maxConcurrentRequests: options.concurrency },
-    evaluator: { id: "independent-rules", version: "2.2.0" }, grader: { type: "manual", version: "1.0.0", blind: true },
+    evaluator: { id: "independent-rules", version: "2.3.0" }, grader: { type: "manual", version: "1.0.0", blind: true },
     budget: { maxLogicalTrials: logicalTrials, maxCalls: options.maxCalls, maxInputTokens: derivedInputLimit, maxOutputTokens: derivedOutputLimit, maxCostUsd: options.maxCostUsd },
     pricing: { registryPath: resolve("pricing/openai-v1.json"), registryVersion: "openai-2026-07-11" },
     outputDirectory: ".", rawResponseRetention: "full"

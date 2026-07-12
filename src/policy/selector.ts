@@ -21,7 +21,9 @@ export function selectPolicies(policies: Policy[], selectionInput: SelectionInpu
     const reasonList: string[] = [];
     if (policy.kind === "universal") reasonList.push("universal policy");
     if (policy.alwaysActive) reasonList.push("always active");
-    reasonList.push(...matchPolicy(policy, selectionInput, detectedIntents));
+    if (!suppressDirectMatch(policy, detectedIntents, selectionInput.context)) {
+      reasonList.push(...matchPolicy(policy, selectionInput, detectedIntents));
+    }
 
     if (policy.id === "do_not_browse_for_simple_rewrites" && detectedIntents.includes("current_info")) {
       continue;
@@ -48,6 +50,24 @@ export function selectPolicies(policies: Policy[], selectionInput: SelectionInpu
   };
 }
 
+function suppressDirectMatch(
+  policy: Policy,
+  detectedIntents: string[],
+  context?: ArtifactContext | null,
+): boolean {
+  const currentIntent = detectedIntents.some((intent) => ["current_info", "weather"].includes(intent))
+    || context?.operation === "lookup";
+  if (["current_info_requires_web", "no_current_facts_from_memory"].includes(policy.id)) {
+    return !currentIntent;
+  }
+  if (["citations_required", "authoritative_sources_preferred"].includes(policy.id)) {
+    const webAvailable = [...(context?.toolsAvailable ?? []), ...(context?.toolsRequested ?? [])]
+      .some((tool) => tool.toLowerCase() === "web");
+    return !currentIntent && !detectedIntents.includes("citation_request") && !webAvailable;
+  }
+  return false;
+}
+
 function comparePolicies(left: Policy, right: Policy): number {
   const priority = right.priority - left.priority;
   if (priority !== 0) return priority;
@@ -58,6 +78,10 @@ function comparePolicies(left: Policy, right: Policy): number {
 
 function shouldConservativelyRetain(policy: Policy, input: string, detectedIntents: string[], context?: ArtifactContext | null): boolean {
   if (policy.kind !== "content_gated") return false;
+  if (["current_info_requires_web", "no_current_facts_from_memory"].includes(policy.id)) {
+    return detectedIntents.some((intent) => ["current_info", "weather"].includes(intent))
+      || context?.operation === "lookup";
+  }
   if (!["safety", "privacy", "tool"].includes(policy.severity)) return false;
   if (policy.id === "send_email_requires_explicit_request") return false;
   const artifactTypes = policy.triggers.artifactTypes ?? [];

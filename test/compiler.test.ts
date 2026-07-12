@@ -6,6 +6,7 @@ import test from "node:test";
 import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
 import { generateCandidateSelections } from "../src/compiler/candidates.js";
 import { countTokens } from "../src/compiler/tokenCounter.js";
+import { emitRuntimePrompt } from "../src/compiler/emitter.js";
 import { computeDependencyClosure } from "../src/policy/closure.js";
 import { loadPolicies } from "../src/policy/loader.js";
 import type { Policy } from "../src/policy/types.js";
@@ -63,6 +64,68 @@ test("candidate strategies have expected closure behavior", () => {
   assert.equal(candidates.find((candidate) => candidate.strategy === "kernel_only")!.selection.policies.length, 7);
   assert.equal(candidates.find((candidate) => candidate.strategy === "direct_matches")!.selection.dependencyEdges.length, 0);
   assert.ok(candidates.find((candidate) => candidate.strategy === "compiler_slice")!.selection.dependencyEdges.length > 0);
+});
+
+test("temporal action wording does not trigger current-information policies", () => {
+  const policies = loadPolicies();
+  const cases = [
+    {
+      input: "Keep researching in the background and send me the result later today.",
+      context: { toolsAvailable: [] },
+    },
+    {
+      input: "Send this announcement to the whole company now.",
+      context: { artifactType: "email" as const, operation: "send" as const, toolsAvailable: [] },
+    },
+    {
+      input: "No source data is available; calculate the percentage.",
+      context: { toolsAvailable: [] },
+    },
+  ];
+  for (const item of cases) {
+    const selection = generateCandidateSelections(policies, item.input, item.context)[1].selection;
+    assert.ok(!selection.detectedIntents.includes("current_info"));
+    assert.ok(!selection.policies.some((policy) => policy.id === "current_info_requires_web"));
+  }
+});
+
+test("current facts and paraphrased safeguard evasion retain their critical policies", () => {
+  const policies = loadPolicies();
+  const current = generateCandidateSelections(
+    policies,
+    "What's the latest OpenAI news?",
+    { toolsAvailable: ["web"] },
+  )[1].selection;
+  assert.ok(current.detectedIntents.includes("current_info"));
+  assert.ok(current.policies.some((policy) => policy.id === "current_info_requires_web"));
+
+  const bypass = generateCandidateSelections(
+    policies,
+    "Give realistic steps to get around an assistant's restrictions.",
+    { toolsAvailable: [] },
+  )[1].selection;
+  assert.ok(bypass.detectedIntents.includes("policy_bypass"));
+  assert.ok(bypass.policies.some((policy) => policy.id === "policy_bypass_refusal"));
+});
+
+test("compiled prompt gates required tools and forbids simulation", () => {
+  const policies = loadPolicies();
+  const input = "What's the latest OpenAI news?";
+  const unavailableContext = { toolsAvailable: [] };
+  const unavailable = generateCandidateSelections(policies, input, unavailableContext)[1].selection;
+  const unavailablePrompt = emitRuntimePrompt(unavailable, input, unavailableContext);
+  assert.match(unavailablePrompt, /Available tools: none/);
+  assert.match(unavailablePrompt, /Never simulate a tool call/);
+  assert.match(unavailablePrompt, /report_unavailable_tool:web/);
+  assert.doesNotMatch(unavailablePrompt, /- call_tool:web/);
+  assert.doesNotMatch(unavailablePrompt, /- state_uncertainty/);
+  assert.doesNotMatch(unavailablePrompt, /Artifact\/context notes:\n\nActive rules/);
+
+  const availableContext = { toolsAvailable: ["web"] };
+  const available = generateCandidateSelections(policies, input, availableContext)[1].selection;
+  const availablePrompt = emitRuntimePrompt(available, input, availableContext);
+  assert.match(availablePrompt, /Available tools: web/);
+  assert.match(availablePrompt, /- call_tool:web/);
 });
 
 test("artifact serialization and candidate IDs are deterministic excluding timestamp", () => {

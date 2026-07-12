@@ -1,7 +1,18 @@
 import type { ArtifactContext, IntentTrigger, Policy, SelectionInput } from "./types.js";
 
 const INTENT_KEYWORDS: Array<{ intent: IntentTrigger; patterns: RegExp[] }> = [
-  { intent: "current_info", patterns: [/\blatest\b/i, /\bcurrent\b/i, /\brecent\b/i, /\btoday\b/i, /\bnow\b/i, /\bthis week\b/i, /\bnew guidance\b/i, /\bnews\b/i] },
+  {
+    intent: "current_info",
+    patterns: [
+      /\blatest\b/i,
+      /\bcurrent(?:ly)?\b/i,
+      /\brecent(?:ly)?\b/i,
+      /\bnew guidance\b/i,
+      /\bnews\b/i,
+      /\b(?:today|this week|now)\b.{0,40}\b(?:news|weather|forecast|price|score|status|guidance|release|update|ceo)\b/i,
+      /\b(?:news|weather|forecast|price|score|status|guidance|release|update|ceo)\b.{0,40}\b(?:today|this week|now)\b/i,
+    ],
+  },
   { intent: "weather", patterns: [/\bweather\b/i, /\bforecast\b/i, /\btemperature\b/i, /\brain\b/i] },
   { intent: "rewrite", patterns: [/\brewrite\b/i, /\brephrase\b/i, /\bshorten\b/i, /\bmake .* professional\b/i, /\bclean up this (email|text|draft)\b/i] },
   { intent: "draft", patterns: [/\bdraft\b/i, /\bwrite (an?|the)\b/i, /\bcompose\b/i] },
@@ -15,12 +26,12 @@ const INTENT_KEYWORDS: Array<{ intent: IntentTrigger; patterns: RegExp[] }> = [
   { intent: "send_email", patterns: [/\bsend (this )?(email|message)\b/i, /\bemail .* to\b/i, /\bforward\b/i] },
   { intent: "draft_email", patterns: [/\bdraft (an? )?email\b/i, /\bprepare (an? )?email\b/i] },
   { intent: "calendar_mutation", patterns: [/\bcreate .* calendar\b/i, /\bschedule\b/i, /\bmove .* meeting\b/i, /\bdelete .* event\b/i, /\bcancel .* meeting\b/i] },
-  { intent: "background_work", patterns: [/\bdo this later\b/i, /\bkeep working\b/i, /\bnotify me when\b/i, /\bbackground\b/i] },
+  { intent: "background_work", patterns: [/\bdo this later\b/i, /\bkeep working\b/i, /\bnotify me when\b/i, /\bbackground\b/i, /\bmessage me when\b/i, /\bwork on this for (?:a few|several|\d+) hours\b/i] },
   { intent: "hidden_reasoning", patterns: [/\bchain[- ]of[- ]thought\b/i, /\bhidden reasoning\b/i, /\bshow your reasoning\b/i, /\bverbatim thoughts\b/i] },
-  { intent: "citation_request", patterns: [/\bcite\b/i, /\bcitations?\b/i, /\bsources?\b/i, /\breferences?\b/i] },
+  { intent: "citation_request", patterns: [/\bcite\b/i, /\bcitations?\b/i, /\b(?:provide|include|with|list) sources?\b/i, /\breferences?\b/i] },
   { intent: "identification", patterns: [/\bwho is this\b/i, /\bidentify (this|the) person\b/i, /\bname this person\b/i] },
   { intent: "sensitive_attribute", patterns: [/\brace\b/i, /\bethnicity\b/i, /\breligion\b/i, /\bpolitical\b/i, /\bdisability\b/i, /\bsexual orientation\b/i] },
-  { intent: "policy_bypass", patterns: [/\bbypass\b/i, /\bignore policy\b/i, /\bpolicy x\b/i, /\bjailbreak\b/i] }
+  { intent: "policy_bypass", patterns: [/\bbypass\b/i, /\bignore policy\b/i, /\bpolicy x\b/i, /\bjailbreak\b/i, /\b(?:get around|evade|disable|circumvent)\b.{0,40}\b(?:restrictions?|safeguards?|safety controls?|rules?)\b/i] }
 ];
 
 export function detectIntents(input: string, context?: ArtifactContext | null): IntentTrigger[] {

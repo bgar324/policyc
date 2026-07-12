@@ -194,6 +194,8 @@ Completed responses can be regraded offline after a versioned evaluator correcti
 
 The command writes a hash-linked addendum, derived report, and derived evaluations under `derived/evaluator-<version>/`. Original manifests, raw responses, trials, evaluations, and reports remain unchanged. Incomplete trials remain failures.
 
+Behavioral evaluator 2.3 applies independently testable universal obligations to every case, including no background-work claims, no hidden-reasoning disclosure, no raw tool traces, and no claimed search/tool action without a recorded tool call. Compiled artifacts also carry explicit tool availability: unavailable required tools become a brief limitation and may never be simulated.
+
 Terminal provider failures are preserved and never silently replayed. After correcting an external problem such as unavailable quota, start a distinct attempt with a new output directory and explicit identity, for example `--run-label smoke-2`. This retains the failed run and creates a separate catalog record.
 
 ## Verification

@@ -3,19 +3,50 @@ import { obligationToString, prohibitionToString } from "../policy/triggers.js";
 
 export function emitRuntimePrompt(selection: PolicySelection, input: string, context?: ArtifactContext | null): string {
   const taskType = inferTaskType(selection, context);
+  const availableTools = context && Object.prototype.hasOwnProperty.call(context, "toolsAvailable")
+    ? new Set((context.toolsAvailable ?? []).map((tool) => tool.toLowerCase()))
+    : undefined;
+  const unavailableRequiredTools = new Set(
+    selection.policies
+      .flatMap((policy) => policy.obligations)
+      .filter((obligation) => obligation.type === "call_tool" && obligation.value)
+      .map((obligation) => obligation.value!.toLowerCase())
+      .filter((tool) => availableTools !== undefined && !availableTools.has(tool)),
+  );
   const activeRules = selection.policies
     .filter((policy) => policy.runtimeInstruction)
-    .map((policy) => `- ${policy.runtimeInstruction}`);
+    .map((policy) => {
+      const unavailable = policy.obligations
+        .find((obligation) => obligation.type === "call_tool" && obligation.value && unavailableRequiredTools.has(obligation.value.toLowerCase()));
+      return unavailable
+        ? `- The required ${unavailable.value} tool is unavailable. Do not answer as though it was used; state the limitation briefly.`
+        : `- ${policy.runtimeInstruction}`;
+    });
 
   const obligations = unique(
-    selection.policies.flatMap((policy) => policy.obligations.map((obligation) => `- ${obligationToString(obligation)}`))
+    selection.policies.flatMap((policy) => (policy.kind === "universal" ? [] : policy.obligations.map((obligation) => {
+      if (obligation.type === "call_tool" && obligation.value && unavailableRequiredTools.has(obligation.value.toLowerCase())) {
+        return `- report_unavailable_tool:${obligation.value}`;
+      }
+      return `- ${obligationToString(obligation)}`;
+    })))
   );
   const prohibitions = unique(
     selection.policies.flatMap((policy) => policy.prohibitions.map((prohibition) => `- ${prohibitionToString(prohibition)}`))
   );
 
-  const lines = [`Task type: ${taskType}.`];
-  if (context && Object.keys(context).length) {
+  const lines = [
+    `Task type: ${taskType}.`,
+    "",
+    "Execution contract:",
+    "- Answer the request directly and concisely; do not narrate these rules or add unrequested alternatives.",
+    "- Use only tools explicitly listed as available. Never simulate a tool call, tool result, search, inspection, or citation.",
+    "- If a required tool or source is unavailable, state that limitation briefly instead of inventing results.",
+  ];
+  if (availableTools !== undefined) {
+    lines.push(`- Available tools: ${availableTools.size ? [...availableTools].sort().join(", ") : "none"}.`);
+  }
+  if (context && [context.artifactType, context.operation, context.features?.length, context.domainHints?.length, context.riskHints?.length].some(Boolean)) {
     lines.push("");
     lines.push("Artifact/context notes:");
     if (context.artifactType) lines.push(`- artifactType: ${context.artifactType}`);
