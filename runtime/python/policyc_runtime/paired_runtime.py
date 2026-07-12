@@ -93,7 +93,9 @@ class PairedExperimentRuntime:
                 if item["status"] != "completed" or not item["evaluation"]["passed"]
             ]
             self.store.write_json_atomic(self.root / "failures-development.json", failures)
-            self.catalog.finalize(manifest.runId, status="completed", budget=budget, report_path=report_path)
+            self.catalog.finalize(
+                manifest.runId, status=_catalog_status(ordered), budget=budget, report_path=report_path
+            )
             return report
         except BaseException as error:
             self.catalog.finalize(
@@ -131,6 +133,10 @@ class PairedExperimentRuntime:
             if value.get("status") == "ambiguous" and not self.loaded.manifest.retryPolicy.retryAmbiguous:
                 await self.ledger.restore_ambiguous(value["ambiguousCostExposureUsd"], attempts)
                 return value
+            if value.get("status") == "failed":
+                if attempts:
+                    await self.ledger.restore_definitive_failure(attempts)
+                return value
         provider_path = self.root / "provider" / f"{spec.trial_id}.json"
         if provider_path.exists():
             record = json.loads(provider_path.read_text())
@@ -154,7 +160,13 @@ class PairedExperimentRuntime:
                     received_at=datetime.fromisoformat(raw_value["receivedAt"]),
                     duration_ms=raw_value["durationMs"],
                 )
-                response = self.provider.parse(raw, self.loaded.manifest.model)
+                try:
+                    response = self.provider.parse(raw, self.loaded.manifest.model)
+                except ProviderError as error:
+                    await self.ledger.restore_definitive_failure(attempt)
+                    result = self._failed_result(spec, "failed", attempt, error)
+                    self.store.write_json_atomic(self.root / "trials" / f"{spec.trial_id}.json", result)
+                    return result
             else:
                 response = _response_from_dict(raw_value["body"]["response"])
             cached = response.cached_input_tokens if response.cached_input_tokens is not None else 0
@@ -421,3 +433,14 @@ def _backoff(
     base = min(maximum, initial * (2 ** (attempt - 1)))
     result = max(0.0, base * (1 + random.Random(f"{trial_id}:{attempt}").uniform(-jitter, jitter)))
     return max(result, retry_after or 0.0)
+
+
+def _catalog_status(results: list[dict[str, Any]]) -> str:
+    statuses = {item["status"] for item in results}
+    if statuses == {"completed"}:
+        return "completed"
+    if "completed" in statuses:
+        return "completed_with_failures"
+    if "ambiguous" in statuses:
+        return "ambiguous"
+    return "failed"

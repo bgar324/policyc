@@ -133,6 +133,29 @@ async def test_http_errors(tmp_path, status: int, retryable: bool) -> None:
     assert caught.value.retry_after == 2
 
 
+@pytest.mark.asyncio
+async def test_insufficient_quota_is_terminal(tmp_path) -> None:
+    provider = OpenAIResponsesProvider(
+        api_key="test",
+        transport=httpx.MockTransport(
+            lambda _: httpx.Response(
+                429,
+                json={
+                    "error": {
+                        "code": "insufficient_quota",
+                        "type": "insufficient_quota",
+                        "message": "quota unavailable",
+                    }
+                },
+            )
+        ),
+    )
+    with pytest.raises(ProviderError) as caught:
+        await provider.invoke(request(tmp_path))
+    assert caught.value.retryable is False
+    assert caught.value.outcome == "terminal_error"
+
+
 def test_retry_after_http_date() -> None:
     now = datetime.now(UTC).replace(microsecond=0)
     assert parse_retry_after(format_datetime(now + timedelta(seconds=5)), now) == 5

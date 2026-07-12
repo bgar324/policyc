@@ -12,6 +12,7 @@ type Options = {
   samples: number; concurrency: number; maxOutputTokens: number; maxCalls: number; maxInputTokens?: number;
   maxOutputTokensTotal?: number; maxCostUsd: number; retries: number; output: string; dryRun: boolean;
   yes: boolean; retryAmbiguous: boolean;
+  runLabel?: string;
 };
 
 export function runExperimentCommand(argv: string[]): void {
@@ -47,6 +48,7 @@ export function runExperimentCommand(argv: string[]): void {
   const compilerHash = sha256(canonicalJson({ compilerVersion: "0.3.0", policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
   const identityCore = {
     schemaVersion: "2.0.0", experimentName: "paired-policy-preservation", dataset: { path: resolve(options.cases), hash: caseSet.datasetHash, version: caseSet.datasetVersion, split: caseSet.split },
+    ...(options.runLabel ? { runLabel: options.runLabel } : {}),
     compilerHash, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
     modelParameters: { max_output_tokens: options.maxOutputTokens, store: false }, sampleCount: options.samples,
     maxConcurrency: options.concurrency, timeoutSeconds: 60,
@@ -100,11 +102,13 @@ function parseOptions(argv: string[]): Options {
   if (!strategies.includes("full_policy") || !strategies.includes("compiler_slice")) throw new Error("paired experiments require full_policy and compiler_slice");
   const maxCostUsd = Number(required("--max-cost-usd"));
   if (!Number.isFinite(maxCostUsd) || maxCostUsd <= 0) throw new Error("--max-cost-usd must be positive");
+  const runLabel = values.get("--run-label");
+  if (runLabel && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(runLabel)) throw new Error("--run-label must contain only letters, numbers, dots, underscores, and hyphens");
   return {
     cases: required("--cases"), strategies, provider: provider as "fake" | "openai", model: required("--model"),
     samples: integer("--samples", 1), concurrency: integer("--concurrency", 1), maxOutputTokens: integer("--max-output-tokens"),
     maxCalls: integer("--max-calls"), maxInputTokens: values.has("--max-input-tokens") ? integer("--max-input-tokens") : undefined,
     maxOutputTokensTotal: values.has("--max-output-tokens-total") ? integer("--max-output-tokens-total") : undefined,
-    maxCostUsd, retries: integer("--retries", 0, true), output: required("--output"), dryRun: flags.has("--dry-run"), yes: flags.has("--yes"), retryAmbiguous: flags.has("--retry-ambiguous")
+    maxCostUsd, retries: integer("--retries", 0, true), output: required("--output"), dryRun: flags.has("--dry-run"), yes: flags.has("--yes"), retryAmbiguous: flags.has("--retry-ambiguous"), runLabel
   };
 }

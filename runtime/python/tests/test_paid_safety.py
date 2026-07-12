@@ -9,7 +9,7 @@ from policyc_runtime.blind_grading import build_blind_packets
 from policyc_runtime.budget import BudgetExceeded, BudgetLedger
 from policyc_runtime.case_evaluator import evaluate_case
 from policyc_runtime.experiment_models import BehavioralCase, BudgetConfig, PairedRunManifest
-from policyc_runtime.paired_report import build_paired_report
+from policyc_runtime.paired_report import _cached_savings, _sum_known, build_paired_report
 from policyc_runtime.pricing import ModelPrice, calculate_cost
 from policyc_runtime.providers import ProviderResponse
 
@@ -52,8 +52,29 @@ async def test_two_call_ceiling_proves_no_third_call() -> None:
     assert ledger.calls == 2
 
 
+@pytest.mark.asyncio
+async def test_missing_usage_makes_accounting_unknown() -> None:
+    config = BudgetConfig(maxLogicalTrials=1, maxCalls=1, maxInputTokens=100, maxOutputTokens=100, maxCostUsd=1)
+    ledger = BudgetLedger(config, price())
+    reservation = await ledger.reserve(10, 10, "failed-trial")
+    await ledger.fail_definitive(reservation, "failed-trial")
+    snapshot = ledger.snapshot()
+    assert snapshot["calls"] == 1
+    assert snapshot["accountingComplete"] is False
+    assert snapshot["unknownUsageAttempts"] == 1
+    assert snapshot["actualInputTokens"] is None
+    assert snapshot["actualOutputTokens"] is None
+    assert snapshot["actualCostUsd"] is None
+
+
 def test_cached_cost_is_not_zero() -> None:
     assert calculate_cost(price(), 100, 40, 20) == pytest.approx(0.000104)
+
+
+def test_empty_failed_metrics_are_unknown_not_zero() -> None:
+    assert _sum_known([], "costUsd") is None
+    assert _sum_known([], "inputTokens") is None
+    assert _cached_savings([], price()) is None
 
 
 def test_independent_obligation_and_tool_evaluation() -> None:

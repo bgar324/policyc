@@ -27,6 +27,8 @@ class BudgetLedger:
         self.actual_input_tokens = 0
         self.actual_output_tokens = 0
         self.actual_cost_usd = 0.0
+        self.accounting_complete = True
+        self.unknown_usage_attempts = 0
         self.ambiguous_cost_exposure_usd = 0.0
         self._reserved_input = 0
         self._reserved_output = 0
@@ -96,6 +98,8 @@ class BudgetLedger:
     async def fail_definitive(self, reservation: Reservation, trial_id: str) -> None:
         async with self._lock:
             self._release(reservation)
+            self.accounting_complete = False
+            self.unknown_usage_attempts += 1
             self.decisions.append({"trialId": trial_id, "stage": "definitive_failure", "allowed": True})
 
     async def ambiguous(self, reservation: Reservation, trial_id: str) -> None:
@@ -118,12 +122,23 @@ class BudgetLedger:
             self.calls += attempts
             self.ambiguous_cost_exposure_usd += exposure_usd
 
+    async def restore_definitive_failure(self, attempts: int) -> None:
+        async with self._lock:
+            self.calls += attempts
+            self.accounting_complete = False
+            self.unknown_usage_attempts += attempts
+
     def snapshot(self) -> dict[str, Any]:
         return {
             "calls": self.calls,
-            "actualInputTokens": self.actual_input_tokens,
-            "actualOutputTokens": self.actual_output_tokens,
-            "actualCostUsd": self.actual_cost_usd,
+            "actualInputTokens": self.actual_input_tokens if self.accounting_complete else None,
+            "actualOutputTokens": self.actual_output_tokens if self.accounting_complete else None,
+            "actualCostUsd": self.actual_cost_usd if self.accounting_complete else None,
+            "knownInputTokens": self.actual_input_tokens,
+            "knownOutputTokens": self.actual_output_tokens,
+            "knownCostUsd": self.actual_cost_usd,
+            "accountingComplete": self.accounting_complete,
+            "unknownUsageAttempts": self.unknown_usage_attempts,
             "ambiguousCostExposureUsd": self.ambiguous_cost_exposure_usd,
             "limits": self.config.model_dump(mode="json"),
             "decisions": self.decisions,

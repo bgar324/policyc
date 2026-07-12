@@ -128,6 +128,7 @@ class PricingRef(StrictModel):
 class PairedRunManifest(StrictModel):
     schemaVersion: Literal["2.0.0"]
     runId: str
+    runLabel: str | None = None
     experimentName: str
     dataset: DatasetRef
     compilerHash: str

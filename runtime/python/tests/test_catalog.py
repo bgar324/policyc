@@ -148,3 +148,42 @@ def test_catalog_can_be_rebuilt_from_authoritative_run_files(tmp_path: Path) -> 
     assert detail is not None
     assert detail["run"]["completed_trials"] == 2
     assert len(detail["trials"]) == 2
+
+
+def test_rebuild_marks_failed_run_and_unknown_accounting(tmp_path: Path) -> None:
+    run_directory = tmp_path / "runs/run_catalog_test"
+    trials = run_directory / "trials"
+    trials.mkdir(parents=True)
+    value = manifest(tmp_path)
+    (run_directory / "manifest.canonical.json").write_text(value.model_dump_json())
+    failed = {
+        **trial("full_policy"),
+        "status": "failed",
+        "inputTokens": None,
+        "cachedInputTokens": None,
+        "outputTokens": None,
+        "costUsd": None,
+        "evaluation": None,
+        "error": {"outcome": "terminal_error"},
+    }
+    (trials / "trial-full_policy.json").write_text(json.dumps(failed))
+    (run_directory / "budget.json").write_text(
+        json.dumps(
+            {
+                "calls": 1,
+                "actualInputTokens": 0,
+                "actualOutputTokens": 0,
+                "actualCostUsd": 0,
+                "ambiguousCostExposureUsd": 0,
+            }
+        )
+    )
+    (run_directory / "report.json").write_text("{}")
+
+    catalog = RunCatalog(tmp_path / "failed.sqlite")
+    catalog.rebuild(tmp_path / "runs")
+    detail = catalog.show(value.runId)
+    assert detail is not None
+    assert detail["run"]["status"] == "failed"
+    assert detail["run"]["actual_cost_usd"] is None
+    assert detail["run"]["input_tokens"] is None

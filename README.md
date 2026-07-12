@@ -138,6 +138,7 @@ pnpm policyc experiment \
   --samples 1 --concurrency 1 \
   --max-output-tokens 256 --max-calls 2 \
   --max-cost-usd 0.02 --retries 0 \
+  --run-label smoke-1 \
   --output runs/openai-smoke --dry-run
 ```
 
@@ -183,6 +184,8 @@ pnpm policyc runs rebuild --root runs
 The database persists across process restarts and is ignored by Git. Back up `.policyc/catalog.sqlite` together with `runs/` if you want the history on another machine. The run directories remain the scientific source of truth; if the SQLite file is lost, `runs rebuild` recreates the catalog from their manifests, trials, budgets, and reports.
 
 Repeated invocations with the same experiment configuration and output directory reuse the same run ID and completed trials. Reusing an output directory with an incompatible configuration is rejected instead of silently starting a different run.
+
+Terminal provider failures are preserved and never silently replayed. After correcting an external problem such as unavailable quota, start a distinct attempt with a new output directory and explicit identity, for example `--run-label smoke-2`. This retains the failed run and creates a separate catalog record.
 
 ## Verification
 

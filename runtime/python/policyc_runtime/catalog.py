@@ -52,8 +52,7 @@ class RunCatalog:
                     created_at, started_at, updated_at, logical_trials, max_calls, max_cost_usd
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
-                    status=excluded.status, git_commit=excluded.git_commit,
-                    git_dirty=excluded.git_dirty, manifest_hash=excluded.manifest_hash,
+                    status=excluded.status, manifest_hash=excluded.manifest_hash,
                     manifest_path=excluded.manifest_path, run_directory=excluded.run_directory,
                     updated_at=excluded.updated_at
                 """,
@@ -113,9 +112,9 @@ class RunCatalog:
                     result.get("outputTokens"),
                     result.get("costUsd"),
                     result.get("latencyMs"),
-                    _optional_bool(result.get("evaluation", {}).get("criticalPassed")),
-                    _optional_bool(result.get("evaluation", {}).get("passed")),
-                    result.get("error", {}).get("outcome"),
+                    _optional_bool((result.get("evaluation") or {}).get("criticalPassed")),
+                    _optional_bool((result.get("evaluation") or {}).get("passed")),
+                    (result.get("error") or {}).get("outcome"),
                     _now(),
                 ),
             )
@@ -181,12 +180,24 @@ class RunCatalog:
                 manifest = PairedRunManifest.model_validate_json(manifest_path.read_text())
                 run_directory = manifest_path.parent
                 self.register(manifest, manifest_path, run_directory, status="running")
+                trial_values = []
                 for trial_path in sorted((run_directory / "trials").glob("*.json")):
-                    self.record_trial(json.loads(trial_path.read_text()))
+                    trial_value = json.loads(trial_path.read_text())
+                    trial_values.append(trial_value)
+                    self.record_trial(trial_value)
                 budget_path = run_directory / "budget.json"
                 report_path = run_directory / "report.json"
                 budget = json.loads(budget_path.read_text()) if budget_path.exists() else None
-                status = "completed" if report_path.exists() else "incomplete"
+                if budget is not None and any(
+                    item.get("status") == "failed" and item.get("inputTokens") is None for item in trial_values
+                ):
+                    budget = {
+                        **budget,
+                        "actualInputTokens": None,
+                        "actualOutputTokens": None,
+                        "actualCostUsd": None,
+                    }
+                status = _catalog_status(trial_values) if trial_values else "incomplete"
                 self.finalize(
                     manifest.runId,
                     status=status,
@@ -304,3 +315,14 @@ def _now() -> str:
 
 def _optional_bool(value: Any) -> int | None:
     return int(value) if isinstance(value, bool) else None
+
+
+def _catalog_status(results: list[dict[str, Any]]) -> str:
+    statuses = {item.get("status") for item in results}
+    if statuses == {"completed"}:
+        return "completed"
+    if "completed" in statuses:
+        return "completed_with_failures"
+    if "ambiguous" in statuses:
+        return "ambiguous"
+    return "failed"

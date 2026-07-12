@@ -167,7 +167,7 @@ Commands:
   policyc compare-models --limit 20
   policyc eval-model --strategy compiled_prompt --limit 20
   policyc compile-candidates  # deprecated; use experiment
-  policyc experiment --cases eval/behavioral/smoke-v1.jsonl --strategies full_policy,compiler_slice --provider openai --model gpt-5-mini-2025-08-07 --samples 1 --concurrency 1 --max-output-tokens 256 --max-calls 2 --max-cost-usd 0.02 --retries 0 --output runs/openai-smoke --dry-run
+  policyc experiment --cases eval/behavioral/smoke-v1.jsonl --strategies full_policy,compiler_slice --provider openai --model gpt-5-mini-2025-08-07 --samples 1 --concurrency 1 --max-output-tokens 256 --max-calls 2 --max-cost-usd 0.02 --retries 0 --run-label smoke-1 --output runs/openai-smoke --dry-run
   policyc cases validate --cases eval/behavioral/smoke-v1.jsonl
   policyc cases freeze --cases eval/behavioral/held-out-pilot-v1.jsonl
   policyc runs list

@@ -93,7 +93,8 @@ class OpenAIResponsesProvider:
     def parse(self, raw: RawProviderResponse, requested_model: str) -> ProviderResponse:
         if raw.status_code >= 400:
             message = _error_message(raw.body)
-            retryable = raw.status_code == 429 or raw.status_code >= 500
+            error_code = _error_code(raw.body)
+            retryable = (raw.status_code == 429 and error_code != "insufficient_quota") or raw.status_code >= 500
             raise ProviderError(
                 message,
                 retryable=retryable,
@@ -201,6 +202,14 @@ def _error_message(body: Any) -> str:
         if isinstance(error, dict) and isinstance(error.get("message"), str):
             return error["message"][:1000]
     return str(body)[:1000]
+
+
+def _error_code(body: Any) -> str | None:
+    if isinstance(body, dict):
+        error = body.get("error")
+        if isinstance(error, dict) and isinstance(error.get("code"), str):
+            return error["code"]
+    return None
 
 
 def _optional_int(value: Any) -> int | None:

@@ -121,3 +121,50 @@ def test_repeating_top_level_command_resumes_without_new_provider_calls(tmp_path
     assert len(list((output / "raw").glob("*/attempt-*.json"))) == 2
     budget = json.loads((output / "budget.json").read_text())
     assert budget["calls"] == 2
+
+
+def test_run_label_creates_distinct_preserved_attempt_identity(tmp_path):
+    root = Path(__file__).resolve().parents[3]
+    run_ids = []
+    for label in ("smoke-1", "smoke-2"):
+        output = tmp_path / label
+        subprocess.run(
+            [
+                "node",
+                "dist/cli.js",
+                "experiment",
+                "--cases",
+                "eval/behavioral/smoke-v1.jsonl",
+                "--strategies",
+                "full_policy,compiler_slice",
+                "--provider",
+                "fake",
+                "--model",
+                "gpt-5-mini-2025-08-07",
+                "--samples",
+                "1",
+                "--concurrency",
+                "1",
+                "--max-output-tokens",
+                "256",
+                "--max-calls",
+                "2",
+                "--max-cost-usd",
+                "0.02",
+                "--retries",
+                "0",
+                "--run-label",
+                label,
+                "--output",
+                str(output),
+                "--dry-run",
+            ],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        value = json.loads((output / "manifest.v2.json").read_text())
+        assert value["runLabel"] == label
+        run_ids.append(value["runId"])
+    assert run_ids[0] != run_ids[1]

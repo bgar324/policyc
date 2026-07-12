@@ -150,6 +150,8 @@ def _proportion(successes: int, total: int) -> dict[str, Any]:
 
 
 def _sum_known(rows: list[dict[str, Any]], key: str) -> float | int | None:
+    if not rows:
+        return None
     values = [row[key] for row in rows if row.get(key) is not None]
     return sum(values) if len(values) == len(rows) else None
 
@@ -165,6 +167,8 @@ def _mean_nested(rows: list[dict[str, Any]], parent: str, key: str) -> float | N
 
 
 def _cached_savings(rows: list[dict[str, Any]], price: ModelPrice) -> float | None:
+    if not rows:
+        return None
     if any(row.get("cachedInputTokens") is None for row in rows):
         return None
     cached = sum(row["cachedInputTokens"] for row in rows)
