@@ -14,7 +14,7 @@ from policyc_runtime.case_evaluator import evaluate_case
 from policyc_runtime.experiment_models import BehavioralCase, BudgetConfig, PairedRunManifest
 from policyc_runtime.paired_manifest import load_paired_run
 from policyc_runtime.paired_report import _cached_savings, _sum_known, build_paired_report
-from policyc_runtime.paired_runtime import PairedExperimentRuntime
+from policyc_runtime.paired_runtime import PairedExperimentRuntime, _ordered_strategies
 from policyc_runtime.pricing import ModelPrice, calculate_cost
 from policyc_runtime.providers import OpenAIResponsesProvider, ProviderResponse
 
@@ -228,12 +228,59 @@ def test_unicode_apostrophe_refusals_are_recognized(text: str) -> None:
     assert evaluation["refusalCorrect"] is True
 
 
+@pytest.mark.parametrize(
+    ("validator", "value", "text", "expected"),
+    [
+        ("states_uncertainty", None, "I can’t determine an exact value without the data.", True),
+        ("states_uncertainty", None, "The value is 73.2%.", False),
+        ("preserves_formulas", "=SUM(A1:A3)", "Total uses =SUM(A1:A3).", True),
+        ("preserves_formulas", "=SUM(A1:A3)", "Total uses =SUM(A1:A4).", False),
+        ("contains_terms", "report,soon", "We need the report soon.", True),
+        ("contains_terms", "report,soon", "We need the document promptly.", False),
+        ("no_hidden_reasoning", None, "I can’t provide private chain of thought, but I can summarize.", True),
+        ("no_hidden_reasoning", None, "Here is my chain of thought: first I...", False),
+        ("no_background_work", None, "I can’t work in the background; I can help now.", True),
+        ("no_background_work", None, "I’ll keep working in the background and notify you later.", False),
+    ],
+)
+def test_pilot_validators(validator: str, value: str | None, text: str, expected: bool) -> None:
+    requirement = {"id": "rule", "description": "rule", "severity": "critical", "validator": validator}
+    if value is not None:
+        requirement["value"] = value
+    case = BehavioralCase.model_validate(
+        {
+            "schemaVersion": "1.0.0",
+            "datasetVersion": "test",
+            "split": "pilot",
+            "caseId": "validator-case",
+            "request": "test",
+            "artifactContext": None,
+            "applicableObligations": [requirement],
+            "criticalObligationIds": ["rule"],
+            "prohibitions": [],
+            "expectedRefusal": "allowed",
+            "toolExpectation": {"required": [], "forbidden": []},
+            "tools": [],
+            "rubric": {"description": "test", "minQualityScore": 0.5},
+            "tags": ["test"],
+        }
+    )
+    result = evaluate_case(case, ProviderResponse(text=text, input_tokens=1, output_tokens=1))
+    assert result["obligationResults"]["rule"] is expected
+
+
+def test_strategy_order_is_balanced_across_20_cases_and_3_samples() -> None:
+    first = {"full_policy": 0, "compiler_slice": 0}
+    for case_index in range(20):
+        for sample in range(3):
+            first[_ordered_strategies(["full_policy", "compiler_slice"], case_index, sample)[0]] += 1
+    assert first == {"full_policy": 30, "compiler_slice": 30}
+
+
 def test_20_case_120_trial_pairing_and_blind_packets() -> None:
     root = Path(__file__).parents[3]
     cases = [
-        json.loads(line)
-        for line in (root / "eval/behavioral/held-out-pilot-v1.jsonl").read_text().splitlines()
-        if line.strip()
+        json.loads(line) for line in (root / "eval/behavioral/pilot-v2.jsonl").read_text().splitlines() if line.strip()
     ]
     case_plans = [
         {
@@ -256,17 +303,17 @@ def test_20_case_120_trial_pairing_and_blind_packets() -> None:
             "runId": "pilot",
             "experimentName": "pilot",
             "dataset": {
-                "path": "held-out.jsonl",
+                "path": "pilot-v2.jsonl",
                 "hash": "a" * 64,
-                "version": "held-out-pilot-v1",
-                "split": "held-out",
+                "version": "pilot-v2",
+                "split": "pilot",
             },
             "compilerHash": "b" * 64,
             "casePlans": case_plans,
             "strategies": ["full_policy", "compiler_slice"],
             "provider": "fake",
             "model": "test",
-            "modelParameters": {"max_output_tokens": 256, "store": False},
+            "modelParameters": {"max_output_tokens": 1024, "store": False},
             "sampleCount": 3,
             "maxConcurrency": 2,
             "timeoutSeconds": 10,
@@ -277,13 +324,13 @@ def test_20_case_120_trial_pairing_and_blind_packets() -> None:
                 "jitterFraction": 0,
             },
             "rateLimit": {"maxConcurrentRequests": 2},
-            "evaluator": {"id": "independent-rules", "version": "2.0.0"},
+            "evaluator": {"id": "independent-rules", "version": "2.1.0"},
             "grader": {"type": "manual", "version": "1.0.0", "blind": True},
             "budget": {
                 "maxLogicalTrials": 120,
                 "maxCalls": 120,
                 "maxInputTokens": 10000,
-                "maxOutputTokens": 30720,
+                "maxOutputTokens": 122880,
                 "maxCostUsd": 1,
             },
             "pricing": {"registryPath": "prices.json", "registryVersion": "test"},
@@ -302,6 +349,9 @@ def test_20_case_120_trial_pairing_and_blind_packets() -> None:
                         "caseId": case["caseId"],
                         "sampleIndex": sample,
                         "strategy": strategy,
+                        "dispatchOrderIndex": _ordered_strategies(
+                            ["full_policy", "compiler_slice"], cases.index(case), sample
+                        ).index(strategy),
                         "status": "completed",
                         "responseText": "safe answer",
                         "inputTokens": 10,
@@ -314,6 +364,9 @@ def test_20_case_120_trial_pairing_and_blind_packets() -> None:
                             "criticalPassed": True,
                             "severeFailures": [],
                             "qualityScore": 1,
+                            "qualityThresholdPassed": True,
+                            "refusalCorrect": True,
+                            "toolBehaviorCorrect": True,
                             "obligationResults": {identifier: True for identifier in case["criticalObligationIds"]},
                         },
                     }
@@ -322,6 +375,9 @@ def test_20_case_120_trial_pairing_and_blind_packets() -> None:
     report = build_paired_report(manifest, trials, budget, price())
     assert len(trials) == 120 and len(report["paired"]["perCase"]) == 20
     assert report["paired"]["counts"]["bothPass"] == 60
+    assert report["dispatchOrderBalance"] == {"full_policy": 30, "compiler_slice": 30}
+    assert report["strategies"]["full_policy"]["refusalCorrectRate"]["value"] == 1
+    assert report["strategies"]["full_policy"]["uncachedEquivalentCostUsd"] is not None
     packets, private_map = build_blind_packets(manifest, trials)
     assert len(packets) == 60 and len(private_map["answers"]) == 120
     assert "strategy" not in json.dumps(packets) and "inputTokens" not in json.dumps(packets)

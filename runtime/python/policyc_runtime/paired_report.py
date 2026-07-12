@@ -26,6 +26,7 @@ def build_paired_report(
         critical = sum(bool(row["evaluation"]["criticalPassed"]) for row in rows)
         severe = sum(bool(row["evaluation"]["severeFailures"]) for row in rows)
         violations = sum(not bool(row["evaluation"]["passed"]) for row in rows)
+        economics = _strategy_economics(all_rows, price)
         strategies[strategy] = {
             "caseCount": len({row["caseId"] for row in all_rows}),
             "trialCount": len(all_rows),
@@ -38,12 +39,28 @@ def build_paired_report(
             "criticalFailureRate": _proportion(len(rows) - critical, len(rows)),
             "severeFailureRate": _proportion(severe, len(rows)),
             "violationRate": _proportion(violations, len(rows)),
+            "refusalCorrectRate": _proportion(
+                sum(bool(row["evaluation"]["refusalCorrect"]) for row in rows), len(rows)
+            ),
+            "toolBehaviorCorrectRate": _proportion(
+                sum(bool(row["evaluation"]["toolBehaviorCorrect"]) for row in rows), len(rows)
+            ),
+            "qualityThresholdPassRate": _proportion(
+                sum(bool(row["evaluation"]["qualityThresholdPassed"]) for row in rows), len(rows)
+            ),
             "meanAnswerQuality": _mean_nested(rows, "evaluation", "qualityScore"),
             "inputTokens": _sum_known(all_rows, "inputTokens"),
+            "regularInputTokens": _regular_input_tokens(all_rows),
             "cachedInputTokens": _sum_known(all_rows, "cachedInputTokens"),
             "outputTokens": _sum_known(all_rows, "outputTokens"),
             "costUsd": _sum_known(all_rows, "costUsd"),
+            "meanInputTokens": _mean_known(all_rows, "inputTokens"),
+            "meanOutputTokens": _mean_known(all_rows, "outputTokens"),
+            "meanCostUsd": _mean_known(all_rows, "costUsd"),
+            "meanCostColdUsd": _mean_cost_partition(all_rows, cached=False),
+            "meanCostCachedUsd": _mean_cost_partition(all_rows, cached=True),
             "meanLatencyMs": _mean_known(all_rows, "latencyMs"),
+            **economics,
         }
     indexed = {(row["caseId"], row["sampleIndex"], row["strategy"]): row for row in completed}
     pairs: list[dict[str, Any]] = []
@@ -109,6 +126,10 @@ def build_paired_report(
             "pairs": pairs,
             "perCase": per_case,
         },
+        "dispatchOrderBalance": {
+            strategy: sum(row.get("dispatchOrderIndex") == 0 for row in trials if row["strategy"] == strategy)
+            for strategy in manifest.strategies
+        },
         "outcomes": {
             status: sum(item["status"] == status for item in trials) for status in ("completed", "failed", "ambiguous")
         },
@@ -124,11 +145,15 @@ def build_paired_report(
             "graderCostUsd": None,
             "ambiguousAttemptExposureUsd": budget["ambiguousCostExposureUsd"],
             "cachedTokenSavingsUsd": _cached_savings(trials, price),
+            "uncachedEquivalentCostUsd": _uncached_equivalent_cost(trials, price),
         },
         "limitations": [
             "Confidence intervals and paired tests are descriptive at small sample sizes.",
             "Rule validators measure declared obligations and do not establish semantic equivalence.",
             "Unknown usage, latency, or cost values remain null rather than being treated as zero.",
+            "Repeated samples are clustered within cases; trial-level intervals do not create 120 independent cases.",
+            "Cached and uncached costs are reported separately because execution order can affect "
+            "prompt-cache economics.",
         ],
     }
 
@@ -173,6 +198,49 @@ def _cached_savings(rows: list[dict[str, Any]], price: ModelPrice) -> float | No
         return None
     cached = sum(row["cachedInputTokens"] for row in rows)
     return cached * (price.inputPerMillion - price.cachedInputPerMillion) / 1_000_000
+
+
+def _regular_input_tokens(rows: list[dict[str, Any]]) -> int | None:
+    if not rows or any(row.get("inputTokens") is None or row.get("cachedInputTokens") is None for row in rows):
+        return None
+    return sum(int(row["inputTokens"]) - int(row["cachedInputTokens"]) for row in rows)
+
+
+def _strategy_economics(rows: list[dict[str, Any]], price: ModelPrice) -> dict[str, float | None]:
+    if not rows or any(
+        row.get("inputTokens") is None or row.get("cachedInputTokens") is None or row.get("outputTokens") is None
+        for row in rows
+    ):
+        return {
+            "inputCostUsd": None,
+            "outputCostUsd": None,
+            "uncachedEquivalentCostUsd": None,
+            "cachedSavingsUsd": None,
+        }
+    regular = sum(int(row["inputTokens"]) - int(row["cachedInputTokens"]) for row in rows)
+    cached = sum(int(row["cachedInputTokens"]) for row in rows)
+    output = sum(int(row["outputTokens"]) for row in rows)
+    input_cost = (regular * price.inputPerMillion + cached * price.cachedInputPerMillion) / 1_000_000
+    output_cost = output * price.outputPerMillion / 1_000_000
+    uncached = ((regular + cached) * price.inputPerMillion + output * price.outputPerMillion) / 1_000_000
+    return {
+        "inputCostUsd": input_cost,
+        "outputCostUsd": output_cost,
+        "uncachedEquivalentCostUsd": uncached,
+        "cachedSavingsUsd": uncached - input_cost - output_cost,
+    }
+
+
+def _uncached_equivalent_cost(rows: list[dict[str, Any]], price: ModelPrice) -> float | None:
+    economics = _strategy_economics(rows, price)
+    return economics["uncachedEquivalentCostUsd"]
+
+
+def _mean_cost_partition(rows: list[dict[str, Any]], *, cached: bool) -> float | None:
+    if not rows or any(row.get("cachedInputTokens") is None or row.get("costUsd") is None for row in rows):
+        return None
+    selected = [float(row["costUsd"]) for row in rows if (int(row["cachedInputTokens"]) > 0) is cached]
+    return sum(selected) / len(selected) if selected else None
 
 
 def _binomial_two_sided(k: int, n: int) -> float | None:

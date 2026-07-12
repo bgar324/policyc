@@ -169,7 +169,7 @@ Commands:
   policyc compile-candidates  # deprecated; use experiment
   policyc experiment --cases eval/behavioral/smoke-v1.jsonl --strategies full_policy,compiler_slice --provider openai --model gpt-5-mini-2025-08-07 --samples 1 --concurrency 1 --max-output-tokens 1024 --max-calls 2 --max-cost-usd 0.02 --retries 0 --run-label smoke-1 --output runs/openai-smoke --dry-run
   policyc cases validate --cases eval/behavioral/smoke-v1.jsonl
-  policyc cases freeze --cases eval/behavioral/held-out-pilot-v1.jsonl
+  policyc cases freeze --cases eval/behavioral/pilot-v2.jsonl
   policyc runs list
   policyc runs show <run-id>
   policyc runs rebuild --root runs

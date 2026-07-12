@@ -36,6 +36,7 @@ class PairedTrialSpec:
     case_id: str
     strategy: str
     sample_index: int
+    dispatch_order_index: int
     case: BehavioralCase
 
 
@@ -329,6 +330,7 @@ class PairedExperimentRuntime:
             "caseId": spec.case_id,
             "strategy": spec.strategy,
             "sampleIndex": spec.sample_index,
+            "dispatchOrderIndex": spec.dispatch_order_index,
             "status": "completed",
             "attemptCount": attempt,
             "provider": self.loaded.manifest.provider,
@@ -372,6 +374,7 @@ class PairedExperimentRuntime:
             "caseId": spec.case_id,
             "strategy": spec.strategy,
             "sampleIndex": spec.sample_index,
+            "dispatchOrderIndex": spec.dispatch_order_index,
             "status": status,
             "attemptCount": attempt,
             "error": error_info,
@@ -389,9 +392,10 @@ class PairedExperimentRuntime:
     def _specs(self) -> list[PairedTrialSpec]:
         manifest = self.loaded.manifest
         specs = []
-        for plan in manifest.casePlans:
+        for case_index, plan in enumerate(manifest.casePlans):
             for sample in range(manifest.sampleCount):
-                for strategy in manifest.strategies:
+                ordered_strategies = _ordered_strategies(manifest.strategies, case_index, sample)
+                for order_index, strategy in enumerate(ordered_strategies):
                     artifact = self.loaded.artifacts[f"{plan.caseId}:{strategy}"]
                     trial_id = stable_id(
                         "trial",
@@ -406,7 +410,7 @@ class PairedExperimentRuntime:
                             "sample": sample,
                         },
                     )
-                    specs.append(PairedTrialSpec(trial_id, plan.caseId, strategy, sample, plan.case))
+                    specs.append(PairedTrialSpec(trial_id, plan.caseId, strategy, sample, order_index, plan.case))
         return specs
 
 
@@ -491,3 +495,8 @@ def _catalog_status(results: list[dict[str, Any]]) -> str:
     if "ambiguous" in statuses:
         return "ambiguous"
     return "failed"
+
+
+def _ordered_strategies(strategies: list[str], case_index: int, sample_index: int) -> list[str]:
+    ordered = list(strategies)
+    return ordered if (case_index + sample_index) % 2 == 0 else list(reversed(ordered))

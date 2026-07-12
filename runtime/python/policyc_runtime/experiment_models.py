@@ -47,7 +47,7 @@ class Rubric(StrictModel):
 class BehavioralCase(StrictModel):
     schemaVersion: Literal["1.0.0"]
     datasetVersion: str
-    split: Literal["development", "held-out", "adversarial", "smoke"]
+    split: Literal["development", "pilot", "held-out", "adversarial", "smoke"]
     caseId: str
     request: str
     artifactContext: dict[str, Any] | None

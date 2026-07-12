@@ -152,19 +152,20 @@ The 20-case pilot shape is:
 
 ```bash
 pnpm policyc experiment \
-  --cases eval/behavioral/held-out-pilot-v1.jsonl \
+  --cases eval/behavioral/pilot-v2.jsonl \
   --strategies full_policy,compiler_slice \
   --provider openai \
   --model gpt-5-mini-2025-08-07 \
   --samples 3 --concurrency 2 \
   --max-output-tokens 1024 --max-calls 120 \
-  --max-cost-usd 0.50 --retries 0 \
-  --output runs/openai-pilot --dry-run
+  --max-cost-usd 0.55 --retries 0 \
+  --run-label pilot-v2 \
+  --output runs/openai-pilot-v2 --dry-run
 ```
 
 ### Dataset discipline
 
-Use `development-v1.jsonl` for iteration, freeze compiler and cases, then run the versioned held-out set once. Every manifest persists the split, version, and canonical hash; edits or relabeling cause validation failure. Export discovered failures to a separate development file rather than rewriting held-out inputs. `adversarial-template-v1.jsonl` is intentionally non-executable until independently authored cases replace its template row.
+Use `development-v1.jsonl` for iteration, freeze compiler and cases, then run a versioned evaluation set once. `pilot-v2.jsonl` is a development-informed pilot, not a held-out set; its preregistration and the rejected v1 audit live under `eval/`. Every manifest persists the split, version, and canonical hash; edits or relabeling cause validation failure. Export discovered failures to a separate development file rather than rewriting evaluated inputs. `adversarial-template-v1.jsonl` is intentionally non-executable until independently authored cases replace its template row.
 
 ### Blinded grading
 
@@ -229,7 +230,7 @@ V2 runs additionally contain `raw/<trial>/attempt-*.json`, parsed `provider/*.js
 - Intent detection is lexical and can miss paraphrases.
 - The existing 157-case selector evaluation is repository-authored, not held out.
 - The deterministic evaluator uses regular expressions and is not a complete judge of model behavior.
-- The 20-case held-out pilot is small and repository-authored; it supports a disciplined first pilot, not broad external validity.
+- The 20-case pilot set is small and repository-authored; it is not held out and does not provide broad external validity.
 - The fake provider validates scheduling and reproducibility, not policy preservation.
 - The OpenAI adapter is contract-tested against mocked documented shapes but has not yet been verified by a live call.
 - Network ambiguity prevents guaranteed exactly-once billing; PolicyC stops by default and surfaces the exposure.

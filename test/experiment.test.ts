@@ -10,10 +10,10 @@ test("loads and hashes the one-case smoke set", () => {
   assert.equal(first.datasetHash, second.datasetHash);
 });
 
-test("held-out pilot has exactly 20 independently declared cases", () => {
-  const dataset = loadBehavioralCases("eval/behavioral/held-out-pilot-v1.jsonl");
+test("pilot set has exactly 20 independently declared cases", () => {
+  const dataset = loadBehavioralCases("eval/behavioral/pilot-v2.jsonl");
   assert.equal(dataset.cases.length, 20);
-  assert.equal(dataset.split, "held-out");
+  assert.equal(dataset.split, "pilot");
   assert.equal(new Set(dataset.cases.map((item) => item.caseId)).size, 20);
   assert.ok(dataset.cases.every((item) => item.criticalObligationIds.length > 0));
 });
