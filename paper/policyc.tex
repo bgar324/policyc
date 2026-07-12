@@ -1,0 +1,293 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{amsmath,amssymb}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{enumitem}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!55!black,
+  citecolor=blue!55!black,
+  urlcolor=blue!55!black
+}
+\setlist{nosep}
+\newcommand{\policyc}{\textsc{PolicyC}}
+\newcommand{\px}{P_x}
+
+\title{\policyc: Compiling Large Policy Prompts into Task-Specific Obligation Slices}
+\author{Author omitted for draft}
+\date{July 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Large system prompts increasingly combine safety rules, privacy constraints, tool-use requirements, artifact-specific procedures, formatting conventions, and general behavioral guidance. Sending the entire policy prompt for every request increases input length and cost, but removing apparently irrelevant instructions can silently remove critical obligations. We study the following question: given a policy prompt $P$ and user request $x$, can a compiler construct a much smaller active subset $\px$ while preserving the critical obligations satisfied under $P$?
+
+We present \policyc, a research prototype that represents a synthetic enterprise-agent prompt as a validated dependency graph of 39 policy nodes across six policy packs. A deterministic TypeScript compiler detects request intents, selects directly applicable policies, conservatively retains high-impact rules, computes dependency closure, and emits a compact runtime contract. A Python asynchronous runtime executes paired full-policy and compiled-policy trials with hard call, token, and dollar ceilings; atomic persistence and resumability; hash-linked provenance; a local SQLite catalog; deterministic rule evaluation; and blinded grading packets.
+
+In a preregistered 50-case held-out experiment using a pinned GPT-5 mini model, three samples per case and condition produced 300 provider calls. The compiled condition reduced mean input tokens from 16,242 to 288 (98.23\%), reduced mean latency by 19.95\%, and reduced uncached-equivalent generation cost by 67.80\%. Actual billed cost fell by 23.01\% despite a 98.6\% cache rate on the repeated full prompt. Twenty-six responses reached the 2,048-token cap, leaving 129 complete pairs. Strategy-blind semantic grading of every complete pair found 92 both-pass, 15 full-only-pass, nine compiled-only-pass, and 13 both-fail critical outcomes. Conditional preservation was therefore $92/107=85.98\%$ (trial-level Wilson 95\% interval: 78.15\%--91.32\%). Eleven of 15 regressions arose from one emitter defect that exposed an internal tool-status directive; four represented distinct confirmation or meaning-preservation failures. Thus, the experiment demonstrates large efficiency gains but rejects a near-equivalence claim for the tested compiler. The result is valuable precisely because it localizes a concentrated set of compiler failures needed for a stronger follow-up.
+\end{abstract}
+
+\section{Introduction}
+
+System prompts for production language-model applications are becoming policy programs. A single prompt may specify which tools must be used for current information, when citations are required, how destructive actions are confirmed, what private attributes must not be inferred, how spreadsheets or documents are handled, which hidden material must not be disclosed, and how answers should be formatted. Most requests activate only a fraction of these rules, yet conventional inference supplies the full prompt every time.
+
+Generic prompt-compression work removes low-information tokens or passages while attempting to preserve downstream task quality \cite{selectivecontext,llmlingua,longllmlingua,llmlingua2}. Policy prompts pose a different objective. A rare sentence about irreversible deletion can be irrelevant to most tasks but decisive for one task. Average semantic similarity or answer quality is therefore insufficient: a compressor must preserve the obligations that are critical for the particular request. Related alignment work emphasizes explicit principles and privileged instruction levels \cite{constitutional,instructionhierarchy}, but does not address request-conditioned compilation of a large policy program.
+
+We formulate policy prompt compilation as follows. Let $P$ be a set of policy nodes extracted from a large prompt, and let $x$ include a user request and optional structured artifact context. A compiler $S$ produces a dependency-closed subset
+\begin{equation}
+  \px = \operatorname{closure}(S(P,x)).
+\end{equation}
+Let $C(P,x,y)$ indicate that response $y$, generated under policy condition $P$, satisfies every independently declared critical obligation for $x$. The primary behavioral target is conditional preservation:
+\begin{equation}
+  \Pr\!\left[C(\px,x,Y_{\px})=1 \mid C(P,x,Y_P)=1\right] \approx 1.
+\end{equation}
+This conditioning matters: if the full-policy baseline fails, a paired failure does not support preservation. The efficiency target is the relative input reduction
+\begin{equation}
+  R_{\mathrm{input}} = 1 - \frac{T_{\mathrm{input}}(\px,x)}{T_{\mathrm{input}}(P,x)}.
+\end{equation}
+
+This paper makes four contributions:
+\begin{enumerate}
+  \item a typed, dependency-aware representation and deterministic compiler for task-specific policy slicing;
+  \item a safety-bounded, resumable paired-experiment runtime that separates compiler construction from behavioral execution;
+  \item a staged empirical record from offline tests through paid smoke tests, development pilots, compiler hardening, and a frozen held-out run; and
+  \item an honest negative-positive result: very large efficiency gains alongside a blind semantic preservation estimate of 85.98\%, below the near-equivalence target.
+\end{enumerate}
+
+\section{Related Work}
+
+\paragraph{Prompt compression.}
+Selective Context filters content using self-information \cite{selectivecontext}. LLMLingua introduces coarse-to-fine and token-level compression and reports high compression ratios with limited performance loss on several general tasks \cite{llmlingua}; LongLLMLingua adapts compression to long-context retrieval and position bias \cite{longllmlingua}. LLMLingua-2 reframes task-agnostic prompt compression as token classification learned from distilled data \cite{llmlingua2}. These systems primarily optimize task accuracy, semantic fidelity, latency, or cost. \policyc instead treats policies as typed program elements and evaluates independently specified obligations, because low-frequency policy text may be behaviorally critical even when it contributes little to semantic content.
+
+\paragraph{Rule-guided alignment and instruction priority.}
+Constitutional AI demonstrates how a written set of principles can guide critique, revision, and preference learning \cite{constitutional}. The Instruction Hierarchy formalizes priority among system, user, and lower-trust instructions and improves resistance to prompt injection \cite{instructionhierarchy}. \policyc is complementary: it does not train a model or define a new priority hierarchy. It asks which privileged rules must remain active for a particular request and whether a smaller runtime prompt preserves their observed effect.
+
+\paragraph{Behavioral evaluation.}
+Policy compilation requires a distinction between structural and behavioral evidence. Structural recall asks whether annotated policy nodes were selected; behavioral preservation asks whether paired outputs satisfy the same independently authored obligations. \policyc therefore does not use its selector output as evaluation ground truth. It produces paired counts, exact obligation regressions, failure provenance, and blinded packets for manual adjudication.
+
+\section{System Design}
+
+\subsection{Policy representation}
+
+The current policy corpus contains 39 manually structured nodes across six YAML packs: core behavior, web/current information, files, email and calendar, images, and writing. Each node includes a stable identifier, kind, severity, priority, triggers, optional dependencies, runtime instructions, obligations, prohibitions, and validator references. Node kinds distinguish always-active universal rules, request-gated content rules, and structural definitions.
+
+Runtime validation rejects unknown fields and invalid enum values. Graph validation rejects duplicate identifiers and edges, missing references, self-dependencies, cycles, invalid always-active configurations, unknown validators, and unreachable structural nodes. This representation is deliberately explicit: the present prototype compiles a structured policy graph, not arbitrary unparsed natural-language prompt text.
+
+\subsection{Deterministic compiler}
+
+Given request $x$ and optional artifact context, the compiler performs six steps:
+\begin{enumerate}
+  \item detect intents using deterministic lexical and structured-context rules;
+  \item activate universal and always-active nodes;
+  \item match policy triggers against the request, artifact type, operation, features, domain hints, risk hints, and available tools;
+  \item conservatively retain safety, privacy, and tool policies on recognized high-impact surfaces;
+  \item compute the transitive \texttt{requires} closure with queue-based graph traversal; and
+  \item order nodes deterministically and emit a compact execution contract, active rules, required actions, prohibitions, and the original user request.
+\end{enumerate}
+
+The experimental compiler can serialize five construction strategies: \texttt{full\_policy}, \texttt{compiler\_slice}, \texttt{kernel\_only}, \texttt{direct\_matches}, and \texttt{conservative\_expanded}. This paper evaluates only the paired full-policy and compiler-slice conditions.
+
+Universal policies initially expanded into repetitive runtime instructions. Compiler version 0.5 replaced this duplication with a compact universal kernel covering honesty, privacy, hidden reasoning, fabrication, trace exposure, tool simulation, and background-work claims. Request-specific non-universal rules remain separately emitted.
+
+\subsection{Cross-language execution boundary}
+
+TypeScript is the authority for policy loading, schema validation, graph construction, matching, closure, candidate construction, prompt emission, token counting, hashing, and artifact serialization. Python owns repeated provider calls, bounded concurrency, rate limiting, timeout and retry policy, event streams, atomic persistence, evaluation, reports, and run-catalog storage. JSON Schemas define the boundary, and Python revalidates candidate and prompt hashes before execution.
+
+This separation prevents the behavioral runtime from silently reconstructing a different compiler. Trial identifiers and provenance hashes bind the run, dataset, compiler, candidate, provider, model, and sample.
+
+\subsection{Paid-experiment safety}
+
+The live workflow was designed to fail closed. A dry run validates payloads and computes logical and worst-case spend. Paid execution requires a run-specific confirmation string. Hard ceilings cover provider calls, input tokens, output tokens, and dollars. Missing usage fails rather than being treated as zero. The API key is read from the environment and is never persisted.
+
+Raw provider responses are atomically stored before parsing. Completed trials resume without another provider call when their provenance matches. Ambiguous network outcomes consume a call and worst-case cost reservation and are not retried unless explicitly configured. A SQLite catalog stores status, Git commit and dirty state, dataset and manifest hashes, usage, cost, and authoritative artifact locations; the immutable run directories remain the source of truth and can rebuild the catalog.
+
+\section{Evaluation Method}
+
+\subsection{Paired cases}
+
+Each behavioral case declares a request, independently specified applicable obligations, critical-obligation identifiers, prohibitions, refusal expectation, tool expectation, and rubric. The obligations are not derived from the candidate prompt. For every case and sample index, both prompt strategies call the same pinned model. Dispatch order is deterministically counterbalanced.
+
+The deterministic evaluator checks declared obligations and a universal floor: no claimed background work, no hidden-reasoning disclosure, no unsupported precision pattern, no raw tool trace, and no simulated tool action without a recorded call. It reports all-obligation pass, critical pass, severe failures, refusal correctness, tool correctness, and exact failed obligation identifiers. Because lexical validators are incomplete semantic measurements, every run also produces opaque, randomly ordered answer pairs for blinded manual review.
+
+\subsection{Staged experimental journey}
+
+The project progressed through four empirical stages.
+
+\paragraph{Offline MVP and runtime construction.}
+The first implementation validated policy selection, dependency closure, deterministic artifacts, and a fake-provider end-to-end workflow. The runtime then added asynchronous bounded workers, persistence, resume behavior, provider adapters, and cross-language contract tests.
+
+\paragraph{Safe live smoke tests.}
+Two-call paid tests exposed practical requirements that were not visible offline: definitive quota failures, preservation of failed attempts, incomplete-response handling, exact cost accounting, key hygiene, and idempotent resume. These failures were retained rather than overwritten by successful retries.
+
+\paragraph{Development pilot and remediation.}
+A 20-case, three-sample paired pilot initially used a 1,024-token output limit. Of 120 calls, 31 were incomplete, showing that the cap was too small for a reasoning-token model. A preregistered 2,048-token follow-up completed all 120 calls. Its original evaluator reported 55 both-pass, three full-only-pass, and two both-fail pairs. An offline evaluator-2.3 regrade added universal behavioral checks and exposed seven compiler regressions involving simulated unavailable lookup and background-work promises. Those responses became development evidence, not held-out evidence. Compiler 0.4 hardened tool gating and universal evaluation; compiler 0.5 compacted universal emission. A four-case development smoke then achieved four of four both-pass pairs while reducing mean input tokens from 16,217 to 202, a 98.75\% reduction. This smoke was a regression gate, not a research conclusion.
+
+\paragraph{Frozen held-out evaluation.}
+An independently authored 50-case dataset was schema- and evaluator-contract-audited before any compiler execution. The exact case file and preregistration were frozen at Git commit \texttt{53fc3c0}, with canonical SHA-256 \texttt{1017c9ad1b9c9c869856009452ba282c43997085c16557999f1b04ebd4c92765}. No selector, compiler, policy-pack, evaluator, case, label, or analysis rule was changed after compilation began.
+
+The held-out configuration used \texttt{gpt-5-mini-2025-08-07}, three samples, two strategies, concurrency six, 2,048 maximum output tokens, no retries, 300 maximum calls, and a \$2.25 hard cost ceiling. No provider tools were exposed, so the experiment cannot support a claim about tool-call preservation.
+
+\section{Results}
+
+\subsection{Execution integrity}
+
+The held-out run executed all 300 authorized provider calls from a clean Git state. It cost \$0.6881, below the \$1.235 expected estimate and \$2.25 ceiling. There were no ambiguous provider outcomes. However, 26 trials reached the output ceiling and were marked incomplete: 19 full-policy trials and seven compiler-slice trials. Consequently, only 129 of 150 sample pairs had two complete responses.
+
+\begin{table}[t]
+\centering
+\caption{Held-out efficiency results. Means use all 150 attempted trials per strategy for usage and latency accounting as recorded by the report; pass rates use completed trials.}
+\label{tab:efficiency}
+\begin{tabular}{lrrr}
+\toprule
+Metric & Full policy & Compiler slice & Relative change \\
+\midrule
+Mean input tokens & 16,242.16 & 287.66 & $-98.23\%$ \\
+Mean output tokens & 1,067.89 & 961.75 & $-9.94\%$ \\
+Mean latency (s) & 10.91 & 8.74 & $-19.95\%$ \\
+Actual generation cost & \$0.3888 & \$0.2993 & $-23.01\%$ \\
+Uncached-equivalent cost & \$0.9294 & \$0.2993 & $-67.80\%$ \\
+Completed / attempted & 131 / 150 & 143 / 150 & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:efficiency} shows the central positive result. The compiler removed nearly all policy input while also reducing output usage and latency. The actual billed saving is smaller than the uncached-equivalent saving because 2,403,072 of the full condition's 2,436,324 input tokens were billed as cached input. We therefore separate prompt-cache economics from compiler savings.
+
+\subsection{Behavioral outcomes}
+
+Among completed trials, critical-pass rates were 56.49\% for the full policy (74/131) and 54.55\% for the compiler slice (78/143), a difference of $-1.94$ percentage points for the compiled condition. These marginal rates have different denominators because truncation was asymmetric and therefore should not be interpreted as a clean paired estimate.
+
+\begin{table}[t]
+\centering
+\caption{Paired outcomes among the 129 pairs with two complete responses. ``All obligations'' is the report's primary rule result; ``rule-critical'' uses stored deterministic critical outcomes; ``blind semantic'' uses the frozen adjudication.}
+\label{tab:pairs}
+\begin{tabular}{lrrr}
+\toprule
+Paired outcome & All obligations & Rule-critical & Blind semantic \\
+\midrule
+Both pass & 47 & 56 & 92 \\
+Full only passes & 17 & 17 & 15 \\
+Compiler only passes & 11 & 13 & 9 \\
+Both fail & 54 & 43 & 13 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For all-obligation rule pass, the exact two-sided McNemar $p$-value was 0.345. For the 24 semantically discordant critical pairs, the corresponding value was 0.3075. This experiment does not show a statistically clear directional difference, but equivalence is a stronger claim than failure to detect a difference. The primary conditional estimate was $92/(92+15)=85.98\%$, with a trial-level Wilson 95\% interval of 78.15\%--91.32\%. The upper bound remains below the intended near-100\% target.
+
+\subsection{Failure analysis}
+
+All 129 complete pairs were graded in two strategy-blind rounds using opaque answer identifiers. Only after both grade files were frozen were identifiers joined to strategies. The adjudication revealed two categories.
+
+\paragraph{Evaluator artifacts.}
+Several apparent regressions were semantically compliant answers missed by narrow lexical rules. Examples included refusing with ``I can't reveal'' rather than an accepted refusal template, citing ``\S7(a)'' rather than spelling out ``Section 7(a),'' using ``following'' where a term matcher expected ``follow,'' and expressing uncertainty in language outside a fixed phrase list. The semantic grader raised full-policy critical pass from 74 completed trials to 107 complete-pair answers and compiled critical pass from 78 to 101, confirming that rule scores substantially understated both conditions.
+
+\paragraph{Confirmed compiler regressions.}
+Fifteen full-only semantic regressions occurred across nine case IDs. Eleven (73.3\%) came from the compact emitter exposing the internal directive-like string \texttt{report\_unavailable\_tool:web}. The remaining four failures covered explicit confirmation before production publication, confirmation before whole-file overwrite with uncommitted changes, clarification of one calendar cancellation versus a recurring series, and preservation of legal scope during rewriting. If the directive leak alone were removed while all other answer behavior remained fixed, the observed conditional point estimate would rise to $103/107=96.26\%$; this is a counterfactual diagnostic, not a new experimental result.
+
+\section{Discussion}
+
+\subsection{What the experiment establishes}
+
+The held-out result establishes that deterministic, obligation-aware policy slicing can reduce policy context by approximately 98\% in this synthetic system and can translate that reduction into lower latency and materially lower uncached cost. It also demonstrates an experiment pipeline capable of preserving raw evidence, bounding spend, resuming safely, distinguishing cached from uncached economics, and tracing failures to exact cases, prompts, compiler hashes, and commits.
+
+The result does not establish that critical obligations are preserved in general or at a near-100\% rate on the present dataset. The correct conclusion is mixed: the efficiency hypothesis is strongly supported for this setting, while the preservation hypothesis is resolved negatively for compiler 0.5 at an 85.98\% conditional point estimate.
+
+\subsection{Why paired conditioning matters}
+
+Raw both-pass rate is not the sole target because the full prompt can fail or truncate. The relevant numerator is the number of pairs where both conditions pass critical obligations, and the denominator is the number where the full condition passes them. Blind grading yields $92/(92+15)=85.98\%$ among complete pairs. At the stricter clustered level, 42 cases had at least one complete full-policy critical pass; 33 had no observed full-only regression and nine had at least one, for 78.57\% regression-free eligible cases. Neither measure can recover the 21 incomplete pairs.
+
+\subsection{Engineering lessons}
+
+Several lessons emerged from the development journey:
+\begin{itemize}
+  \item Structural policy recall is not behavioral preservation. Universal tool-simulation failures were invisible until every response received universal behavioral checks.
+  \item Output-token ceilings interact with reasoning models. A nominally short answer can exhaust its cap through hidden reasoning tokens; truncation must remain a failure rather than being silently scored.
+  \item Prompt caching can reverse naive billed-cost comparisons. Compiler savings should be reported both as actual warm-cache cost and uncached-equivalent cost.
+  \item Machine-readable prompt syntax can leak into the response. Runtime contracts should use natural instructions or delimit internal metadata so it is not copied verbatim.
+  \item Held-out failures are research assets. Once observed, they should be exported into development regression tests, not repaired in place or rerun as though still held out.
+\end{itemize}
+
+\section{Limitations and Threats to Validity}
+
+\paragraph{Structured rather than arbitrary prompt compilation.}
+The initial research question refers to a large system prompt $P$, but the current compiler begins from 39 manually structured YAML nodes. Automatic extraction of policies, dependencies, priorities, and validators from arbitrary natural-language prompts remains future work.
+
+\paragraph{Single model and synthetic policy environment.}
+All live results use one pinned GPT-5 mini snapshot and a synthetic enterprise policy prompt. Behavior may differ across providers, model sizes, model updates, temperatures, or real organizational policies.
+
+\paragraph{Limited independent sample size.}
+The held-out set contains 50 independently authored cases. Three generations per case measure stochastic variability but do not create 150 independent policy situations. Confidence statements must cluster at the case level.
+
+\paragraph{No tool execution.}
+The held-out dataset intentionally exposed no provider tools. It tests refusal, limitation, confirmation, privacy, citation, artifact, numerical, and writing behavior, but cannot establish that compiled prompts preserve correct tool selection or arguments.
+
+\paragraph{Evaluator validity.}
+Evaluator 2.3 is deterministic and reproducible but lexically narrow. It produced both false positives and false negatives relative to semantic judgment. A single fresh Codex reviewer graded all complete pairs in two rounds; this removes strategy visibility but does not provide inter-annotator reliability, and the optional reviewer identifier and timestamp were left blank.
+
+\paragraph{Asymmetric truncation.}
+Nineteen full-policy and seven compiled-policy responses reached the 2,048-token cap. Excluding incomplete pairs loses data non-randomly; treating them as passes would be invalid. A future preregistered experiment should use a larger cap and concise answer contract while retaining a hard budget.
+
+\paragraph{Dataset audit and independence.}
+The held-out cases were independently authored and were revised before compiler execution to conform to the frozen evaluator's schema and validator contract. This protects compiler holdout discipline, but it is weaker than a fully external, untouched benchmark with independently validated semantic labels.
+
+\section{Future Work}
+
+The immediate next step is to copy confirmed semantic failures into a development corpus. The emitter should remove machine-oriented directive tokens from model-visible text. Compiler remediation should add explicit coverage for production publication, whole-file overwrite with uncommitted changes, calendar-series cancellation, and legal-scope preservation.
+
+Evaluator 2.4 should broaden generic refusal, citation, morphological, and uncertainty recognition, with unit tests written independently of strategy labels. The existing held-out responses can then be regraded offline as a derived analysis while preserving the original report. After development tests pass, a new independently authored \texttt{held-out-v2} should use at least a 4,096-token cap and a larger number of independent cases. The desired confirmatory target is near-zero full-critical-pass/compiler-critical-fail cases, high absolute semantic compliance for both conditions, and continued efficiency gains.
+
+Longer-term work includes parsing arbitrary natural-language prompts into typed policy graphs, learned or hybrid selectors with calibrated conservative fallback, tool-enabled evaluations, cross-model replication, case-clustered uncertainty estimates, and minimization algorithms that search for the smallest obligation-preserving slice rather than applying only deterministic triggers.
+
+\section{Conclusion}
+
+\policyc treats system-prompt reduction as policy compilation rather than generic text compression. Its first held-out experiment shows that a request-specific dependency-closed prompt can be roughly two orders of magnitude smaller than the full policy prompt while reducing latency and uncached cost. It also shows why efficiency alone is not enough: model-visible internal directives, missed confirmation and meaning-preservation obligations, evaluator artifacts, and output truncations block a defensible equivalence claim. The project has therefore reached a productive research milestone. It has not proven the hypothesis, but it has transformed it into a reproducible experiment with measurable counterexamples and a clear path toward stronger evidence.
+
+\begin{thebibliography}{9}
+
+\bibitem{selectivecontext}
+Y. Li.
+\newblock Unlocking Context Constraints of LLMs: Enhancing Context Efficiency of LLMs with Self-Information-Based Content Filtering.
+\newblock \emph{arXiv:2304.12102}, 2023.
+\newblock \url{https://arxiv.org/abs/2304.12102}.
+
+\bibitem{llmlingua}
+H. Jiang, Q. Wu, C.-Y. Lin, Y. Yang, and L. Qiu.
+\newblock LLMLingua: Compressing Prompts for Accelerated Inference of Large Language Models.
+\newblock \emph{arXiv:2310.05736}, 2023.
+\newblock \url{https://arxiv.org/abs/2310.05736}.
+
+\bibitem{longllmlingua}
+H. Jiang, Q. Wu, X. Luo, D. Li, C.-Y. Lin, Y. Yang, and L. Qiu.
+\newblock LongLLMLingua: Accelerating and Enhancing LLMs in Long Context Scenarios via Prompt Compression.
+\newblock \emph{arXiv:2310.06839}, 2023.
+\newblock \url{https://arxiv.org/abs/2310.06839}.
+
+\bibitem{llmlingua2}
+Z. Pan, Q. Wu, H. Jiang, M. Xia, X. Luo, J. Zhang, Q. Lin, V. R\"uhle, Y. Yang, C.-Y. Lin, H. V. Zhao, L. Qiu, and D. Zhang.
+\newblock LLMLingua-2: Data Distillation for Efficient and Faithful Task-Agnostic Prompt Compression.
+\newblock \emph{arXiv:2403.12968}, 2024.
+\newblock \url{https://arxiv.org/abs/2403.12968}.
+
+\bibitem{constitutional}
+Y. Bai et al.
+\newblock Constitutional AI: Harmlessness from AI Feedback.
+\newblock \emph{arXiv:2212.08073}, 2022.
+\newblock \url{https://arxiv.org/abs/2212.08073}.
+
+\bibitem{instructionhierarchy}
+E. Wallace, K. Xiao, R. Leike, L. Weng, J. Heidecke, and A. Beutel.
+\newblock The Instruction Hierarchy: Training LLMs to Prioritize Privileged Instructions.
+\newblock \emph{arXiv:2404.13208}, 2024.
+\newblock \url{https://arxiv.org/abs/2404.13208}.
+
+\end{thebibliography}
+
+\end{document}

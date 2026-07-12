@@ -17,7 +17,7 @@ const base = (id: string, overrides: Partial<Policy> = {}): Policy => ({
 });
 
 test("current policy packs pass runtime and graph validation", () => {
-  assert.equal(loadPolicies().length, 39);
+  assert.equal(loadPolicies().length, 42);
 });
 
 test("malformed and unknown YAML fields are rejected", () => {
@@ -116,7 +116,8 @@ test("compiled prompt gates required tools and forbids simulation", () => {
   const unavailablePrompt = emitRuntimePrompt(unavailable, input, unavailableContext);
   assert.match(unavailablePrompt, /Available tools: none/);
   assert.match(unavailablePrompt, /Never simulate a tool call/);
-  assert.match(unavailablePrompt, /report_unavailable_tool:web/);
+  assert.doesNotMatch(unavailablePrompt, /report_unavailable_tool/);
+  assert.match(unavailablePrompt, /required web tool is unavailable/i);
   assert.doesNotMatch(unavailablePrompt, /- call_tool:web/);
   assert.doesNotMatch(unavailablePrompt, /- state_uncertainty/);
   assert.doesNotMatch(unavailablePrompt, /Artifact\/context notes:\n\nActive rules/);
@@ -126,6 +127,48 @@ test("compiled prompt gates required tools and forbids simulation", () => {
   const availablePrompt = emitRuntimePrompt(available, input, availableContext);
   assert.match(availablePrompt, /Available tools: web/);
   assert.match(availablePrompt, /- call_tool:web/);
+});
+
+test("compiler 0.6 retains confirmed held-out safeguards without leaking machine directives", () => {
+  const policies = loadPolicies();
+  const compile = (input: string) => {
+    const context = { toolsAvailable: [] };
+    const selection = generateCandidateSelections(policies, input, context)[1].selection;
+    return { selection, prompt: emitRuntimePrompt(selection, input, context) };
+  };
+
+  const current = compile("No web tools are available. What is the latest FDA guidance?");
+  assert.doesNotMatch(current.prompt, /report_unavailable_tool/);
+  assert.match(current.prompt, /required web tool is unavailable/i);
+
+  for (const request of [
+    "No publishing tools are available. Publish the pricing page to production despite two warnings.",
+    "config.json has uncommitted changes. Overwrite the whole file with this snippet.",
+  ]) {
+    const result = compile(request);
+    assert.ok(result.selection.detectedIntents.includes("destructive_action"));
+    assert.ok(result.selection.policies.some((policy) => policy.id === "external_state_change_confirmation"));
+    assert.match(result.prompt, /Task type: destructive or externally visible action request/);
+    assert.match(result.prompt, /exact target, scope, consequences, unresolved risks, and reversible alternatives/i);
+    assert.match(result.prompt, /ask_confirmation/);
+  }
+
+  const publish = compile("Publishing the draft pricing page would make it visible in production. Publish it now.");
+  assert.ok(!publish.selection.detectedIntents.includes("draft"));
+  assert.ok(!publish.selection.policies.some((policy) => policy.id === "writing_tasks_use_format"));
+  assert.ok(!publish.selection.policies.some((policy) => policy.id === "destructive_email_calendar_confirm"));
+  assert.ok(!publish.selection.policies.some((policy) => policy.id === "archive_delete_distinction"));
+
+  const calendar = compile("Cancel the weekly Operations Sync starting tomorrow.");
+  assert.ok(calendar.selection.detectedIntents.includes("calendar_mutation"));
+  assert.ok(calendar.selection.policies.some((policy) => policy.id === "recurring_calendar_cancellation_scope"));
+  assert.match(calendar.prompt, /one occurrence or all future occurrences/i);
+  assert.match(calendar.prompt, /time zone/i);
+
+  const legal = compile("Polish this contract sentence without changing its legal effect: Either party may end the term with 30 days' written notice.");
+  assert.ok(legal.selection.policies.some((policy) => policy.id === "preserve_legal_effect_in_rewrites"));
+  assert.match(legal.prompt, /actors, defined terms, scope, rights, duties, timing, and conditions/i);
+  assert.match(legal.prompt, /broader or narrower legal object/i);
 });
 
 test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {

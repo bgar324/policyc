@@ -7,6 +7,7 @@ from pathlib import Path
 
 import uvicorn
 
+from .adjudication import build_adjudication_bundle, build_completion_bundle
 from .catalog import RunCatalog, default_catalog_path
 from .events import serialize_sse
 from .manifest import load_run
@@ -35,6 +36,15 @@ def main() -> None:
     runs.add_argument("--root", type=Path, default=Path("runs"))
     runs.add_argument("--limit", type=int, default=50)
     runs.add_argument("--json", action="store_true")
+    adjudication = subcommands.add_parser("adjudication-bundle")
+    adjudication.add_argument("run_directory", type=Path)
+    adjudication.add_argument("--output", type=Path)
+    adjudication.add_argument("--agreements-per-class", type=int, default=10)
+    completion = subcommands.add_parser("adjudication-completion-bundle")
+    completion.add_argument("run_directory", type=Path)
+    completion.add_argument("--prior-bundle", type=Path, required=True)
+    completion.add_argument("--completed-grades", type=Path, required=True)
+    completion.add_argument("--output", type=Path)
     args = parser.parse_args()
     if args.command == "serve":
         uvicorn.run("policyc_runtime.service:app", host=args.host, port=args.port)
@@ -42,6 +52,23 @@ def main() -> None:
         asyncio.run(run_paired_manifest(args.manifest, dry_run=args.dry_run, yes=args.yes))
     elif args.command == "runs":
         run_catalog_command(args.action, args.run_id, args.catalog, args.root, args.limit, args.json)
+    elif args.command == "adjudication-bundle":
+        output = args.output or args.run_directory / "blind" / "adjudication-v1"
+        result = build_adjudication_bundle(
+            args.run_directory,
+            output,
+            agreements_per_class=args.agreements_per_class,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
+    elif args.command == "adjudication-completion-bundle":
+        output = args.output or args.run_directory / "blind" / "adjudication-completion-v1"
+        result = build_completion_bundle(
+            args.run_directory,
+            args.prior_bundle,
+            args.completed_grades,
+            output,
+        )
+        print(json.dumps(result, indent=2, sort_keys=True))
     else:
         asyncio.run(run_manifest(args.manifest))
 

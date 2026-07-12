@@ -24,11 +24,11 @@ export function emitRuntimePrompt(selection: PolicySelection, input: string, con
     });
 
   const obligations = unique(
-    selection.policies.flatMap((policy) => (policy.kind === "universal" ? [] : policy.obligations.map((obligation) => {
+    selection.policies.flatMap((policy) => (policy.kind === "universal" ? [] : policy.obligations.flatMap((obligation) => {
       if (obligation.type === "call_tool" && obligation.value && unavailableRequiredTools.has(obligation.value.toLowerCase())) {
-        return `- report_unavailable_tool:${obligation.value}`;
+        return [];
       }
-      return `- ${obligationToString(obligation)}`;
+      return [`- ${obligationToString(obligation)}`];
     })))
   );
   const prohibitions = unique(
@@ -83,13 +83,13 @@ export function emitRuntimePrompt(selection: PolicySelection, input: string, con
 function inferTaskType(selection: PolicySelection, context?: ArtifactContext | null): string {
   if (selection.detectedIntents.includes("current_info")) return "current information request";
   if (selection.detectedIntents.includes("weather")) return "weather/current information request";
+  if (selection.detectedIntents.includes("destructive_action")) return "destructive or externally visible action request";
+  if (selection.detectedIntents.includes("calendar_mutation")) return "calendar mutation request";
   if (selection.detectedIntents.some((intent) => ["rewrite", "draft", "polish"].includes(intent))) return "writing task";
   if (selection.detectedIntents.includes("image_generation")) return "image generation request";
   if (selection.detectedIntents.includes("image_interpretation")) return "image interpretation request";
   if (selection.detectedIntents.includes("pdf_summary") || context?.artifactType === "pdf") return "PDF artifact task";
   if (selection.detectedIntents.includes("spreadsheet_edit") || context?.artifactType === "spreadsheet") return "spreadsheet artifact task";
-  if (selection.detectedIntents.includes("destructive_action")) return "destructive action request";
-  if (selection.detectedIntents.includes("calendar_mutation")) return "calendar mutation request";
   return "general request";
 }
 

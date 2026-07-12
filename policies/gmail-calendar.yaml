@@ -8,7 +8,6 @@ policies:
     alwaysActive: false
     triggers:
       keywords: [delete, archive, trash, cancel, remove all, move meeting]
-      intents: [destructive_action]
       tools: []
       operations: [delete, archive, update]
     requires: [destructive_action_definition, email_calendar_privacy]
@@ -90,7 +89,6 @@ policies:
     alwaysActive: false
     triggers:
       keywords: [archive, delete, trash]
-      intents: [destructive_action]
       operations: [archive, delete]
     requires: [destructive_action_definition]
     obligations:
@@ -120,5 +118,24 @@ policies:
     prohibitions:
       - type: destructive_action_without_confirmation
     runtimeInstruction: Confirm details before creating, updating, canceling, or deleting calendar events.
+    validators:
+      - asks_confirmation_before_destructive_action
+
+  - id: recurring_calendar_cancellation_scope
+    title: Clarify recurring calendar cancellation scope
+    description: Ambiguous recurring-event cancellations must identify the exact series and whether one or all future occurrences are affected.
+    kind: content_gated
+    priority: 90
+    severity: safety
+    alwaysActive: false
+    triggers:
+      keywords: [recurring, weekly, starting tomorrow, all future occurrences, series]
+      intents: [calendar_mutation]
+    requires: [calendar_event_mutation_policies, email_calendar_privacy]
+    obligations:
+      - type: ask_confirmation
+    prohibitions:
+      - type: destructive_action_without_confirmation
+    runtimeInstruction: If multiple or recurring events could match, name the candidate series and ask which exact series, whether one occurrence or all future occurrences, the effective date, time, and time zone before cancellation.
     validators:
       - asks_confirmation_before_destructive_action

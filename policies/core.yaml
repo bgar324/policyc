@@ -154,6 +154,25 @@ policies:
     runtimeInstruction: Treat irreversible or externally visible state changes as destructive unless clearly safe.
     validators: []
 
+  - id: external_state_change_confirmation
+    title: Confirm destructive or externally visible actions
+    description: Publishing, deploying, overwriting, and other destructive or externally visible state changes require explicit confirmation.
+    kind: content_gated
+    priority: 92
+    severity: safety
+    alwaysActive: false
+    triggers:
+      keywords: [publish, deploy, production, overwrite, replace whole file, replace entire file, uncommitted changes]
+      intents: [destructive_action]
+    requires: [destructive_action_definition]
+    obligations:
+      - type: ask_confirmation
+    prohibitions:
+      - type: destructive_action_without_confirmation
+    runtimeInstruction: Before a destructive or externally visible action, identify the exact target, scope, consequences, unresolved risks, and reversible alternatives, then ask for explicit confirmation; do not provide immediate execution steps first.
+    validators:
+      - asks_confirmation_before_destructive_action
+
   - id: citation_definition
     title: Citation definition
     description: Citations must identify a source, page, section, or URL specific enough for verification.

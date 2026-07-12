@@ -31,7 +31,7 @@ The protocol boundary is defined by JSON Schemas under [`protocol/`](protocol/).
 
 ## Compiler pipeline
 
-The compiler loads 39 manually structured policy nodes from six YAML packs. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
+Compiler 0.6 loads 42 manually structured policy nodes from six YAML packs. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
 
 1. Zod validates required fields, enums, priorities, triggers, and unknown fields.
 2. Graph validation rejects duplicate IDs/edges, missing references, self-dependencies, cycles, unreachable structural nodes, unknown validators, and invalid always-active configurations.
@@ -167,9 +167,28 @@ pnpm policyc experiment \
 
 Use `development-v1.jsonl` for iteration, freeze compiler and cases, then run a versioned evaluation set once. `pilot-v2.jsonl` is a development-informed pilot, not a held-out set; its preregistration and the rejected v1 audit live under `eval/`. Every manifest persists the split, version, and canonical hash; edits or relabeling cause validation failure. Export discovered failures to a separate development file rather than rewriting evaluated inputs. `adversarial-template-v1.jsonl` is intentionally non-executable until independently authored cases replace its template row.
 
+Confirmed compiler 0.5 held-out failures were copied—not moved or edited—into `eval/behavioral/compiler-v0.6-regression-v1.jsonl` as a nine-case development-only regression set. It is suitable for offline validation and a separately authorized paid development smoke, but never as fresh held-out evidence.
+
 ### Blinded grading
 
 Every v2 run writes `blind/grading-packets.json` with opaque answer IDs and deterministically randomized answer order. It omits strategy names and token counts. The private mapping is stored separately as `blind/answer-map.private.json`. Manual grading requires no paid grader; any later model-grader result is evidence, not ground truth.
+
+Create a smaller reviewer-safe adjudication bundle containing every automated critical regression plus deterministic both-pass and both-fail controls:
+
+```bash
+.venv/bin/policyc-runtime adjudication-bundle runs/<run-directory> \
+  --agreements-per-class 10
+```
+
+The reviewer folder contains enriched critical obligations, opaque answer IDs, and a fillable grade template, but no strategy names, token counts, or selection labels. A hash-linked private selection file stays beside the existing private answer map and must not be shown to the reviewer until grading is final.
+
+If targeted controls show that the automated agreement strata are unreliable, create a second bundle containing every remaining complete pair without duplicating reviewed packets:
+
+```bash
+.venv/bin/policyc-runtime adjudication-completion-bundle runs/<run-directory> \
+  --prior-bundle runs/<run-directory>/blind/adjudication-v1 \
+  --completed-grades /path/to/grades.completed.json
+```
 
 ### Persistent run catalog
 

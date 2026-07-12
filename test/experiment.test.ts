@@ -18,6 +18,15 @@ test("pilot set has exactly 20 independently declared cases", () => {
   assert.ok(dataset.cases.every((item) => item.criticalObligationIds.length > 0));
 });
 
+test("compiler 0.6 regression set contains the nine promoted development cases", () => {
+  const dataset = loadBehavioralCases("eval/behavioral/compiler-v0.6-regression-v1.jsonl");
+  assert.equal(dataset.cases.length, 9);
+  assert.equal(dataset.datasetVersion, "compiler-v0.6-regression-v1");
+  assert.equal(dataset.split, "development");
+  assert.equal(new Set(dataset.cases.map((item) => item.caseId)).size, 9);
+  assert.ok(dataset.cases.every((item) => item.criticalObligationIds.length > 0));
+});
+
 test("template datasets cannot execute", () => {
   assert.throws(
     () => loadBehavioralCases("eval/behavioral/adversarial-template-v1.jsonl"),

@@ -7,7 +7,7 @@ policies:
     severity: format
     alwaysActive: false
     triggers:
-      keywords: [rewrite, rephrase, polish, proofread, professionally, draft, compose, make this, prepare email, prepare an email, prepare]
+      keywords: [rewrite, rephrase, polish, proofread, professionally, compose, make this, prepare email, prepare an email, prepare]
       intents: [rewrite, draft, polish]
       operations: [rewrite, draft]
     requires: [writing_output_format]
@@ -53,4 +53,20 @@ policies:
     obligations: []
     prohibitions: []
     runtimeInstruction: Preserve the user's meaning unless they ask for substantive changes.
+    validators: []
+
+  - id: preserve_legal_effect_in_rewrites
+    title: Preserve legal effect in rewrites
+    description: Legal and contract rewrites must preserve actors, defined terms, scope, rights, duties, timing, and conditions unless substantive change is requested.
+    kind: content_gated
+    priority: 86
+    severity: safety
+    alwaysActive: false
+    triggers:
+      keywords: [legal effect, contract, clause, written notice, either party]
+      intents: [rewrite, polish]
+    requires: [preserve_user_meaning]
+    obligations: []
+    prohibitions: []
+    runtimeInstruction: In legal or contract rewrites, preserve the exact actors, defined terms, scope, rights, duties, timing, and conditions; do not substitute a broader or narrower legal object.
     validators: []
