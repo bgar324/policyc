@@ -53,6 +53,7 @@ export function formatMetrics(report: MetricsReport): string {
     `average full prompt tokens: ${report.averageFullPromptTokens.toFixed(0)}`,
     `average compiled prompt tokens: ${report.averageCompiledPromptTokens.toFixed(0)}`,
     `average token reduction: ${pct(report.averageTokenReductionPercentage)}`,
+    `token counting: ${report.tokenCountingMethod}`,
     `obligation pass rate: ${pct(report.obligationPassRate)}`,
     `critical obligation pass rate: ${pct(report.criticalObligationPassRate)}`,
     `forbidden behavior rate: ${pct(report.forbiddenBehaviorRate)}`,

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://policyc.dev/schema/compiled-policy-artifact-1.0.0.json",
+  "title": "PolicyC compiled policy artifact",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "compilerVersion", "candidateId", "policyPackHash", "sourcePolicyId", "sourcePolicyHash", "request", "artifactContext", "selectedPolicyIds", "directlySelectedPolicyIds", "dependencyAddedPolicyIds", "criticalPolicyIds", "dependencyEdges", "selectionReasons", "orderedRuntimeInstructions", "compiledPrompt", "compiledPromptHash", "tokenCount", "compilationStrategy", "createdAt"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "compilerVersion": { "type": "string" },
+    "candidateId": { "type": "string", "pattern": "^cand_[a-f0-9]{16}$" },
+    "policyPackHash": { "$ref": "#/$defs/hash" },
+    "sourcePolicyId": { "type": "string" },
+    "sourcePolicyHash": { "$ref": "#/$defs/hash" },
+    "request": { "type": "string" },
+    "artifactContext": { "type": ["object", "null"] },
+    "selectedPolicyIds": { "$ref": "#/$defs/strings" },
+    "directlySelectedPolicyIds": { "$ref": "#/$defs/strings" },
+    "dependencyAddedPolicyIds": { "$ref": "#/$defs/strings" },
+    "criticalPolicyIds": { "$ref": "#/$defs/strings" },
+    "dependencyEdges": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["from", "requires"], "properties": { "from": { "type": "string" }, "requires": { "type": "string" } } } },
+    "selectionReasons": { "type": "array", "items": { "type": "object" } },
+    "orderedRuntimeInstructions": { "$ref": "#/$defs/strings" },
+    "compiledPrompt": { "type": "string" },
+    "compiledPromptHash": { "$ref": "#/$defs/hash" },
+    "tokenCount": { "type": "object", "additionalProperties": false, "required": ["tokens", "method", "tokenizer"], "properties": { "tokens": { "type": "integer", "minimum": 0 }, "method": { "enum": ["exact", "estimated"] }, "tokenizer": { "type": "string" }, "model": { "type": "string" } } },
+    "compilationStrategy": { "enum": ["full_policy", "compiler_slice", "kernel_only", "direct_matches", "conservative_expanded"] },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "strings": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+  }
+}

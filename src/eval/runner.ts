@@ -85,6 +85,7 @@ function runEvalCase(testCase: EvalCase, policies: Policy[], fullPrompt: string)
     validatorFailures: validatorFailures.length,
     failedValidators,
     criticalValidatorFailures: validatorFailures.filter((result) => result.critical).length,
+    criticalValidatorPasses: validatorResults.filter((result) => result.critical && result.passed).length,
     forbiddenBehaviorFailures,
     failureTypes,
     overInclusionCategory

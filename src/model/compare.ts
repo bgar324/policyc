@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { emitRuntimePrompt } from "../compiler/emitter.js";
-import { countApproxTokens } from "../compiler/tokenCounter.js";
+import { countTokens } from "../compiler/tokenCounter.js";
 import { severityWeight, type EvalCase, type FailureType } from "../eval/types.js";
 import { loadEvalCases } from "../eval/runner.js";
 import { loadPolicies } from "../policy/loader.js";
@@ -54,8 +54,8 @@ export async function compareModels(options: {
         context: testCase.context,
         strategy,
         selectedPolicies: selectedPolicies.map((policy) => policy.id),
-        compiledPromptTokens: countApproxTokens(compiledPrompt),
-        fullPromptTokens: countApproxTokens(fullPrompt),
+        compiledPromptTokens: countTokens(compiledPrompt).tokens,
+        fullPromptTokens: countTokens(fullPrompt).tokens,
         systemPromptUsed: systemPrompt,
         output: modelResult.output,
         toolsCalled: modelResult.toolsCalled,
@@ -103,7 +103,7 @@ function computeStrategyMetrics(strategy: PromptStrategy, cases: EvalCase[], tra
   return {
     strategy,
     cases: traces.length,
-    averagePromptTokens: average(traces.map((trace) => countApproxTokens(trace.systemPromptUsed))),
+    averagePromptTokens: average(traces.map((trace) => countTokens(trace.systemPromptUsed).tokens)),
     validatorPassRate: validatorResults.length ? (validatorResults.length - validatorFailures.length) / validatorResults.length : 1,
     criticalValidatorPassRate: criticalResults.length ? (criticalResults.length - criticalFailures.length) / criticalResults.length : 1,
     forbiddenBehaviorRate: traces.length ? forbiddenFailures / traces.length : 0,

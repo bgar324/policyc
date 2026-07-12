@@ -1,222 +1,170 @@
-# policyc
+# PolicyC
 
-`policyc` is a CLI-first research prototype for treating LLM system prompts as source code.
+PolicyC is a polyglot research system for testing whether a task-specific slice of a large policy prompt can preserve the behaviorally relevant obligations of the full policy while using less context.
 
-Core phrase:
+It deliberately separates two concerns:
 
-> System prompt as source code. Policy IR as intermediate representation. Runtime prompt as compiled output. Validators as tests.
+- TypeScript is the single authority for policy loading, validation, matching, graph closure, candidate construction, prompt emission, hashing, and artifact serialization.
+- Python owns repeated model trials, bounded concurrency, rate limiting, retries, timeouts, cancellation, streamed events, persistence, evaluation, statistics, and baseline comparison.
 
-The project lowers YAML policy packs into a typed Policy IR, selects a conservative active policy closure for a request and optional artifact context, emits a compact runtime prompt, and evaluates whether the compiled prompt preserves critical obligations.
+PolicyC does **not** currently prove behavioral equivalence. Its included end-to-end demo uses a deterministic fake provider to verify runtime mechanics. A real OpenAI adapter is available only when explicitly configured with credentials.
 
-## Research Question
+## Architecture
 
-Can a conservative policy compiler reduce active system prompt context while preserving critical obligations under dependency closure?
-
-The goal is not just shorter prompts. The goal is preserving behavior. A compiler that saves tokens by dropping safety, privacy, tool-use, citation, or artifact obligations has failed.
-
-## Why Not Naive Summarization?
-
-Large system prompts contain universal rules, conditional rules, definitions, exceptions, and tool-specific instructions. A naive summary may remove a policy that does not look relevant from the user's words but is required by the artifact, tool, operation, domain, or risk context.
-
-That failure mode is **latent obligation loss**. Example: the user says "summarize this PDF", but the artifact manifest says the PDF contains financial tables and charts. A request-only compiler may keep a generic PDF summary rule while dropping chart/table numeric caution and page-citation obligations.
-
-## Policy Kinds
-
-`policyc` splits policies into three kinds:
-
-- `universal`: always active and never dropped, such as honesty, no hidden reasoning reveal, no background-work claims, and a privacy floor.
-- `content_gated`: activated by text, intent, artifact type, artifact feature, tool, operation, domain, or risk triggers. These are the compressible part.
-- `structural`: definitions, precedence rules, exceptions, and support rules. They are included when retained policies depend on them through `requires`.
-
-For restrictive safety policies, recall matters more than precision. False positives cost tokens or over-caution. False negatives can lose critical behavior. The selector is intentionally conservative.
-
-## Artifact Context
-
-Eval cases and CLI inputs can include optional context:
-
-```json
-{
-  "artifactType": "pdf",
-  "features": ["charts", "tables"],
-  "operation": "summarize",
-  "domainHints": ["finance"],
-  "riskHints": ["numeric_accuracy"]
-}
+```mermaid
+flowchart LR
+    P["YAML policy packs"] --> V["Zod runtime validation"]
+    V --> G["Graph validation"]
+    X["Request + artifact context"] --> S["Deterministic selector"]
+    G --> S
+    S --> C["Five candidate strategies"]
+    C --> A["Versioned JSON artifacts + hashes"]
+    A --> M["Run manifest"]
+    M --> R["Python asyncio runtime"]
+    R --> Q["Bounded worker queue + rate limiter"]
+    Q --> F["Fake or OpenAI provider"]
+    F --> E["Rule-based evaluator"]
+    E --> O["Atomic trials + JSONL/SSE events + report"]
 ```
 
-The selector uses both request text and context. Artifact-triggered policies are how `policyc` guards against latent obligation loss.
+The protocol boundary is defined by JSON Schemas under [`protocol/`](protocol/). Python validates TypeScript artifacts and verifies candidate and compiled-prompt hashes before execution.
 
-## CLI
+## Compiler pipeline
 
-Install and build:
+The compiler loads 39 manually structured policy nodes from six YAML packs. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
+
+1. Zod validates required fields, enums, priorities, triggers, and unknown fields.
+2. Graph validation rejects duplicate IDs/edges, missing references, self-dependencies, cycles, unreachable structural nodes, unknown validators, and invalid always-active configurations.
+3. Regex intent detection and structured artifact context select seed policies.
+4. Queue-based traversal adds the transitive `requires` closure.
+5. Policies are ordered deterministically and emitted as a runtime prompt.
+6. The compiler serializes five experimental candidates:
+   - `full_policy`
+   - `compiler_slice`
+   - `kernel_only`
+   - `direct_matches`
+   - `conservative_expanded`
+
+Candidate names describe construction strategies, not behavioral equivalence.
+
+## Python runtime
+
+The Python package lives in [`runtime/python`](runtime/python) and targets Python 3.12+.
+
+The scheduler creates a fixed number of worker tasks and feeds them through a bounded queue. A second semaphore enforces provider-specific concurrency. An in-process sliding-window limiter can constrain requests and estimated prompt tokens. Each invocation has a timeout; retryable failures use exponential backoff with deterministic jitter and optional provider `Retry-After` values.
+
+Trial IDs are hashes of stable run, provider, model, candidate, and sample inputs. Completed trials are written atomically and reused after restart when their provenance hash matches. Incomplete and retryable trials execute again. Cancellation propagates to active provider tasks.
+
+Events receive a per-run monotonic sequence number, persist as JSONL, and serialize as SSE. FastAPI provides:
+
+- `POST /runs`
+- `GET /runs/{run_id}`
+- `GET /runs/{run_id}/events`
+- `POST /runs/{run_id}/cancel`
+- `GET /runs/{run_id}/report`
+
+Raw response retention is explicit in each manifest: `none`, `text`, or `full`. Secrets are never written by the runtime.
+
+## Evaluation
+
+Structural evidence and behavioral evidence are kept separate.
+
+Structural evaluation covers selected-policy precision/recall, critical-policy recall, dependency completeness, graph validity, deterministic artifact construction, and exact or estimated token counts.
+
+Behavioral evaluation records obligation checks, violations, answer-quality heuristics, tool use, latency, provider token usage, and estimated cost. Reports compare each candidate with the full-policy baseline and calculate mean, median, sample standard deviation, and an approximate 95% confidence interval. A configurable non-inferiority margin is experimental; it is not proof, and candidates missing compiler-slice critical policies are rejected before size ranking.
+
+The built-in evaluator is intentionally small and deterministic. Model graders can be added as adapters, but should not be treated as ground truth.
+
+## Setup
 
 ```bash
 pnpm install
 pnpm build
+
+python3.12 -m venv .venv
+.venv/bin/pip install -e 'runtime/python[dev]'
 ```
 
-Select policies:
+The local environment may use a newer Python, but CI verifies Python 3.12.
+
+## CLI
+
+Existing commands remain available:
 
 ```bash
 pnpm policyc select --input "what's the latest OpenAI news?"
-```
-
-Compile a runtime prompt:
-
-```bash
-pnpm policyc compile --input "rewrite this email professionally: yo send it"
-```
-
-Select with artifact context:
-
-```bash
-pnpm policyc select \
-  --input "summarize this PDF" \
-  --context '{"artifactType":"pdf","features":["charts","tables"],"operation":"summarize"}'
-```
-
-Inspect one policy:
-
-```bash
+pnpm policyc compile --input "rewrite this email professionally"
 pnpm policyc inspect --policy current_info_requires_web
-```
-
-Run evals:
-
-```bash
 pnpm policyc eval
 ```
 
-Run mock model-strategy comparison and persist traces:
+Generate cross-language experiment artifacts:
 
 ```bash
-pnpm policyc compare-models --limit 20
-pnpm policyc eval-model --strategy compiled_prompt --limit 20
+node dist/cli.js compile-candidates \
+  --input "what's the latest OpenAI news?" \
+  --output experiment \
+  --model fake-v1
 ```
 
-## Eval Metrics
-
-`policyc eval` loads YAML policies and JSONL eval cases, runs deterministic selection, compiles a runtime prompt, creates mocked traces, and runs code validators.
-
-The report includes:
-
-- policy precision
-- policy recall
-- critical policy recall
-- dependency closure completeness
-- average full prompt tokens
-- average compiled prompt tokens
-- average token reduction
-- obligation pass rate
-- critical obligation pass rate
-- forbidden behavior rate
-- severity-weighted failure score
-- top failing case IDs
-
-Policy recall and critical recall are more important than precision.
-
-## Initial Eval Results
-
-Latest local run:
+Run and stream an offline experiment:
 
 ```bash
-pnpm build
-pnpm policyc eval
+.venv/bin/policyc-runtime run experiment/manifest.json
 ```
 
-Current results:
+Or run the complete demo:
 
-| Metric | Value |
-| --- | ---: |
-| Eval cases | 157 |
-| Policy precision | 94.4% |
-| Policy recall | 100.0% |
-| Critical policy recall | 100.0% |
-| Dependency closure completeness | 100.0% |
-| Average full prompt tokens | 16358 |
-| Average compiled prompt tokens | 256 |
-| Average token reduction | 98.4% |
-| Obligation/validator pass rate | 100.0% |
-| Critical obligation pass rate | 100.0% |
-| Validator sanity tests | 8/8 passed |
+```bash
+pnpm demo
+```
 
-Prompt strategy token table:
+The demo compiles five candidates, executes three samples per candidate with maximum concurrency four, streams SSE-compatible events, atomically persists 15 trial results, and produces `report.json`. Its compliance results are fake-provider evidence only.
 
-| Strategy | Avg tokens |
-| --- | ---: |
-| Full prompt | 16358 |
-| Compiled prompt | 256 |
-| Minimal prompt | 7 |
-| Naive summary | future work |
+## Real provider
 
-Top failure categories:
+The isolated OpenAI Responses API adapter is selected by setting `provider` to `openai` in the manifest and exporting `OPENAI_API_KEY`. Offline tests never require or call a real provider. Provider responses can be expensive or contain sensitive data; review the manifest's retention setting and output directory before running.
 
-- `over_inclusion`: 25 cases
+## Verification
 
-Over-inclusion breakdown:
+```bash
+pnpm typecheck
+pnpm test
+pnpm graph:validate
 
-- `acceptable_conservative_over_inclusion`: 7 cases
-- `eval_label_too_narrow`: 7 cases
-- `overly_broad_intent_trigger`: 7 cases
-- `overly_broad_keyword_trigger`: 4 cases
+pnpm py:format
+pnpm py:lint
+pnpm py:typecheck
+pnpm py:test
 
-There are currently no missing-policy, missing-dependency, artifact-trigger-miss, or validator-failure cases in the eval report. The remaining failures are conservative retention or broad trigger matches that include extra policies. Examples include citation/source-quality rules for citation-adjacent wording, writing rules on some structured-file cleanup requests, and person/image caution retained when the eval label is narrower.
+pnpm test:all
+```
 
-This is a useful failure mode for the prototype: the compiler is preserving critical obligations, but it is not yet highly precise. For restrictive policies this is the intended bias, but the report now makes the cost visible.
+CI installs both environments, builds TypeScript, validates the graph and cross-language artifacts, runs all offline tests, and executes the fake-provider demo without credentials.
 
-## Next-Stage Evaluation
+## Token accounting
 
-The v0 eval measures selector and compiler correctness. It checks whether deterministic policy selection retains expected active policies, closes dependencies, emits a smaller runtime prompt, and attaches validators that can catch obvious behavioral failures.
+Modern OpenAI-family models use exact `o200k_base` BPE counts through `gpt-tokenizer`. Unsupported model names use the documented whitespace estimator `ceil(words / 0.75)`. Every artifact records `tokens`, `method`, `tokenizer`, and `model`; reports never silently mix estimated and exact values.
 
-It does not yet prove model behavioral equivalence. The next stage compares model outputs under four prompt strategies:
-
-- `full_prompt`: the expanded synthetic enterprise prompt.
-- `compiled_prompt`: the task-specific prompt emitted from selected Policy IR.
-- `naive_summary`: a deliberately shallow summary baseline.
-- `minimal_prompt`: a small generic assistant prompt.
-
-The success condition is not just token reduction. A useful compiled prompt should preserve critical validator pass rate and forbidden-behavior avoidance while using far fewer prompt tokens than the full baseline.
-
-`policyc compare-models` currently uses a mock runner and writes traces to `runs/<timestamp>/traces.jsonl` plus `runs/<timestamp>/summary.json`. The trace schema includes case id, input, context, strategy, selected policies, prompt token counts, system prompt used, output, tools called, validator results, and failure categories. The runner interface is ready for OpenAI, Anthropic, or local model implementations, but no provider key is required in v1.
-
-Example mock comparison:
+## Persistence layout
 
 ```text
-Strategy          Avg tokens  Validator pass  Critical pass  Forbidden rate  Latent miss  Weighted failures
-full_prompt            16358          100.0%         100.0%            0.0%         0.0%                0.0
-compiled_prompt          281          100.0%         100.0%            0.0%         0.0%                0.0
-naive_summary             70          100.0%         100.0%            0.0%         0.0%                0.0
-minimal_prompt             7           75.0%          60.0%            0.0%       100.0%               64.0
+experiment/
+  manifest.json                 # input manifest
+  artifacts/*.json              # compiler candidates
+  manifest.canonical.json       # normalized run configuration
+  environment.json              # environment and reproduction command
+  events.jsonl                  # ordered run events
+  trials/<trial-id>.json        # atomic individual results
+  report.json                   # aggregate comparison
 ```
 
-## Repo Layout
+## Known limitations
 
-```text
-src/
-  cli.ts
-  policy/
-  compiler/
-  model/
-  validators/
-  eval/
-  traces/
-  util/
-policies/
-evals/
-prompts/
-```
-
-## Limitations
-
-This does not prove universal behavioral equivalence. It only measures compliance over bounded evals.
-
-The selector is safety-critical and needs red-teaming. Prompt policy is not a replacement for hard runtime gates on irreversible actions. The validators are regex and trace checks, so they are approximate. The eval runner uses mocked traces for v1, so validator pass rates mean "the validators behave on the mocked traces", not that a real model will comply. LLM-assisted extraction from giant prompts is future work and is not trusted in v1.
-
-## Future Work
-
-- model-provider runner interface for real compiled-prompt evaluations
-- baselines for full prompt, summarized prompt, and minimal prompt
-- richer parser for existing enterprise prompts
-- confidence-aware selector traces
-- stronger validators and optional LLM judges
-- hard runtime gates for irreversible actions
+- Policy nodes and dependency edges are manually authored; prompt-to-IR extraction is not implemented.
+- Intent detection is lexical and can miss paraphrases.
+- The existing 157-case selector evaluation is repository-authored, not held out.
+- The deterministic evaluator uses regular expressions and is not a complete judge of model behavior.
+- The fake provider validates scheduling and reproducibility, not policy preservation.
+- Real-provider results require repeated trials and careful interpretation; no single run proves equivalence.
+- The API is an in-process research service, not a distributed production control plane.

@@ -1,6 +1,6 @@
 {
   "name": "policyc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "bin": {
@@ -8,15 +8,29 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test test/**/*.test.ts",
+    "test:all": "pnpm typecheck && pnpm test && pnpm graph:validate && .venv/bin/ruff format --check runtime/python && .venv/bin/ruff check runtime/python && .venv/bin/mypy runtime/python/policyc_runtime && .venv/bin/pytest -q runtime/python/tests",
+    "graph:validate": "tsx src/tools/validateGraph.ts",
+    "py:format": ".venv/bin/ruff format runtime/python",
+    "py:lint": ".venv/bin/ruff check runtime/python",
+    "py:typecheck": ".venv/bin/mypy runtime/python/policyc_runtime",
+    "py:test": ".venv/bin/pytest -q runtime/python/tests",
+    "runtime:serve": ".venv/bin/policyc-runtime serve",
+    "demo": "pnpm build && node dist/cli.js compile-candidates --input \"what's the latest OpenAI news?\" --output demo-run --model fake-v1 && .venv/bin/policyc-runtime run demo-run/manifest.json",
     "policyc": "node dist/cli.js",
     "eval": "node dist/cli.js eval"
   },
   "dependencies": {
-    "yaml": "^2.8.0"
+    "gpt-tokenizer": "^3.4.0",
+    "yaml": "^2.8.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.8.0"
   },
-  "packageManager": "pnpm@10.0.0"
+  "packageManager": "pnpm@10.0.0",
+  "pnpm": { "onlyBuiltDependencies": ["esbuild"] }
 }

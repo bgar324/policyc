@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pnpm install --frozen-lockfile
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install -e 'runtime/python[dev]'
+      - run: pnpm build
+      - run: pnpm test:all
+      - run: node dist/cli.js compile-candidates --input "latest policy news" --output /tmp/policyc-demo --model fake-v1
+      - run: .venv/bin/policyc-runtime run /tmp/policyc-demo/manifest.json

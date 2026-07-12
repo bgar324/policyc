@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { emitRuntimePrompt } from "./compiler/emitter.js";
-import { countApproxTokens, tokenReduction } from "./compiler/tokenCounter.js";
+import { canonicalJson, createArtifact, sha256 } from "./compiler/artifact.js";
+import { generateCandidateSelections } from "./compiler/candidates.js";
+import { countTokens, tokenReduction } from "./compiler/tokenCounter.js";
 import { runEval } from "./eval/runner.js";
 import { compareModels } from "./model/compare.js";
 import type { PromptStrategy } from "./model/types.js";
@@ -17,6 +20,8 @@ type ParsedArgs = {
   policy?: string;
   strategy?: PromptStrategy;
   limit?: number;
+  output?: string;
+  model?: string;
 };
 
 async function main(): Promise<void> {
@@ -41,6 +46,32 @@ async function main(): Promise<void> {
 
   const policies = loadPolicies();
 
+  if (command === "compile-candidates") {
+    if (!args.input) throw new Error("compile-candidates requires --input");
+    const output = resolve(args.output ?? "experiment");
+    const artifactDir = resolve(output, "artifacts");
+    mkdirSync(artifactDir, { recursive: true });
+    const sourcePolicyId = "synthetic-enterprise-agent";
+    const sourcePolicyText = readFileSync("prompts/synthetic-enterprise-agent.md", "utf8");
+    const createdAt = new Date().toISOString();
+    const artifacts = generateCandidateSelections(policies, args.input, args.context).map(({ strategy, selection }) =>
+      createArtifact({ policies, selection, request: args.input!, context: args.context, strategy, sourcePolicyId, sourcePolicyText, model: args.model, createdAt })
+    );
+    for (const artifact of artifacts) writeFileSync(resolve(artifactDir, `${artifact.candidateId}.json`), `${canonicalJson(artifact)}\n`);
+    const full = artifacts.find((artifact) => artifact.compilationStrategy === "full_policy")!;
+    const runId = `run_${sha256(canonicalJson({ candidates: artifacts.map((artifact) => artifact.candidateId), model: args.model ?? "fake-v1", request: args.input })).slice(0, 16)}`;
+    const manifest = {
+      schemaVersion: "1.0.0", runId, experimentName: "policy-slice-non-inferiority", candidates: artifacts.map((artifact) => `artifacts/${artifact.candidateId}.json`),
+      fullPolicyCandidateId: full.candidateId, provider: "fake", model: args.model ?? "fake-v1", modelParameters: { temperature: 0 }, sampleCount: 3,
+      maxConcurrency: 4, timeoutSeconds: 10, retryPolicy: { maxAttempts: 3, initialBackoffSeconds: 0.05, maxBackoffSeconds: 0.5, jitterFraction: 0 },
+      rateLimit: { requestsPerWindow: 100, windowSeconds: 1, maxConcurrentRequests: 4 }, evaluator: { id: "rule-based", version: "1.0.0", nonInferiorityMargin: 0.05 },
+      seed: 0, outputDirectory: ".", rawResponseRetention: "text"
+    };
+    writeFileSync(resolve(output, "manifest.json"), `${canonicalJson(manifest)}\n`);
+    console.log(`wrote ${artifacts.length} candidate artifacts and manifest to ${output}`);
+    return;
+  }
+
   if (command === "inspect") {
     if (!args.policy) throw new Error("inspect requires --policy <id>");
     const policy = getPolicyById(policies, args.policy);
@@ -61,8 +92,10 @@ async function main(): Promise<void> {
     const selection = selectPolicies(policies, { input: args.input, context: args.context });
     const compiledPrompt = emitRuntimePrompt(selection, args.input, args.context);
     const fullPrompt = readFileSync("prompts/synthetic-enterprise-agent.md", "utf8");
-    const fullTokens = countApproxTokens(fullPrompt);
-    const compiledTokens = countApproxTokens(compiledPrompt);
+    const fullCount = countTokens(fullPrompt, args.model);
+    const compiledCount = countTokens(compiledPrompt, args.model);
+    const fullTokens = fullCount.tokens;
+    const compiledTokens = compiledCount.tokens;
     console.log("Selected policies:");
     for (const policy of selection.policies) {
       console.log(`- ${formatPolicySummary(policy).split("\n")[0]}`);
@@ -74,6 +107,7 @@ async function main(): Promise<void> {
     console.log(`estimated full prompt tokens: ${fullTokens}`);
     console.log(`estimated compiled tokens: ${compiledTokens}`);
     console.log(`token reduction: ${(tokenReduction(fullTokens, compiledTokens) * 100).toFixed(1)}%`);
+    console.log(`token counting: ${compiledCount.method} (${compiledCount.tokenizer})`);
     return;
   }
 
@@ -101,6 +135,12 @@ function parseArgs(argv: string[]): ParsedArgs {
       args.limit = Number.parseInt(next, 10);
       if (!Number.isFinite(args.limit)) throw new Error("--limit must be a number");
       index += 1;
+    } else if (arg === "--output") {
+      args.output = next;
+      index += 1;
+    } else if (arg === "--model") {
+      args.model = next;
+      index += 1;
     }
   }
   return args;
@@ -124,6 +164,7 @@ Commands:
   policyc eval
   policyc compare-models --limit 20
   policyc eval-model --strategy compiled_prompt --limit 20
+  policyc compile-candidates --input "what's the latest news?" --output experiment
 
 Options:
   --input <text>

@@ -1,4 +1,4 @@
-import { countApproxTokens } from "../compiler/tokenCounter.js";
+import { countTokens } from "../compiler/tokenCounter.js";
 import type { ArtifactContext } from "../policy/types.js";
 
 export type PromptStrategy = "full_prompt" | "compiled_prompt" | "minimal_prompt" | "naive_summary";
@@ -8,16 +8,18 @@ export type BaselineTokenCounts = {
   compiledPromptTokens: number;
   minimalPromptTokens: number;
   naiveSummaryTokens?: number;
+  tokenCountingMethod: string;
 };
 
 const MINIMAL_PROMPT = "You are a helpful assistant.";
 
 export function countBaselineTokens(fullPrompt: string, compiledPrompt: string): BaselineTokenCounts {
   return {
-    fullPromptTokens: countApproxTokens(fullPrompt),
-    compiledPromptTokens: countApproxTokens(compiledPrompt),
-    minimalPromptTokens: countApproxTokens(MINIMAL_PROMPT),
-    naiveSummaryTokens: undefined
+    fullPromptTokens: countTokens(fullPrompt).tokens,
+    compiledPromptTokens: countTokens(compiledPrompt).tokens,
+    minimalPromptTokens: countTokens(MINIMAL_PROMPT).tokens,
+    naiveSummaryTokens: undefined,
+    tokenCountingMethod: "exact:o200k_base"
   };
 }
 

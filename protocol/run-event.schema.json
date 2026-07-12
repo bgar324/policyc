@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://policyc.dev/schema/run-event-1.0.0.json",
+  "title": "PolicyC streamed run event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runId", "eventId", "eventType", "timestamp", "sequence", "payload"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" }, "runId": { "type": "string" }, "eventId": { "type": "string" },
+    "eventType": { "enum": ["run.created", "run.started", "trial.queued", "trial.started", "trial.retrying", "trial.completed", "trial.failed", "trial.cancelled", "evaluation.started", "evaluation.completed", "run.completed", "run.failed", "run.cancelled"] },
+    "timestamp": { "type": "string", "format": "date-time" }, "sequence": { "type": "integer", "minimum": 1 }, "trialId": { "type": ["string", "null"] }, "candidateId": { "type": ["string", "null"] }, "payload": { "type": "object" }
+  }
+}

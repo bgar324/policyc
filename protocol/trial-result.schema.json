@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://policyc.dev/schema/trial-result-1.0.0.json",
+  "title": "PolicyC trial result",
+  "type": "object",
+  "required": ["schemaVersion", "runId", "trialId", "candidateId", "strategy", "sampleIndex", "status", "attemptCount", "queuedAt", "provider", "model", "evaluatorScores", "policyViolations", "provenanceHashes"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" }, "runId": { "type": "string" }, "trialId": { "type": "string" }, "candidateId": { "type": "string" }, "strategy": { "type": "string" }, "sampleIndex": { "type": "integer" },
+    "status": { "enum": ["queued", "running", "retrying", "completed", "failed", "cancelled"] }, "attemptCount": { "type": "integer" }, "queuedAt": { "type": "string" }, "startedAt": { "type": ["string", "null"] }, "completedAt": { "type": ["string", "null"] }, "latencyMs": { "type": ["number", "null"] },
+    "provider": { "type": "string" }, "model": { "type": "string" }, "inputTokens": { "type": ["integer", "null"] }, "outputTokens": { "type": ["integer", "null"] }, "estimatedCostUsd": { "type": ["number", "null"] }, "responseText": { "type": ["string", "null"] }, "toolCalls": { "type": "array" },
+    "evaluatorScores": { "type": "object" }, "policyViolations": { "type": "array" }, "error": { "type": ["object", "null"] }, "provenanceHashes": { "type": "object" }
+  }
+}

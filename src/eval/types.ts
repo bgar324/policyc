@@ -65,6 +65,7 @@ export type EvalCaseResult = {
   validatorFailures: number;
   failedValidators: FailedValidator[];
   criticalValidatorFailures: number;
+  criticalValidatorPasses: number;
   forbiddenBehaviorFailures: number;
   failureTypes: FailureType[];
   overInclusionCategory?: OverInclusionCategory;
@@ -106,6 +107,7 @@ export type MetricsReport = {
   averageNaiveSummaryTokens?: number;
   promptStrategyAverages: PromptStrategyTokenAverages;
   averageTokenReductionPercentage: number;
+  tokenCountingMethod: "exact:o200k_base";
   obligationPassRate: number;
   criticalObligationPassRate: number;
   forbiddenBehaviorRate: number;

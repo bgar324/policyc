@@ -2,6 +2,9 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import YAML from "yaml";
 import type { Policy, PolicyPackFile } from "./types.js";
+import { policyPackSchema } from "./schema.js";
+import { validatePolicyGraph } from "./graph.js";
+import { validators } from "../validators/rules.js";
 
 const DEFAULT_POLICY_DIR = "policies";
 
@@ -13,7 +16,12 @@ export function loadPolicies(policyDir = DEFAULT_POLICY_DIR): Policy[] {
   const policies: Policy[] = [];
   for (const file of files) {
     const path = join(policyDir, file);
-    const parsed = YAML.parse(readFileSync(path, "utf8")) as PolicyPackFile;
+    const raw: unknown = YAML.parse(readFileSync(path, "utf8"));
+    const result = policyPackSchema.safeParse(raw);
+    if (!result.success) {
+      throw new Error(`Invalid policy pack ${path}: ${result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}`);
+    }
+    const parsed: PolicyPackFile = result.data;
     const pack = file.replace(/\.ya?ml$/, "");
     for (const policy of parsed.policies ?? []) {
       policies.push({
@@ -29,6 +37,7 @@ export function loadPolicies(policyDir = DEFAULT_POLICY_DIR): Policy[] {
   }
 
   assertUniquePolicyIds(policies);
+  validatePolicyGraph(policies, new Set(Object.keys(validators)));
   return policies;
 }
 
