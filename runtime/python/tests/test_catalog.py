@@ -14,6 +14,7 @@ def manifest(root: Path) -> PairedRunManifest:
         {
             "schemaVersion": "2.0.0",
             "runId": "run_catalog_test",
+            "sourceControl": {"system": "git", "commit": "c" * 40, "dirty": False},
             "experimentName": "catalog-test",
             "dataset": {
                 "path": str(repository / "eval/behavioral/smoke-v1.jsonl"),
@@ -116,6 +117,8 @@ def test_catalog_persists_run_and_trial_summaries(tmp_path: Path) -> None:
     assert rows[0]["status"] == "completed"
     assert rows[0]["completed_trials"] == 2
     assert rows[0]["actual_cost_usd"] == 0.002
+    assert rows[0]["git_commit"] == "c" * 40
+    assert rows[0]["git_dirty"] == 0
     detail = reopened.show(value.runId)
     assert detail is not None and len(detail["trials"]) == 2
 

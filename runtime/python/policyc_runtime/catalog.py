@@ -40,7 +40,11 @@ class RunCatalog:
         status: str = "running",
     ) -> None:
         now = _now()
-        git_commit, git_dirty = _git_state()
+        git_commit, git_dirty = (
+            (manifest.sourceControl.commit, manifest.sourceControl.dirty)
+            if manifest.sourceControl is not None
+            else _git_state()
+        )
         manifest_value = manifest.model_dump(mode="json")
         with self._connect() as connection:
             connection.execute(

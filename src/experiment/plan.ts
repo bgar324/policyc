@@ -18,6 +18,7 @@ type Options = {
 
 export function runExperimentCommand(argv: string[]): void {
   const options = parseOptions(argv);
+  const sourceControl = gitProvenance();
   const caseSet = loadBehavioralCases(options.cases);
   const policies = loadPolicies();
   const sourcePolicyText = readFileSync("prompts/synthetic-enterprise-agent.md", "utf8");
@@ -54,6 +55,7 @@ export function runExperimentCommand(argv: string[]): void {
   const identityCore = {
     schemaVersion: "2.0.0", experimentName: "paired-policy-preservation", dataset: { path: resolve(options.cases), hash: caseSet.datasetHash, version: caseSet.datasetVersion, split: caseSet.split },
     ...(options.runLabel ? { runLabel: options.runLabel } : {}),
+    sourceControl,
     compilerHash, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
     modelParameters: { max_output_tokens: options.maxOutputTokens, store: false }, sampleCount: options.samples,
     inputTokenOverheadPerCall: INPUT_TOKEN_OVERHEAD_PER_CALL,
@@ -76,6 +78,15 @@ export function runExperimentCommand(argv: string[]): void {
   const result = spawnSync(runtime, runtimeArgs, { stdio: "inherit", env: process.env });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`experiment runtime exited with status ${result.status}`);
+}
+
+function gitProvenance(): { system: "git"; commit: string; dirty: boolean } {
+  const revision = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
+  const status = spawnSync("git", ["status", "--porcelain"], { encoding: "utf8" });
+  if (revision.status !== 0 || status.status !== 0 || !revision.stdout.trim()) {
+    throw new Error("experiment requires readable Git provenance");
+  }
+  return { system: "git", commit: revision.stdout.trim(), dirty: Boolean(status.stdout.trim()) };
 }
 
 function readExistingManifest(path: string): { runId: string; createdAt: string } | undefined {

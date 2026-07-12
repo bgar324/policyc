@@ -146,7 +146,7 @@ The dry run validates every provider payload and prints the exact paid command. 
 
 Hard limits cover logical trials, provider attempts, cumulative input tokens, cumulative output tokens, dollar exposure, fixed model, and per-call output tokens. Checks run before the experiment, before every attempt, after returned usage, after retries, and on resume. Pricing includes standard input, cached input, and output; missing usage fails closed rather than becoming zero. `seed` is not sent.
 
-Raw HTTP responses are atomically persisted before parsing and evaluation. Completed provider calls resume without another call. A timeout or transport disconnect is recorded as an ambiguous paid attempt, consumes call and worst-case cost exposure, and is not retried unless `--retry-ambiguous` was explicitly selected. This mitigates duplicate billing but cannot provide exactly-once semantics across an uncertain network boundary.
+Raw HTTP responses are atomically persisted before parsing and evaluation. Completed provider calls resume without another call. The manifest embeds the Git commit and dirty state used to construct the run, and the SQLite catalog retains the same provenance. A timeout or transport disconnect is recorded as an ambiguous paid attempt, consumes call and worst-case cost exposure, and is not retried unless `--retry-ambiguous` was explicitly selected. This mitigates duplicate billing but cannot provide exactly-once semantics across an uncertain network boundary.
 
 The 20-case pilot shape is:
 

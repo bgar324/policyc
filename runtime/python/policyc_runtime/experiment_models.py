@@ -125,10 +125,17 @@ class PricingRef(StrictModel):
     registryVersion: str
 
 
+class SourceControlRef(StrictModel):
+    system: Literal["git"]
+    commit: str
+    dirty: bool
+
+
 class PairedRunManifest(StrictModel):
     schemaVersion: Literal["2.0.0"]
     runId: str
     runLabel: str | None = None
+    sourceControl: SourceControlRef | None = None
     experimentName: str
     dataset: DatasetRef
     compilerHash: str
