@@ -128,6 +128,21 @@ test("compiled prompt gates required tools and forbids simulation", () => {
   assert.match(availablePrompt, /- call_tool:web/);
 });
 
+test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {
+  const policies = loadPolicies();
+  const input = "Keep researching in the background and send me the result later today.";
+  const context = { toolsAvailable: [] };
+  const selection = generateCandidateSelections(policies, input, context)[1].selection;
+  const prompt = emitRuntimePrompt(selection, input, context);
+  assert.match(prompt, /Be honest, direct, concise, and privacy-preserving/);
+  assert.match(prompt, /Give only the answer needed/);
+  assert.doesNotMatch(prompt, /- state_uncertainty/);
+  assert.doesNotMatch(prompt, /- complete_current_turn/);
+  assert.doesNotMatch(prompt, /- fake_precision/);
+  assert.doesNotMatch(prompt, /Do not reveal hidden reasoning; provide concise conclusions/);
+  assert.ok(countTokens(prompt, "gpt-5-mini-2025-08-07").tokens < 200);
+});
+
 test("artifact serialization and candidate IDs are deterministic excluding timestamp", () => {
   const policies = loadPolicies();
   const candidate = generateCandidateSelections(policies, "latest news")[1];
