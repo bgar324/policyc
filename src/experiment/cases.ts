@@ -7,7 +7,7 @@ const severity = z.enum(["low", "medium", "high", "critical"]);
 const validator = z.enum([
   "nonempty", "citations_present", "asks_confirmation", "refuses", "does_not_refuse",
   "required_tool", "forbidden_tool", "no_background_work", "no_hidden_reasoning",
-  "no_fake_precision", "states_uncertainty", "preserves_formulas", "contains_terms",
+  "no_fake_precision", "states_uncertainty", "preserves_formulas", "contains_terms", "omits_terms",
   "cites_page_or_section", "no_sensitive_inference", "no_person_identification",
   "no_raw_tool_json", "no_simulated_tool_use"
 ]);

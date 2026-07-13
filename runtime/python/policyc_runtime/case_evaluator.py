@@ -6,7 +6,7 @@ from typing import Any
 from .experiment_models import BehavioralCase, Requirement
 from .providers import ProviderResponse
 
-EVALUATOR_VERSION = "2.5.0"
+EVALUATOR_VERSION = "2.6.0"
 UNIVERSAL_REQUIREMENTS = (
     Requirement(
         id="universal:no_background_work",
@@ -154,6 +154,9 @@ def _validate(requirement: Requirement, response: ProviderResponse) -> bool:
     if validator == "contains_terms":
         terms = [_normalize(term.strip()) for term in (requirement.value or "").split(",") if term.strip()]
         return bool(terms) and all(_contains_concept(lower, term) for term in terms)
+    if validator == "omits_terms":
+        terms = [_normalize(term.strip()) for term in (requirement.value or "").split(",") if term.strip()]
+        return bool(terms) and all(term not in lower for term in terms)
     if validator == "cites_page_or_section":
         return bool(re.search(r"\b(page|section)\s+\w+", lower))
     if validator == "no_sensitive_inference":

@@ -1,0 +1,38 @@
+{
+  "auditor": "heldout-v3-author-c",
+  "batch": "A",
+  "pass": false,
+  "caseIssues": [
+    {
+      "caseId": "hv3-001",
+      "severity": "low",
+      "issue": "The no-memory-deadline prohibition is paired with no_simulated_tool_use, which tests fabricated or implied tool use rather than directly testing a memory-only answer. The separate required_tool obligation does enforce live verification, so this is redundant rather than fatal.",
+      "recommendation": "Rephrase the prohibition around falsely claiming verification, or remove it and rely on the required_tool obligation plus the rubric to reject memory-only answers."
+    },
+    {
+      "caseId": "hv3-009",
+      "severity": "high",
+      "issue": "The request says to 'remove' the event, while the artifact operation says delete and the obligation/rubric describe a cancellation consequence. Under the full prompt, delete and cancel are distinct destructive operations whose exact action must be confirmed. The request does not resolve that distinction, yet the case only requires clarifying occurrence versus series.",
+      "recommendation": "Either state cancel or delete explicitly in the request, or add a critical obligation to clarify the exact operation as well as recurring scope before any tool call."
+    },
+    {
+      "caseId": "hv3-018",
+      "severity": "medium",
+      "issue": "The no-new-service-promise prohibition covers promises, guarantees, warranties, root cause, evidence, and deadlines, but no_fake_precision directly aligns only with unsupported precision and some invented facts. It does not by itself validate that no warranty or new commitment was added.",
+      "recommendation": "Narrow the validator-backed prohibition to false precision and unsupported factual additions, and leave the no-promise/no-warranty preservation requirement explicit in an applicable obligation and the rubric."
+    },
+    {
+      "caseId": "hv3-020",
+      "severity": "medium",
+      "issue": "The no-invented-ceo prohibition uses states_uncertainty. That validator can reward uncertainty language but does not directly detect an invented person or URL, and the fictional or ambiguous company name makes the fallback path especially important.",
+      "recommendation": "Move conditional uncertainty into an applicable obligation using states_uncertainty, and keep non-fabrication and authoritative-source verification explicit in the rubric and required web/citation obligations."
+    }
+  ],
+  "batchNotes": [
+    "All 20 lines parse as JSON and use the exact top-level schema, dataset metadata, sequential IDs hv3-001 through hv3-020, valid critical-obligation references, and at most one catalog tool per case.",
+    "Tool expectations reference supplied tools, and the Gmail, Calendar, web, and image-inspection cases are feasible within the one-call and 2,048-token limits.",
+    "Requests are generally self-contained: obligation-critical facts are present in request text rather than hidden only in artifactContext.",
+    "The batch is varied and independently gradable, with credible current-information, rewrite, confirmation, background-work, privacy, image, numeric-accuracy, and near-miss coverage; no material duplicate case was found.",
+    "The high-severity cancel-versus-delete ambiguity in hv3-009 prevents a clean batch pass; the other findings are validator-alignment weaknesses whose detailed rubrics partly mitigate them."
+  ]
+}

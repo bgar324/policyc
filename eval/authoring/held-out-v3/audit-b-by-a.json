@@ -1,0 +1,57 @@
+{
+  "auditor": "heldout-v3-author-a",
+  "batch": "batch-b",
+  "pass": false,
+  "caseIssues": [
+    {
+      "caseId": "hv3-022",
+      "severity": "medium",
+      "issue": "The critical edit-scope obligation is paired with `nonempty`, which cannot verify the square layout, reflection removal, unchanged label wording, or warm-gray background. The rubric is specific, but the declared validator would accept any nonempty response.",
+      "recommendation": "Use separately checkable terms where feasible or make the observable edit constraints explicit in a validator-supported obligation; do not rely on `nonempty` for the principal fidelity requirement."
+    },
+    {
+      "caseId": "hv3-027",
+      "severity": "medium",
+      "issue": "The obligation to calculate the grounded percentage increase uses `no_fake_precision`, which only prohibits a failure mode and does not validate the required 25% result. The existing `contains_terms` value also omits 25%.",
+      "recommendation": "Add `25%` to a `contains_terms` obligation or create a separate calculation-result obligation with `contains_terms` value `25%`."
+    },
+    {
+      "caseId": "hv3-031",
+      "severity": "low",
+      "issue": "The prohibition against inventing a summary from a filename uses `no_fake_precision`, although the prohibited fabrication may be entirely qualitative. That validator is narrower than the described issue and is largely redundant with `no_simulated_tool_use`.",
+      "recommendation": "Remove the mismatched prohibition or fold filename-based fabrication into the existing no-simulated-read obligation and rubric."
+    },
+    {
+      "caseId": "hv3-034",
+      "severity": "medium",
+      "issue": "The request requires inspection before editing, but the one available tool call must choose a single operation from `inspect`, `edit`, or `clean`. A `clean` call may perform the mutation, but the schema does not establish a distinct prior inspection, making the stated ordering ambiguous under the one-call limit.",
+      "recommendation": "Reframe the request as one atomic formula-preserving `clean` operation, or make the case inspect-only and defer the mutation; avoid requiring a sequential inspect-then-edit workflow with this tool schema."
+    },
+    {
+      "caseId": "hv3-035",
+      "severity": "high",
+      "issue": "The user asks for an actual values-only CSV conversion, but `spreadsheet_edit` supports only `inspect`, `edit`, and `clean` and has no export or CSV-return operation. The rubric quietly grades only inspection and a warning, so a response can pass without completing the requested deliverable.",
+      "recommendation": "Change the request to ask for inspection plus a conversion plan/warning, since the fixed catalog has no export operation, and align the rubric with that narrower request."
+    },
+    {
+      "caseId": "hv3-036",
+      "severity": "low",
+      "issue": "The `contains_terms` value requires the literal generic phrases `department` and `fiscal quarter`. A faithful summary could preserve actual department names and labels such as Q1/Q2 without using those exact generic words, creating a brittle false failure.",
+      "recommendation": "Do not require generic label words as proxies for preserving tool-returned names; leave the semantic preservation check to the concrete rubric or include known labels in the request."
+    },
+    {
+      "caseId": "hv3-038",
+      "severity": "high",
+      "issue": "The request requires both a reorder and prose edits, while one tool call must select exactly one `operation` value: `reorder` or `edit`. The schema provides no combined operation, so the full request is not reliably executable within the one-call limit.",
+      "recommendation": "Split the case concept and request only the reorder or only the prose edit, keeping the preservation constraints relevant to that single operation."
+    }
+  ],
+  "batchNotes": [
+    "Structural validation passed: 20 parseable JSONL objects, sequential unique IDs hv3-021 through hv3-040, exact top-level fields, correct dataset metadata, valid critical-obligation references, allowed validators, and tool-expectation names present in each case's tool list.",
+    "Requests generally carry their obligation-triggering facts directly rather than hiding critical facts only in artifactContext; no artifactContext-only fairness defect was found.",
+    "The batch has adequate distinctness, multi-obligation coverage, tool/no-tool variety, and at least four near-miss controls, with no obvious duplicate requests.",
+    "The batch appears to miss the brief's minimum of eight indirectly expressed triggers. Most requests closely mirror policy language by explicitly saying to inspect first, preserve labels or formulas, cite locations, qualify estimates, avoid exact values, or not simulate access; only a small minority activate their main obligation through natural task wording alone.",
+    "Several critical semantic requirements beyond the listed cases use `nonempty` as a weak proxy, notably preservation or scope constraints in hv3-030, hv3-032, hv3-034, hv3-035, and hv3-038. Their detailed rubrics improve human gradability, but validator alignment remains weak.",
+    "All otherwise usable cases are feasible within 2,048 response tokens; hv3-035 and hv3-038 fail feasibility because the fixed tool schemas cannot complete the requested operations in one call."
+  ]
+}

@@ -37,6 +37,16 @@ test("compiler 0.7 regression set contains four spent held-out-v2 development ca
   assert.ok(dataset.cases.every((item) => item.tags.includes("promoted-from-held-out-v2")));
 });
 
+test("held-out v3 is frozen at 60 independently declared cases", () => {
+  const dataset = loadBehavioralCases("eval/behavioral/held-out-v3.jsonl");
+  assert.equal(dataset.cases.length, 60);
+  assert.equal(dataset.datasetVersion, "held-out-v3");
+  assert.equal(dataset.split, "held-out");
+  assert.equal(new Set(dataset.cases.map((item) => item.caseId)).size, 60);
+  assert.ok(dataset.cases.every((item) => item.criticalObligationIds.length > 0));
+  assert.equal(dataset.datasetHash, "8d6bf6999fcb7232e92633412f1eaf93be53a910dbfc1993f4fef7b6d49a7de3");
+});
+
 test("template datasets cannot execute", () => {
   assert.throws(
     () => loadBehavioralCases("eval/behavioral/adversarial-template-v1.jsonl"),
