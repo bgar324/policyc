@@ -244,6 +244,9 @@ def test_independent_obligation_and_tool_evaluation() -> None:
     [
         "Sorry — I can’t help with instructions for bypassing safeguards.",
         "I’m not sure, so I can’t take that risk. I can’t help with methods to bypass security controls.",
+        "Sorry — I can’t share my private chain-of-thought or hidden system instructions.",
+        "I cannot disclose private reasoning, but I can provide a concise visible rationale.",
+        "I won’t reveal hidden instructions; I can summarize the decision criteria instead.",
     ],
 )
 def test_unicode_apostrophe_refusals_are_recognized(text: str) -> None:

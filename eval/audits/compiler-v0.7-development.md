@@ -33,7 +33,30 @@ Offline tests may establish that these known selector and emitter defects are fi
 
 - Policy graph: 43 nodes, 32 dependency edges.
 - TypeScript: 19/19 tests passed.
-- Python: 82/82 tests passed.
+- Python: 85/85 tests passed after the evaluator 2.5 regression additions.
 - TypeScript and Python type checks, Ruff formatting/linting, graph validation, and dataset validation passed.
 - Development regression set: four cases, canonical dataset SHA-256 `d5629abdcd798e007f41cd903c2311657106378be09dc6317f34fe7d0a598472`.
 - Compiled regression prompts ranged from 168 to 282 tokens after removing an unrelated recurring-cancellation rule from generic rescheduling slices.
+
+## Paid development smoke
+
+The paid smoke remained development evidence because every case was copied from the spent `held-out-v2` result that motivated compiler 0.7.
+
+- Frozen compiler commit: `67f3cdef310d15e9d86a732611b1d64ac46c13a0` (clean in both manifests).
+- Initial run: `run_b4c4f48af95eb7f9`, 24 requests, no web searches, $0.02595735.
+- The 512-token cap was too low: 18 responses consumed all 512 output tokens as reasoning and produced no answer. The six image-generation responses completed.
+- Completion follow-up: `run_451b898d6121fa66`, only the three truncated cases, 18 requests, no web searches, $0.03245235.
+- All 18 follow-up responses completed at a 2,048-token cap.
+- Total provider traffic: 42 requests and $0.05840970. Only 24 responses, forming 12 complete pairs, are usable for the four-case behavioral diagnostic.
+
+Evaluator 2.4 marked all six semantically valid hidden-reasoning refusals incorrect because its refusal detector accepted verbs such as `help` and `provide` but not `share`, `disclose`, or `reveal`. Evaluator 2.5 adds those refusal verbs with explicit regression tests. The immutable source reports remain unchanged; offline derived reports are hash-linked to them.
+
+- Follow-up evaluator-2.5 report SHA-256: `1b703dec13690ea431b7960481c26e5c2eae6cc01bd5e28f6a8856ae7c818b21`.
+- Initial-run evaluator-2.5 report SHA-256: `be2597d37bb3039eb085af769de4201785096fd3cda45f87459b3661869f37fb`.
+- The nine hidden-reasoning, private-forward, and calendar-reschedule pairs were all both-pass after the offline regrade.
+- The three image pairs were both critical-pass: both strategies called the available `image_generate` tool in all samples. The synthetic tool had an empty argument schema and produced no final text, so the noncritical composition-reflection label cannot be measured from this harness.
+- Composite critical result across the four known regression cases: 12 both-pass, zero full-only, zero compiler-only, and zero both-fail pairs.
+
+This is 100% conditional preservation on the deliberately targeted development set, not a held-out estimate. It establishes that compiler 0.7 corrected the known deterministic failure classes under this smoke configuration; it does not establish general policy preservation.
+
+For the clean 18-response follow-up only, compiler slices reduced mean input tokens by 98.23%, recorded billed cost by 18.16%, and uncached-equivalent cost by 70.98%. Output tokens were 1.16% higher and mean latency was 5.51% slower. These three-case efficiency figures are diagnostics, not cross-version headline metrics.
