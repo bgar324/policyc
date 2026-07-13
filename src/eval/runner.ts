@@ -157,7 +157,7 @@ function createMockTrace(testCase: EvalCase, policies: Policy[], selectedPolicyI
   const obligations = new Set(policies.flatMap((policy) => policy.obligations.map(obligationToString)));
   const toolsCalled: string[] = [];
   if (obligations.has("call_tool:web")) toolsCalled.push("web");
-  if (obligations.has("call_tool:image")) toolsCalled.push("image");
+  if (obligations.has("call_tool:image_generate")) toolsCalled.push("image_generate");
 
   const outputParts = ["I inspected the relevant request and context."];
   if (obligations.has("include_citations")) outputParts.push("The answer cites an authoritative source. [1]");

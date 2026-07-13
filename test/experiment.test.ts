@@ -27,6 +27,16 @@ test("compiler 0.6 regression set contains the nine promoted development cases",
   assert.ok(dataset.cases.every((item) => item.criticalObligationIds.length > 0));
 });
 
+test("compiler 0.7 regression set contains four spent held-out-v2 development cases", () => {
+  const dataset = loadBehavioralCases("eval/behavioral/compiler-v0.7-regressions.jsonl");
+  assert.equal(dataset.cases.length, 4);
+  assert.equal(dataset.datasetVersion, "compiler-v0.7-regressions");
+  assert.equal(dataset.split, "development");
+  assert.equal(new Set(dataset.cases.map((item) => item.caseId)).size, 4);
+  assert.ok(dataset.cases.every((item) => item.tags.includes("spent-evidence")));
+  assert.ok(dataset.cases.every((item) => item.tags.includes("promoted-from-held-out-v2")));
+});
+
 test("template datasets cannot execute", () => {
   assert.throws(
     () => loadBehavioralCases("eval/behavioral/adversarial-template-v1.jsonl"),

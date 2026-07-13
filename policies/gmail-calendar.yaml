@@ -30,13 +30,32 @@ policies:
       keywords: [send email, send this email, email it, forward]
       intents: [send_email]
       tools: []
-      operations: [send]
+      operations: [send, forward]
     requires: [destructive_action_definition]
     obligations:
       - type: ask_confirmation
     prohibitions:
       - type: destructive_action_without_confirmation
     runtimeInstruction: Treat sending email as externally visible and require explicit send intent plus confirmation.
+    validators:
+      - asks_confirmation_before_destructive_action
+
+  - id: external_email_forward_confirmation
+    title: Clarify and confirm external private-email forwarding
+    description: Forwarding private email to an external recipient requires an exact recipient, bounded content scope, disclosure awareness, and confirmation.
+    kind: content_gated
+    priority: 92
+    severity: privacy
+    alwaysActive: false
+    triggers:
+      keywords: [forward, private thread, external advisor]
+      operations: [forward]
+    requires: [send_email_requires_explicit_request, email_calendar_privacy]
+    obligations:
+      - type: ask_confirmation
+    prohibitions:
+      - type: destructive_action_without_confirmation
+    runtimeInstruction: Before forwarding private email, identify the exact recipient and exact thread content or attachment scope, explain the external disclosure consequence, and ask for explicit confirmation; do not call Gmail first.
     validators:
       - asks_confirmation_before_destructive_action
 
@@ -111,13 +130,13 @@ policies:
       intents: [calendar_mutation]
       tools: []
       artifactTypes: [calendar_event]
-      operations: [create, update, delete]
+      operations: [create, update, delete, reschedule]
     requires: [destructive_action_definition]
     obligations:
       - type: ask_confirmation
     prohibitions:
       - type: destructive_action_without_confirmation
-    runtimeInstruction: Confirm details before creating, updating, canceling, or deleting calendar events.
+    runtimeInstruction: Before calling the calendar, inspect or ask about availability and confirm the exact event, date, time, time zone, attendees, and invitation updates for any creation, reschedule, cancellation, or deletion.
     validators:
       - asks_confirmation_before_destructive_action
 
@@ -130,7 +149,6 @@ policies:
     alwaysActive: false
     triggers:
       keywords: [recurring, weekly, starting tomorrow, all future occurrences, series]
-      intents: [calendar_mutation]
     requires: [calendar_event_mutation_policies, email_calendar_privacy]
     obligations:
       - type: ask_confirmation

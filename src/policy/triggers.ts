@@ -27,7 +27,7 @@ const INTENT_KEYWORDS: Array<{ intent: IntentTrigger; patterns: RegExp[] }> = [
     ],
   },
   { intent: "polish", patterns: [/\bpolish\b/i, /\bimprove\b/i, /\bproofread\b/i, /\bedit this (text|paragraph|message|email|draft|sentence|note)\b/i] },
-  { intent: "image_generation", patterns: [/\bgenerate (an? )?image\b/i, /\bcreate (an? )?(picture|image|illustration)\b/i, /\bedit (this|the|an?) image\b/i, /\bmodify (this|the|an?) image\b/i, /\bdraw\b/i] },
+  { intent: "image_generation", patterns: [/\bgenerate\b.{0,80}\b(?:picture|image|illustration)\b/i, /\bcreate\b.{0,80}\b(?:picture|image|illustration)\b/i, /\bedit (this|the|an?) image\b/i, /\bmodify (this|the|an?) image\b/i, /\bdraw\b/i] },
   { intent: "image_interpretation", patterns: [/\bwhat does this image show\b/i, /\bdescribe this image\b/i, /\blook at this image\b/i, /\binterpret this image\b/i] },
   { intent: "chart_interpretation", patterns: [/\bchart\b/i, /\bgraph\b/i, /\bplot\b/i, /\baxis\b/i] },
   { intent: "pdf_summary", patterns: [/\bsummarize this pdf\b/i, /\bpdf\b/i] },
@@ -55,7 +55,7 @@ const INTENT_KEYWORDS: Array<{ intent: IntentTrigger; patterns: RegExp[] }> = [
     patterns: [
       /\bcreate .* calendar\b/i,
       /\bschedule\b/i,
-      /\bmove .* meeting\b/i,
+      /\bmove\b.{0,80}\b(?:meeting|event|review|sync|appointment)\b/i,
       /\bdelete .* event\b/i,
       /\bcancel\b.{0,80}\b(?:event|calendar|meeting|sync|appointment|series)\b/i,
     ],
@@ -84,9 +84,12 @@ export function detectIntents(input: string, context?: ArtifactContext | null): 
     intents.add("chart_interpretation");
   }
   if (context?.operation && ["delete", "archive"].includes(context.operation)) intents.add("destructive_action");
-  if (context?.operation === "send") intents.add("send_email");
+  if (context?.operation && ["send", "forward"].includes(context.operation)) intents.add("send_email");
   if (context?.operation === "draft") intents.add("draft_email");
-  if (context?.artifactType === "calendar_event" && ["create", "update", "delete"].includes(context.operation ?? "")) {
+  if (
+    context?.operation === "reschedule" ||
+    (context?.artifactType === "calendar_event" && ["create", "update", "delete"].includes(context.operation ?? ""))
+  ) {
     intents.add("calendar_mutation");
   }
 

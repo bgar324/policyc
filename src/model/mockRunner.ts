@@ -94,10 +94,10 @@ function inferToolsFromPrompt(systemPrompt: string, input: string): string[] {
     tools.push("web");
   }
   if (
-    systemPrompt.includes("call_tool:image") ||
+    systemPrompt.includes("call_tool:image_generate") ||
     (/image tool|Image generation/i.test(systemPrompt) && /generate an image|create an image|draw|edit this image/i.test(input))
   ) {
-    tools.push("image");
+    tools.push("image_generate");
   }
   return tools;
 }
@@ -105,6 +105,6 @@ function inferToolsFromPrompt(systemPrompt: string, input: string): string[] {
 function inferNaiveTools(input: RunModelInput): string[] {
   const tools: string[] = [];
   if (/latest|today|current|recent|weather|guidance/i.test(input.input)) tools.push("web");
-  if (/generate an image|create an image|draw|edit this image/i.test(input.input)) tools.push("image");
+  if (/generate an image|create an image|draw|edit this image/i.test(input.input)) tools.push("image_generate");
   return tools;
 }

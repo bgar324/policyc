@@ -46,7 +46,9 @@ export type OperationTrigger =
   | "delete"
   | "archive"
   | "send"
+  | "forward"
   | "draft"
+  | "reschedule"
   | "lookup";
 
 export type ObligationType =

@@ -21,8 +21,8 @@ export const validators: Record<string, Validator> = {
   "required_tool:web": (trace) =>
     trace.toolsCalled.includes("web") ? pass("required_tool:web", "web tool was called", true) : fail("required_tool:web", "web tool was not called", true),
 
-  "required_tool:image": (trace) =>
-    trace.toolsCalled.includes("image") ? pass("required_tool:image", "image tool was called", true) : fail("required_tool:image", "image tool was not called", true),
+  "required_tool:image_generate": (trace) =>
+    trace.toolsCalled.includes("image_generate") ? pass("required_tool:image_generate", "image generation tool was called", true) : fail("required_tool:image_generate", "image generation tool was not called", true),
 
   "forbidden_tool:web": (trace) =>
     trace.toolsCalled.includes("web") ? fail("forbidden_tool:web", "web tool was called when prohibited") : pass("forbidden_tool:web", "web tool was not called"),
