@@ -1,9 +1,13 @@
 # Held-out v3 blind-grade lock
 
-This record freezes the exhaustive human-semantic grading of run
+This record freezes the exhaustive strategy-blind semantic grading of run
 `run_c019d419734c6c5e` before the private answer-to-strategy map is opened.
 At the time of this lock, the graders and the merging process had not used
 `answer-map.private.json`; strategy identities remained sealed.
+
+Provenance clarification recorded after the lock: the three graders were
+isolated Codex reviewer agents, not human annotators. This clarification does
+not change any grade, count, or hash below.
 
 ## Source integrity
 

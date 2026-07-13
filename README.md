@@ -31,7 +31,7 @@ The protocol boundary is defined by JSON Schemas under [`protocol/`](protocol/).
 
 ## Compiler pipeline
 
-Compiler 0.6 loads 42 manually structured policy nodes from six YAML packs. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
+Compiler 0.7 loads 43 manually structured policy nodes from six YAML packs. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
 
 1. Zod validates required fields, enums, priorities, triggers, and unknown fields.
 2. Graph validation rejects duplicate IDs/edges, missing references, self-dependencies, cycles, unreachable structural nodes, unknown validators, and invalid always-active configurations.
@@ -73,9 +73,13 @@ Structural evidence and behavioral evidence are kept separate.
 
 Structural evaluation covers selected-policy precision/recall, critical-policy recall, dependency completeness, graph validity, deterministic artifact construction, and exact or estimated token counts.
 
-The v2 paired path evaluates the full-policy and compiler-slice responses for each case against the same independently authored case obligations, prohibitions, refusal expectation, tool expectation, and rubric. Obligations never come from the candidate being judged. Reports expose both-pass, both-fail, full-pass/compiled-fail, and compiled-pass/full-fail pairs, exact obligation regressions, severe failures, Wilson intervals, and descriptive McNemar analysis. Selector metrics are structural metrics, not behavioral metrics.
+The paired path evaluates the full-policy and compiler-slice responses for each case against the same independently authored case obligations, prohibitions, refusal expectation, tool expectation, and rubric. Obligations never come from the candidate being judged. Reports expose both-pass, both-fail, full-pass/compiled-fail, and compiled-pass/full-fail pairs, exact obligation regressions, severe failures, Wilson intervals, and descriptive McNemar analysis. Selector metrics are structural metrics, not behavioral metrics.
 
 The built-in evaluator is intentionally small and deterministic. Model graders can be added as adapters, but should not be treated as ground truth.
+
+### Latest frozen result
+
+Compiler 0.7 did not pass its preregistered held-out-v3 test. In 360 GPT-5 mini executions over 60 independently authored cases, exhaustive strategy-blind semantic review measured 130 both-pass, 33 full-only, 11 compiler-only, and six both-fail pairs. Conditional critical-obligation preservation was 130/163 = **79.75%** (Wilson 95%: 72.93%--85.21%), versus the 95% target. The compiler reduced mean actual input tokens by **93.75%** and uncached-equivalent cost by **59.46%**, but total billed cost fell only **12.14%** because the compiled condition made more paid searches. The run cost **$0.9333**. See [`eval/audits/held-out-v3-execution.md`](eval/audits/held-out-v3-execution.md) for the immutable hashes, incident accounting, blind-review provenance, gate decisions, and regression breakdown.
 
 ## Setup
 
@@ -183,6 +187,8 @@ Create a smaller reviewer-safe adjudication bundle containing every automated cr
 ```
 
 The reviewer folder contains enriched critical obligations, opaque answer IDs, and a fillable grade template, but no strategy names, token counts, or selection labels. A hash-linked private selection file stays beside the existing private answer map and must not be shown to the reviewer until grading is final.
+
+To create an exhaustive reviewer-safe bundle containing every complete pair, add `--all-complete`. Lock and commit the completed anonymous grade hashes before opening the private strategy map.
 
 If targeted controls show that the automated agreement strata are unreliable, create a second bundle containing every remaining complete pair without duplicating reviewed packets:
 
