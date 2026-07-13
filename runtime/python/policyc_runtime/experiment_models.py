@@ -25,11 +25,18 @@ class ToolDefinition(StrictModel):
     def provider_dict(self) -> dict[str, Any]:
         if self.type == "web_search":
             return {"type": "web_search", "search_context_size": "low"}
+        parameters = self.parameters or {}
+        if not parameters or parameters == {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": True,
+        }:
+            parameters = {"type": "object", "properties": {}, "additionalProperties": False}
         return {
             "type": "function",
             "name": self.name,
             "description": self.description,
-            "parameters": self.parameters,
+            "parameters": parameters,
             "strict": True,
         }
 

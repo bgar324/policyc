@@ -7,6 +7,7 @@ from email.utils import format_datetime
 import httpx
 import pytest
 
+from policyc_runtime.experiment_models import ToolDefinition
 from policyc_runtime.manifest import load_run
 from policyc_runtime.providers import AmbiguousProviderError, ProviderError, ProviderRequest
 from policyc_runtime.providers.openai import OpenAIResponsesProvider, parse_retry_after
@@ -104,6 +105,19 @@ def test_invalid_max_tool_calls_is_rejected(tmp_path) -> None:
     provider = OpenAIResponsesProvider(api_key="test")
     with pytest.raises(ValueError, match="max_tool_calls"):
         provider.build_payload(request(tmp_path, max_tool_calls=0))
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [{}, {"type": "object", "properties": {}, "additionalProperties": True}],
+)
+def test_synthetic_no_argument_functions_use_strict_openai_schema(parameters) -> None:  # type: ignore[no-untyped-def]
+    tool = ToolDefinition(type="function", name="gmail", description="Synthetic tool", parameters=parameters)
+    assert tool.provider_dict()["parameters"] == {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
+    }
 
 
 @pytest.mark.parametrize(
