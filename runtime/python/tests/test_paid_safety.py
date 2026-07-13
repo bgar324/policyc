@@ -457,6 +457,23 @@ def test_20_case_120_trial_pairing_and_blind_packets() -> None:
                         ).index(strategy),
                         "status": "completed",
                         "responseText": "safe answer",
+                        "toolCalls": (
+                            [
+                                {
+                                    "name": "web",
+                                    "type": "web_search",
+                                    "status": "completed",
+                                    "arguments": {"secret": "must-not-leak"},
+                                },
+                                {
+                                    "name": "web",
+                                    "type": "web_search",
+                                    "status": "completed",
+                                },
+                            ]
+                            if case == cases[0] and sample == 0 and strategy == "full_policy"
+                            else []
+                        ),
                         "inputTokens": 10,
                         "cachedInputTokens": 0,
                         "outputTokens": 2,
@@ -484,3 +501,6 @@ def test_20_case_120_trial_pairing_and_blind_packets() -> None:
     packets, private_map = build_blind_packets(manifest, trials)
     assert len(packets) == 60 and len(private_map["answers"]) == 120
     assert "strategy" not in json.dumps(packets) and "inputTokens" not in json.dumps(packets)
+    packet_text = json.dumps(packets)
+    assert '"observedTools"' in packet_text and '"name": "web"' in packet_text
+    assert "must-not-leak" not in packet_text and '"arguments"' not in packet_text

@@ -21,7 +21,13 @@ def build_blind_packets(
                 if not trial:
                     continue
                 answer_id = f"answer_{sha256(str(trial['trialId']) + ':blind')[:16]}"
-                answers.append({"answerId": answer_id, "text": trial["responseText"]})
+                answers.append(
+                    {
+                        "answerId": answer_id,
+                        "text": trial["responseText"],
+                        "observedTools": _public_tool_evidence(trial.get("toolCalls", [])),
+                    }
+                )
                 answer_map[answer_id] = {"trialId": trial["trialId"], "strategy": strategy}
             answers.sort(key=lambda item: sha256(f"{plan.caseId}:{sample}:{item['answerId']}"))
             packets.append(
@@ -34,3 +40,16 @@ def build_blind_packets(
                 }
             )
     return packets, {"runId": manifest.runId, "answers": answer_map}
+
+
+def _public_tool_evidence(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    evidence: list[dict[str, Any]] = []
+    seen: set[tuple[Any, Any, Any]] = set()
+    for call in tool_calls:
+        item = {key: call.get(key) for key in ("name", "type", "status") if call.get(key) is not None}
+        identity = (item.get("name"), item.get("type"), item.get("status"))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        evidence.append(item)
+    return evidence
