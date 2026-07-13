@@ -180,6 +180,17 @@ async def test_incomplete_usage_is_costed_and_persisted(tmp_path: Path, monkeypa
     assert all(item["inputTokens"] == 100 and item["outputTokens"] == 256 for item in trials)
     assert all(item["costUsd"] is not None for item in trials)
 
+    def unexpected_call(_: httpx.Request) -> httpx.Response:
+        raise AssertionError("resume must not repeat a persisted incomplete response")
+
+    resumed = await PairedExperimentRuntime(
+        load_paired_run(output / "manifest.v2.json"),
+        OpenAIResponsesProvider(api_key="offline-test", transport=httpx.MockTransport(unexpected_call)),
+    ).run()
+    assert resumed["outcomes"] == {"completed": 0, "failed": 2, "ambiguous": 0}
+    resumed_trials = [json.loads(path.read_text()) for path in (output / "trials").glob("*.json")]
+    assert all(item["status"] == "failed" and item["responseOutcome"] == "incomplete" for item in resumed_trials)
+
 
 def test_cached_cost_is_not_zero() -> None:
     assert calculate_cost(price(), 100, 40, 20) == pytest.approx(0.000104)

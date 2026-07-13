@@ -128,7 +128,7 @@ class PairedExperimentRuntime:
             if value.get("provenanceHashes") != self._provenance(spec):
                 raise ValueError(f"resume provenance mismatch for {spec.trial_id}")
             attempts = int(value.get("attemptCount", 0))
-            if value.get("status") == "completed":
+            if value.get("status") == "completed" and value.get("responseOutcome") != "incomplete":
                 await self.ledger.restore_completed(
                     value["inputTokens"],
                     value["outputTokens"],
@@ -158,6 +158,24 @@ class PairedExperimentRuntime:
                 record.get("builtInToolCalls", 0),
                 record.get("toolCostUsd", 0.0),
             )
+            if response.status != "completed" or response.outcome == "incomplete":
+                details = response.metadata.get("incomplete_details") or {}
+                error = ProviderError(
+                    f"OpenAI response status {response.status}: {details}",
+                    retryable=False,
+                    outcome=response.outcome,
+                    partial_response=response,
+                )
+                result = self._partial_failure_result(
+                    spec,
+                    response,
+                    record["attemptCount"],
+                    error,
+                    record["costUsd"],
+                    record["latencyMs"],
+                )
+                self.store.write_json_atomic(trial_path, result)
+                return result
             return self._finish_evaluation(
                 spec, response, record["attemptCount"], record["costUsd"], record["latencyMs"]
             )
