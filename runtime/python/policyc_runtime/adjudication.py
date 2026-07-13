@@ -36,6 +36,7 @@ def build_adjudication_bundle(
     output_directory: Path,
     *,
     agreements_per_class: int = 10,
+    all_complete: bool = False,
 ) -> dict[str, Any]:
     if agreements_per_class < 0:
         raise ValueError("agreements_per_class must be non-negative")
@@ -71,7 +72,10 @@ def build_adjudication_bundle(
 
     controls_pass = _deterministic_sample(run_id, "both-critical-pass", both_pass, agreements_per_class)
     controls_fail = _deterministic_sample(run_id, "both-critical-fail", both_fail, agreements_per_class)
-    selected = sorted({*regressions, *controls_pass, *controls_fail})
+    complete_keys = sorted(
+        key for key, strategies in paired.items() if set(strategies) == {"full_policy", "compiler_slice"}
+    )
+    selected = complete_keys if all_complete else sorted({*regressions, *controls_pass, *controls_fail})
     public_packets = [_enrich_packet(packet_index[key], case_index[key[0]], run_id) for key in selected]
     if any(len(packet["answers"]) != 2 for packet in public_packets):
         raise ValueError("every adjudication packet must contain exactly two completed answers")
@@ -82,6 +86,7 @@ def build_adjudication_bundle(
             "runId": run_id,
             "selected": selected,
             "agreementsPerClass": agreements_per_class,
+            "allComplete": all_complete,
             "version": "1.0.0",
         },
     )
@@ -93,6 +98,7 @@ def build_adjudication_bundle(
         "automatedCriticalRegressions": [_key_dict(item) for item in sorted(regressions)],
         "bothCriticalPassControls": [_key_dict(item) for item in controls_pass],
         "bothCriticalFailControls": [_key_dict(item) for item in controls_fail],
+        "allCompletePairs": [_key_dict(item) for item in complete_keys] if all_complete else [],
     }
     public_manifest = {
         "schemaVersion": "1.0.0",
@@ -105,7 +111,9 @@ def build_adjudication_bundle(
         "packetCount": len(public_packets),
         "answerCount": sum(len(item["answers"]) for item in public_packets),
         "selectionMethod": (
-            "All automated full-critical-pass/compiler-critical-fail pairs plus a deterministic, "
+            "Every pair with two completed answers. Selection labels are withheld from the reviewer."
+            if all_complete
+            else "All automated full-critical-pass/compiler-critical-fail pairs plus a deterministic, "
             "strategy-blind sample of both-critical-pass and both-critical-fail agreement pairs. "
             "Selection labels are withheld from the reviewer."
         ),

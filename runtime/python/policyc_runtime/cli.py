@@ -40,6 +40,7 @@ def main() -> None:
     adjudication.add_argument("run_directory", type=Path)
     adjudication.add_argument("--output", type=Path)
     adjudication.add_argument("--agreements-per-class", type=int, default=10)
+    adjudication.add_argument("--all-complete", action="store_true")
     completion = subcommands.add_parser("adjudication-completion-bundle")
     completion.add_argument("run_directory", type=Path)
     completion.add_argument("--prior-bundle", type=Path, required=True)
@@ -58,6 +59,7 @@ def main() -> None:
             args.run_directory,
             output,
             agreements_per_class=args.agreements_per_class,
+            all_complete=args.all_complete,
         )
         print(json.dumps(result, indent=2, sort_keys=True))
     elif args.command == "adjudication-completion-bundle":

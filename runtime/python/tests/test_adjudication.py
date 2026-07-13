@@ -67,6 +67,14 @@ def test_builds_deterministic_strategy_blind_bundle(tmp_path: Path) -> None:
     assert packet["criticalObligations"][-1]["id"] == "confirm"
     assert packet["answers"][0]["answerId"] == "answer-a"
 
+    exhaustive_output = run / "blind" / "adjudication-all"
+    exhaustive = build_adjudication_bundle(run, exhaustive_output, all_complete=True)
+    assert exhaustive["packetCount"] == 1
+    assert (
+        exhaustive["selectionMethod"]
+        == "Every pair with two completed answers. Selection labels are withheld from the reviewer."
+    )
+
     completed = json.loads((output / "grades.template.json").read_text())
     for grade in completed["grades"][0]["answerGrades"]:
         grade.update({"criticalVerdict": "pass", "rubricVerdict": "pass", "notes": "Compliant."})
