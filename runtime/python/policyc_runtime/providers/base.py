@@ -24,6 +24,7 @@ class ProviderResponse:
     output_tokens: int
     estimated_cost_usd: float | None = None
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    built_in_tool_calls: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     cached_input_tokens: int | None = None
     reasoning_tokens: int | None = None

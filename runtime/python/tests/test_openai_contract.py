@@ -67,6 +67,24 @@ async def test_request_contract_and_detailed_response(tmp_path) -> None:
     assert result.provider_request_id == "req_123"
 
 
+@pytest.mark.asyncio
+async def test_web_search_billing_uses_reported_requests_not_activity_events(tmp_path) -> None:
+    body = response_body(
+        output=[
+            {"type": "web_search_call", "id": "ws_search", "status": "completed"},
+            {"type": "web_search_call", "id": "ws_open", "status": "completed"},
+            {"type": "message", "content": [{"type": "output_text", "text": "answer"}]},
+        ],
+        tool_usage={"web_search": {"num_requests": 1}},
+    )
+    provider = OpenAIResponsesProvider(
+        api_key="test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json=body))
+    )
+    result = await provider.invoke(request(tmp_path, max_tool_calls=1))
+    assert len([item for item in result.tool_calls if item["type"] == "web_search"]) == 2
+    assert result.built_in_tool_calls == 1
+
+
 def test_unsupported_parameter_and_missing_key(tmp_path, monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     with pytest.raises(ValueError, match="OPENAI_API_KEY"):

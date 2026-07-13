@@ -122,6 +122,7 @@ class PairedExperimentRuntime:
 
     async def _resume(self, spec: PairedTrialSpec) -> dict[str, Any] | None:
         trial_path = self.root / "trials" / f"{spec.trial_id}.json"
+        failed_value: dict[str, Any] | None = None
         if trial_path.exists():
             value = json.loads(trial_path.read_text())
             if value.get("provenanceHashes") != self._provenance(spec):
@@ -141,9 +142,10 @@ class PairedExperimentRuntime:
                 await self.ledger.restore_ambiguous(value["ambiguousCostExposureUsd"], attempts)
                 return value
             if value.get("status") == "failed":
-                if attempts:
-                    await self.ledger.restore_definitive_failure(attempts)
-                return value
+                # A raw response can outlive finalization (for example, if
+                # accounting or the process fails after persistence). Recover
+                # it below before treating the provider attempt as failed.
+                failed_value = value
         provider_path = self.root / "provider" / f"{spec.trial_id}.json"
         if provider_path.exists():
             record = json.loads(provider_path.read_text())
@@ -175,8 +177,37 @@ class PairedExperimentRuntime:
                 try:
                     response = self.provider.parse(raw, self.loaded.manifest.model)
                 except ProviderError as error:
-                    await self.ledger.restore_definitive_failure(attempt)
-                    result = self._failed_result(spec, "failed", attempt, error)
+                    if error.partial_response is None:
+                        await self.ledger.restore_definitive_failure(attempt)
+                        result = self._failed_result(spec, "failed", attempt, error)
+                        self.store.write_json_atomic(self.root / "trials" / f"{spec.trial_id}.json", result)
+                        return result
+                    response = error.partial_response
+                    cached = response.cached_input_tokens if response.cached_input_tokens is not None else 0
+                    from .pricing import calculate_cost
+
+                    built_in_tool_calls = _web_search_calls(response)
+                    tool_cost = built_in_tool_calls * self.web_search_per_call
+                    cost = calculate_cost(self.price, response.input_tokens, cached, response.output_tokens) + tool_cost
+                    await self.ledger.restore_completed(
+                        response.input_tokens,
+                        response.output_tokens,
+                        cost,
+                        attempt,
+                        built_in_tool_calls,
+                        tool_cost,
+                    )
+                    record = {
+                        "trialId": spec.trial_id,
+                        "attemptCount": attempt,
+                        "latencyMs": raw_value["durationMs"],
+                        "costUsd": cost,
+                        "builtInToolCalls": built_in_tool_calls,
+                        "toolCostUsd": tool_cost,
+                        "response": asdict(response),
+                    }
+                    self.store.write_json_atomic(provider_path, record)
+                    result = self._partial_failure_result(spec, response, attempt, error, cost, raw_value["durationMs"])
                     self.store.write_json_atomic(self.root / "trials" / f"{spec.trial_id}.json", result)
                     return result
             else:
@@ -206,6 +237,11 @@ class PairedExperimentRuntime:
             }
             self.store.write_json_atomic(provider_path, record)
             return self._finish_evaluation(spec, response, attempt, cost, raw_value["durationMs"])
+        if failed_value is not None:
+            attempts = int(failed_value.get("attemptCount", 0))
+            if attempts:
+                await self.ledger.restore_definitive_failure(attempts)
+            return failed_value
         return None
 
     async def _execute(self, spec: PairedTrialSpec) -> dict[str, Any]:
@@ -298,28 +334,7 @@ class PairedExperimentRuntime:
                         "response": asdict(response),
                     }
                     self.store.write_json_atomic(self.root / "provider" / f"{spec.trial_id}.json", record)
-                    result = self._failed_result(spec, "failed", attempt, error)
-                    result.update(
-                        {
-                            "requestedModel": manifest.model,
-                            "actualModel": response.actual_model,
-                            "responseId": response.response_id,
-                            "providerRequestId": response.provider_request_id,
-                            "responseOutcome": response.outcome,
-                            "responseText": response.text,
-                            "refusal": response.refusal,
-                            "toolCalls": response.tool_calls,
-                            "inputTokens": response.input_tokens,
-                            "cachedInputTokens": response.cached_input_tokens,
-                            "outputTokens": response.output_tokens,
-                            "reasoningTokens": response.reasoning_tokens,
-                            "totalTokens": response.total_tokens,
-                            "latencyMs": latency,
-                            "costUsd": cost,
-                            "builtInToolCalls": _web_search_calls(response),
-                            "toolCostUsd": _web_search_calls(response) * self.web_search_per_call,
-                        }
-                    )
+                    result = self._partial_failure_result(spec, response, attempt, error, cost, latency)
                     self.store.write_json_atomic(self.root / "trials" / f"{spec.trial_id}.json", result)
                     return result
                 await self.ledger.fail_definitive(reservation, spec.trial_id)
@@ -428,6 +443,39 @@ class PairedExperimentRuntime:
             "provenanceHashes": self._provenance(spec),
         }
 
+    def _partial_failure_result(
+        self,
+        spec: PairedTrialSpec,
+        response: ProviderResponse,
+        attempt: int,
+        error: ProviderError,
+        cost: float,
+        latency: float | None,
+    ) -> dict[str, Any]:
+        result = self._failed_result(spec, "failed", attempt, error)
+        result.update(
+            {
+                "requestedModel": self.loaded.manifest.model,
+                "actualModel": response.actual_model,
+                "responseId": response.response_id,
+                "providerRequestId": response.provider_request_id,
+                "responseOutcome": response.outcome,
+                "responseText": response.text,
+                "refusal": response.refusal,
+                "toolCalls": response.tool_calls,
+                "inputTokens": response.input_tokens,
+                "cachedInputTokens": response.cached_input_tokens,
+                "outputTokens": response.output_tokens,
+                "reasoningTokens": response.reasoning_tokens,
+                "totalTokens": response.total_tokens,
+                "latencyMs": latency,
+                "costUsd": cost,
+                "builtInToolCalls": _web_search_calls(response),
+                "toolCostUsd": _web_search_calls(response) * self.web_search_per_call,
+            }
+        )
+        return result
+
     def _provenance(self, spec: PairedTrialSpec) -> dict[str, str]:
         artifact = self.loaded.artifacts[f"{spec.case_id}:{spec.strategy}"]
         return {
@@ -522,6 +570,8 @@ def spend_plan(loaded: LoadedPairedRun) -> dict[str, Any]:
 
 
 def _web_search_calls(response: ProviderResponse) -> int:
+    if response.built_in_tool_calls is not None:
+        return response.built_in_tool_calls
     return sum(item.get("type") == "web_search" for item in response.tool_calls)
 
 

@@ -197,6 +197,16 @@ def _parse_response_body(
         raise ProviderError(
             "OpenAI completed response contains no text or refusal", retryable=False, outcome="malformed_response"
         )
+    tool_usage = body.get("tool_usage")
+    web_search_usage = tool_usage.get("web_search") if isinstance(tool_usage, dict) else None
+    reported_web_search_requests = web_search_usage.get("num_requests") if isinstance(web_search_usage, dict) else None
+    built_in_tool_calls = (
+        reported_web_search_requests
+        if isinstance(reported_web_search_requests, int)
+        and not isinstance(reported_web_search_requests, bool)
+        and reported_web_search_requests >= 0
+        else None
+    )
     return ProviderResponse(
         text=text,
         input_tokens=usage["input_tokens"],
@@ -205,6 +215,7 @@ def _parse_response_body(
         reasoning_tokens=_optional_int(output_details.get("reasoning_tokens")),
         total_tokens=_optional_int(usage.get("total_tokens")),
         tool_calls=tools,
+        built_in_tool_calls=built_in_tool_calls,
         metadata={"requested_model": requested_model, "incomplete_details": body.get("incomplete_details")},
         response_id=_optional_str(body.get("id")),
         actual_model=_optional_str(body.get("model")),
