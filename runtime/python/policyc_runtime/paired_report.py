@@ -13,6 +13,7 @@ def build_paired_report(
     trials: list[dict[str, Any]],
     budget: dict[str, Any],
     price: ModelPrice,
+    web_search_per_call: float = 0.0,
 ) -> dict[str, Any]:
     completed = [item for item in trials if item["status"] == "completed"]
     by_strategy: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -26,7 +27,7 @@ def build_paired_report(
         critical = sum(bool(row["evaluation"]["criticalPassed"]) for row in rows)
         severe = sum(bool(row["evaluation"]["severeFailures"]) for row in rows)
         violations = sum(not bool(row["evaluation"]["passed"]) for row in rows)
-        economics = _strategy_economics(all_rows, price)
+        economics = _strategy_economics(all_rows, price, web_search_per_call)
         strategies[strategy] = {
             "caseCount": len({row["caseId"] for row in all_rows}),
             "trialCount": len(all_rows),
@@ -53,6 +54,8 @@ def build_paired_report(
             "regularInputTokens": _regular_input_tokens(all_rows),
             "cachedInputTokens": _sum_known(all_rows, "cachedInputTokens"),
             "outputTokens": _sum_known(all_rows, "outputTokens"),
+            "builtInToolCalls": _sum_known(all_rows, "builtInToolCalls"),
+            "toolCostUsd": _sum_known(all_rows, "toolCostUsd"),
             "costUsd": _sum_known(all_rows, "costUsd"),
             "meanInputTokens": _mean_known(all_rows, "inputTokens"),
             "meanOutputTokens": _mean_known(all_rows, "outputTokens"),
@@ -145,7 +148,7 @@ def build_paired_report(
             "graderCostUsd": None,
             "ambiguousAttemptExposureUsd": budget["ambiguousCostExposureUsd"],
             "cachedTokenSavingsUsd": _cached_savings(trials, price),
-            "uncachedEquivalentCostUsd": _uncached_equivalent_cost(trials, price),
+            "uncachedEquivalentCostUsd": _uncached_equivalent_cost(trials, price, web_search_per_call),
         },
         "limitations": [
             "Confidence intervals and paired tests are descriptive at small sample sizes.",
@@ -206,7 +209,9 @@ def _regular_input_tokens(rows: list[dict[str, Any]]) -> int | None:
     return sum(int(row["inputTokens"]) - int(row["cachedInputTokens"]) for row in rows)
 
 
-def _strategy_economics(rows: list[dict[str, Any]], price: ModelPrice) -> dict[str, float | None]:
+def _strategy_economics(
+    rows: list[dict[str, Any]], price: ModelPrice, web_search_per_call: float = 0.0
+) -> dict[str, float | None]:
     if not rows or any(
         row.get("inputTokens") is None or row.get("cachedInputTokens") is None or row.get("outputTokens") is None
         for row in rows
@@ -214,25 +219,31 @@ def _strategy_economics(rows: list[dict[str, Any]], price: ModelPrice) -> dict[s
         return {
             "inputCostUsd": None,
             "outputCostUsd": None,
+            "toolCostUsd": None,
             "uncachedEquivalentCostUsd": None,
             "cachedSavingsUsd": None,
         }
     regular = sum(int(row["inputTokens"]) - int(row["cachedInputTokens"]) for row in rows)
     cached = sum(int(row["cachedInputTokens"]) for row in rows)
     output = sum(int(row["outputTokens"]) for row in rows)
+    built_in_tool_calls = sum(int(row.get("builtInToolCalls", 0)) for row in rows)
+    tool_cost = built_in_tool_calls * web_search_per_call
     input_cost = (regular * price.inputPerMillion + cached * price.cachedInputPerMillion) / 1_000_000
     output_cost = output * price.outputPerMillion / 1_000_000
-    uncached = ((regular + cached) * price.inputPerMillion + output * price.outputPerMillion) / 1_000_000
+    uncached = ((regular + cached) * price.inputPerMillion + output * price.outputPerMillion) / 1_000_000 + tool_cost
     return {
         "inputCostUsd": input_cost,
         "outputCostUsd": output_cost,
+        "toolCostUsd": tool_cost,
         "uncachedEquivalentCostUsd": uncached,
         "cachedSavingsUsd": uncached - input_cost - output_cost,
     }
 
 
-def _uncached_equivalent_cost(rows: list[dict[str, Any]], price: ModelPrice) -> float | None:
-    economics = _strategy_economics(rows, price)
+def _uncached_equivalent_cost(
+    rows: list[dict[str, Any]], price: ModelPrice, web_search_per_call: float = 0.0
+) -> float | None:
+    economics = _strategy_economics(rows, price, web_search_per_call)
     return economics["uncachedEquivalentCostUsd"]
 
 

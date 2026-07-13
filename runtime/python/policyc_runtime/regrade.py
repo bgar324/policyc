@@ -41,7 +41,7 @@ def regrade_run(run_directory: Path) -> dict[str, Any]:
     derived_manifest = manifest.model_copy(
         update={"evaluator": EvaluatorRef(id="independent-rules", version=EVALUATOR_VERSION)}
     )
-    report = build_paired_report(derived_manifest, derived_trials, budget, price)
+    report = build_paired_report(derived_manifest, derived_trials, budget, price, pricing.web_search_per_call)
     report["reportType"] = "derived-offline-regrade"
     report["sourceRunId"] = manifest.runId
     report["sourceEvaluator"] = manifest.evaluator.model_dump(mode="json")

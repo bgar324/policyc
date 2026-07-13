@@ -24,7 +24,7 @@ class ToolDefinition(StrictModel):
 
     def provider_dict(self) -> dict[str, Any]:
         if self.type == "web_search":
-            return {"type": "web_search"}
+            return {"type": "web_search", "search_context_size": "low"}
         return {
             "type": "function",
             "name": self.name,

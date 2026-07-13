@@ -16,17 +16,22 @@ class BudgetExceeded(RuntimeError):
 class Reservation:
     input_tokens: int
     output_tokens: int
+    built_in_tool_calls: int
+    tool_cost_usd: float
     cost_usd: float
 
 
 class BudgetLedger:
-    def __init__(self, config: BudgetConfig, price: ModelPrice) -> None:
+    def __init__(self, config: BudgetConfig, price: ModelPrice, web_search_per_call: float = 0.0) -> None:
         self.config = config
         self.price = price
+        self.web_search_per_call = web_search_per_call
         self.calls = 0
         self.actual_input_tokens = 0
         self.actual_output_tokens = 0
         self.actual_cost_usd = 0.0
+        self.actual_built_in_tool_calls = 0
+        self.actual_tool_cost_usd = 0.0
         self.accounting_complete = True
         self.unknown_usage_attempts = 0
         self.ambiguous_cost_exposure_usd = 0.0
@@ -36,8 +41,11 @@ class BudgetLedger:
         self.decisions: list[dict[str, Any]] = []
         self._lock = asyncio.Lock()
 
-    async def reserve(self, estimated_input: int, output_cap: int, trial_id: str) -> Reservation:
-        worst_cost = calculate_cost(self.price, estimated_input, 0, output_cap)
+    async def reserve(
+        self, estimated_input: int, output_cap: int, trial_id: str, max_built_in_tool_calls: int = 0
+    ) -> Reservation:
+        tool_cost = max_built_in_tool_calls * self.web_search_per_call
+        worst_cost = calculate_cost(self.price, estimated_input, 0, output_cap) + tool_cost
         async with self._lock:
             checks = {
                 "calls": self.calls + 1 <= self.config.maxCalls,
@@ -55,6 +63,8 @@ class BudgetLedger:
                 "checks": checks,
                 "estimatedInputTokens": estimated_input,
                 "outputCap": output_cap,
+                "maxBuiltInToolCalls": max_built_in_tool_calls,
+                "reservedToolCostUsd": tool_cost,
                 "reservedCostUsd": worst_cost,
             }
             self.decisions.append(decision)
@@ -64,17 +74,28 @@ class BudgetLedger:
             self._reserved_input += estimated_input
             self._reserved_output += output_cap
             self._reserved_cost += worst_cost
-            return Reservation(estimated_input, output_cap, worst_cost)
+            return Reservation(estimated_input, output_cap, max_built_in_tool_calls, tool_cost, worst_cost)
 
     async def complete(
-        self, reservation: Reservation, input_tokens: int, cached_tokens: int, output_tokens: int, trial_id: str
+        self,
+        reservation: Reservation,
+        input_tokens: int,
+        cached_tokens: int,
+        output_tokens: int,
+        trial_id: str,
+        built_in_tool_calls: int = 0,
     ) -> float:
-        cost = calculate_cost(self.price, input_tokens, cached_tokens, output_tokens)
+        if built_in_tool_calls > reservation.built_in_tool_calls:
+            raise BudgetExceeded(f"built-in tool calls exceeded reserved cap during {trial_id}")
+        tool_cost = built_in_tool_calls * self.web_search_per_call
+        cost = calculate_cost(self.price, input_tokens, cached_tokens, output_tokens) + tool_cost
         async with self._lock:
             self._release(reservation)
             self.actual_input_tokens += input_tokens
             self.actual_output_tokens += output_tokens
             self.actual_cost_usd += cost
+            self.actual_built_in_tool_calls += built_in_tool_calls
+            self.actual_tool_cost_usd += tool_cost
             within = (
                 self.actual_input_tokens <= self.config.maxInputTokens
                 and self.actual_output_tokens <= self.config.maxOutputTokens
@@ -88,6 +109,8 @@ class BudgetLedger:
                     "actualInputTokens": input_tokens,
                     "cachedInputTokens": cached_tokens,
                     "actualOutputTokens": output_tokens,
+                    "actualBuiltInToolCalls": built_in_tool_calls,
+                    "actualToolCostUsd": tool_cost,
                     "actualCostUsd": cost,
                 }
             )
@@ -110,12 +133,22 @@ class BudgetLedger:
                 {"trialId": trial_id, "stage": "ambiguous", "allowed": False, "exposureCostUsd": reservation.cost_usd}
             )
 
-    async def restore_completed(self, input_tokens: int, output_tokens: int, cost_usd: float, attempts: int) -> None:
+    async def restore_completed(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
+        attempts: int,
+        built_in_tool_calls: int = 0,
+        tool_cost_usd: float = 0.0,
+    ) -> None:
         async with self._lock:
             self.calls += attempts
             self.actual_input_tokens += input_tokens
             self.actual_output_tokens += output_tokens
             self.actual_cost_usd += cost_usd
+            self.actual_built_in_tool_calls += built_in_tool_calls
+            self.actual_tool_cost_usd += tool_cost_usd
 
     async def restore_ambiguous(self, exposure_usd: float, attempts: int) -> None:
         async with self._lock:
@@ -134,9 +167,13 @@ class BudgetLedger:
             "actualInputTokens": self.actual_input_tokens if self.accounting_complete else None,
             "actualOutputTokens": self.actual_output_tokens if self.accounting_complete else None,
             "actualCostUsd": self.actual_cost_usd if self.accounting_complete else None,
+            "actualBuiltInToolCalls": self.actual_built_in_tool_calls if self.accounting_complete else None,
+            "actualToolCostUsd": self.actual_tool_cost_usd if self.accounting_complete else None,
             "knownInputTokens": self.actual_input_tokens,
             "knownOutputTokens": self.actual_output_tokens,
             "knownCostUsd": self.actual_cost_usd,
+            "knownBuiltInToolCalls": self.actual_built_in_tool_calls,
+            "knownToolCostUsd": self.actual_tool_cost_usd,
             "accountingComplete": self.accounting_complete,
             "unknownUsageAttempts": self.unknown_usage_attempts,
             "ambiguousCostExposureUsd": self.ambiguous_cost_exposure_usd,

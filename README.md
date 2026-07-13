@@ -148,6 +148,8 @@ Hard limits cover logical trials, provider attempts, cumulative input tokens, cu
 
 Raw HTTP responses are atomically persisted before parsing and evaluation. Completed provider calls resume without another call. The manifest embeds the Git commit and dirty state used to construct the run, and the SQLite catalog retains the same provenance. A timeout or transport disconnect is recorded as an ambiguous paid attempt, consumes call and worst-case cost exposure, and is not retried unless `--retry-ambiguous` was explicitly selected. This mitigates duplicate billing but cannot provide exactly-once semantics across an uncertain network boundary.
 
+Pricing registry v2 also reserves and records OpenAI built-in web-search fees. Web-enabled responses set `max_tool_calls: 1` and `search_context_size: low`; reports separate built-in call counts and tool cost. OpenAI documents that search context size does not guarantee an exact token count, so retrieved search-content tokens are charged from actual provider usage and can overshoot the pre-call token estimate for the in-flight request. Treat the configured ceiling as a scheduler ceiling with bounded per-search fees, not an external billing-account guarantee, whenever built-in search is enabled.
+
 The 20-case pilot shape is:
 
 ```bash

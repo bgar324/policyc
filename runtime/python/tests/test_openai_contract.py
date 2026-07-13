@@ -76,6 +76,18 @@ def test_unsupported_parameter_and_missing_key(tmp_path, monkeypatch) -> None:
         provider.build_payload(request(tmp_path, seed=7))
 
 
+def test_max_tool_calls_is_forwarded_to_responses_api(tmp_path) -> None:
+    provider = OpenAIResponsesProvider(api_key="test")
+    payload = provider.build_payload(request(tmp_path, max_tool_calls=1))
+    assert payload["max_tool_calls"] == 1
+
+
+def test_invalid_max_tool_calls_is_rejected(tmp_path) -> None:
+    provider = OpenAIResponsesProvider(api_key="test")
+    with pytest.raises(ValueError, match="max_tool_calls"):
+        provider.build_payload(request(tmp_path, max_tool_calls=0))
+
+
 @pytest.mark.parametrize(
     ("body", "outcome"),
     [

@@ -13,6 +13,7 @@ from .base import AmbiguousProviderError, ProviderError, ProviderRequest, Provid
 
 ALLOWED_PARAMETERS = {
     "max_output_tokens",
+    "max_tool_calls",
     "temperature",
     "top_p",
     "reasoning",
@@ -52,6 +53,11 @@ class OpenAIResponsesProvider:
         maximum = request.parameters.get("max_output_tokens")
         if not isinstance(maximum, int) or isinstance(maximum, bool) or maximum <= 0:
             raise ValueError("OpenAI requests require a positive integer max_output_tokens")
+        max_tool_calls = request.parameters.get("max_tool_calls")
+        if max_tool_calls is not None and (
+            not isinstance(max_tool_calls, int) or isinstance(max_tool_calls, bool) or max_tool_calls <= 0
+        ):
+            raise ValueError("OpenAI requests require max_tool_calls to be a positive integer")
         payload: dict[str, Any] = {
             "model": request.model,
             "instructions": request.artifact.compiledPrompt,

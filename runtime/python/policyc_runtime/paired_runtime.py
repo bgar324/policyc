@@ -49,7 +49,8 @@ class PairedExperimentRuntime:
         manifest = loaded.manifest
         registry = load_pricing(manifest.pricing.registryPath, manifest.pricing.registryVersion)
         self.price = registry.lookup(manifest.model)
-        self.ledger = BudgetLedger(manifest.budget, self.price)
+        self.web_search_per_call = registry.web_search_per_call
+        self.ledger = BudgetLedger(manifest.budget, self.price, self.web_search_per_call)
         self.rate_limiter = RateLimiter(manifest.rateLimit, manifest.maxConcurrency)
         self.catalog = RunCatalog()
         self.results: list[dict[str, Any]] = []
@@ -75,7 +76,7 @@ class PairedExperimentRuntime:
             ordered = sorted(self.results, key=lambda item: item["trialId"])
             budget = self.ledger.snapshot()
             self.store.write_json_atomic(self.root / "budget.json", budget)
-            report = build_paired_report(manifest, ordered, budget, self.price)
+            report = build_paired_report(manifest, ordered, budget, self.price, self.web_search_per_call)
             report_path = self.root / "report.json"
             self.store.write_json_atomic(report_path, report)
             packets, answer_map = build_blind_packets(manifest, ordered)
@@ -128,7 +129,12 @@ class PairedExperimentRuntime:
             attempts = int(value.get("attemptCount", 0))
             if value.get("status") == "completed":
                 await self.ledger.restore_completed(
-                    value["inputTokens"], value["outputTokens"], value["costUsd"], attempts
+                    value["inputTokens"],
+                    value["outputTokens"],
+                    value["costUsd"],
+                    attempts,
+                    value.get("builtInToolCalls", 0),
+                    value.get("toolCostUsd", 0.0),
                 )
                 return value
             if value.get("status") == "ambiguous" and not self.loaded.manifest.retryPolicy.retryAmbiguous:
@@ -143,7 +149,12 @@ class PairedExperimentRuntime:
             record = json.loads(provider_path.read_text())
             response = _response_from_dict(record["response"])
             await self.ledger.restore_completed(
-                response.input_tokens, response.output_tokens, record["costUsd"], record["attemptCount"]
+                response.input_tokens,
+                response.output_tokens,
+                record["costUsd"],
+                record["attemptCount"],
+                record.get("builtInToolCalls", 0),
+                record.get("toolCostUsd", 0.0),
             )
             return self._finish_evaluation(
                 spec, response, record["attemptCount"], record["costUsd"], record["latencyMs"]
@@ -173,13 +184,24 @@ class PairedExperimentRuntime:
             cached = response.cached_input_tokens if response.cached_input_tokens is not None else 0
             from .pricing import calculate_cost
 
-            cost = calculate_cost(self.price, response.input_tokens, cached, response.output_tokens)
-            await self.ledger.restore_completed(response.input_tokens, response.output_tokens, cost, attempt)
+            built_in_tool_calls = _web_search_calls(response)
+            tool_cost = built_in_tool_calls * self.web_search_per_call
+            cost = calculate_cost(self.price, response.input_tokens, cached, response.output_tokens) + tool_cost
+            await self.ledger.restore_completed(
+                response.input_tokens,
+                response.output_tokens,
+                cost,
+                attempt,
+                built_in_tool_calls,
+                tool_cost,
+            )
             record = {
                 "trialId": spec.trial_id,
                 "attemptCount": attempt,
                 "latencyMs": raw_value["durationMs"],
                 "costUsd": cost,
+                "builtInToolCalls": built_in_tool_calls,
+                "toolCostUsd": tool_cost,
                 "response": asdict(response),
             }
             self.store.write_json_atomic(provider_path, record)
@@ -196,7 +218,14 @@ class PairedExperimentRuntime:
         for attempt in range(start_attempt, manifest.retryPolicy.maxAttempts + 1):
             try:
                 estimated_input = artifact.tokenCount.tokens + manifest.inputTokenOverheadPerCall
-                reservation = await self.ledger.reserve(estimated_input, output_cap, spec.trial_id)
+                max_built_in_tool_calls = (
+                    int(manifest.modelParameters.get("max_tool_calls", 0))
+                    if any(item.type == "web_search" for item in spec.case.tools)
+                    else 0
+                )
+                reservation = await self.ledger.reserve(
+                    estimated_input, output_cap, spec.trial_id, max_built_in_tool_calls
+                )
             except BudgetExceeded as error:
                 result = self._failed_result(spec, "failed", attempt - 1, error)
                 result["stopReason"] = "hard_budget_reached_before_attempt"
@@ -219,7 +248,12 @@ class PairedExperimentRuntime:
                 latency = (perf_counter() - started) * 1000
                 cached = response.cached_input_tokens if response.cached_input_tokens is not None else 0
                 cost = await self.ledger.complete(
-                    reservation, response.input_tokens, cached, response.output_tokens, spec.trial_id
+                    reservation,
+                    response.input_tokens,
+                    cached,
+                    response.output_tokens,
+                    spec.trial_id,
+                    _web_search_calls(response),
                 )
                 response.estimated_cost_usd = cost
                 record = {
@@ -227,6 +261,8 @@ class PairedExperimentRuntime:
                     "attemptCount": attempt,
                     "latencyMs": latency,
                     "costUsd": cost,
+                    "builtInToolCalls": _web_search_calls(response),
+                    "toolCostUsd": _web_search_calls(response) * self.web_search_per_call,
                     "response": asdict(response),
                 }
                 self.store.write_json_atomic(self.root / "provider" / f"{spec.trial_id}.json", record)
@@ -243,7 +279,12 @@ class PairedExperimentRuntime:
                     response = error.partial_response
                     cached = response.cached_input_tokens if response.cached_input_tokens is not None else 0
                     cost = await self.ledger.complete(
-                        reservation, response.input_tokens, cached, response.output_tokens, spec.trial_id
+                        reservation,
+                        response.input_tokens,
+                        cached,
+                        response.output_tokens,
+                        spec.trial_id,
+                        _web_search_calls(response),
                     )
                     response.estimated_cost_usd = cost
                     latency = response.request_duration_ms or (perf_counter() - started) * 1000
@@ -252,6 +293,8 @@ class PairedExperimentRuntime:
                         "attemptCount": attempt,
                         "latencyMs": latency,
                         "costUsd": cost,
+                        "builtInToolCalls": _web_search_calls(response),
+                        "toolCostUsd": _web_search_calls(response) * self.web_search_per_call,
                         "response": asdict(response),
                     }
                     self.store.write_json_atomic(self.root / "provider" / f"{spec.trial_id}.json", record)
@@ -273,6 +316,8 @@ class PairedExperimentRuntime:
                             "totalTokens": response.total_tokens,
                             "latencyMs": latency,
                             "costUsd": cost,
+                            "builtInToolCalls": _web_search_calls(response),
+                            "toolCostUsd": _web_search_calls(response) * self.web_search_per_call,
                         }
                     )
                     self.store.write_json_atomic(self.root / "trials" / f"{spec.trial_id}.json", result)
@@ -349,6 +394,8 @@ class PairedExperimentRuntime:
             "totalTokens": response.total_tokens,
             "latencyMs": latency,
             "costUsd": cost,
+            "builtInToolCalls": _web_search_calls(response),
+            "toolCostUsd": _web_search_calls(response) * self.web_search_per_call,
             "evaluation": evaluation,
             "structuralRetention": {
                 "selectedPolicyIds": artifact.selectedPolicyIds,
@@ -438,7 +485,14 @@ def spend_plan(loaded: LoadedPairedRun) -> dict[str, Any]:
     )
     from .pricing import calculate_cost
 
-    logical_cost_cap = calculate_cost(price, logical_input, 0, logical_output_cap)
+    maximum_built_in_tool_calls = (
+        sum(any(tool.type == "web_search" for tool in plan.case.tools) for plan in manifest.casePlans)
+        * len(manifest.strategies)
+        * manifest.sampleCount
+        * int(manifest.modelParameters.get("max_tool_calls", 0))
+    )
+    built_in_tool_cost_cap = maximum_built_in_tool_calls * registry.web_search_per_call
+    logical_cost_cap = calculate_cost(price, logical_input, 0, logical_output_cap) + built_in_tool_cost_cap
     retry_factor = manifest.retryPolicy.maxAttempts
     return {
         "runId": manifest.runId,
@@ -451,9 +505,12 @@ def spend_plan(loaded: LoadedPairedRun) -> dict[str, Any]:
         "inputTokenOverheadPerCall": manifest.inputTokenOverheadPerCall,
         "logicalOutputTokenCap": logical_output_cap,
         "estimatedMinimumCostUsd": calculate_cost(price, logical_input, 0, 0),
-        "estimatedExpectedCostUsd": calculate_cost(price, logical_input, 0, logical_output_cap // 2),
+        "estimatedExpectedCostUsd": calculate_cost(price, logical_input, 0, logical_output_cap // 2)
+        + built_in_tool_cost_cap,
         "expectedOutputCapUtilization": 0.5,
         "logicalCostCapUsd": logical_cost_cap,
+        "maximumBuiltInToolCalls": maximum_built_in_tool_calls,
+        "builtInToolCostCapUsd": built_in_tool_cost_cap,
         "retryWorstCaseCostUsd": logical_cost_cap * retry_factor,
         "configuredWorstCaseCostUsd": manifest.budget.maxCostUsd,
         "pricing": price.model_dump(mode="json"),
@@ -462,6 +519,10 @@ def spend_plan(loaded: LoadedPairedRun) -> dict[str, Any]:
         "hardBudget": manifest.budget.model_dump(mode="json"),
         "requiresConfirmation": manifest.provider == "openai",
     }
+
+
+def _web_search_calls(response: ProviderResponse) -> int:
+    return sum(item.get("type") == "web_search" for item in response.tool_calls)
 
 
 def _raw_dict(raw: RawProviderResponse) -> dict[str, Any]:

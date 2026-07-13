@@ -19,17 +19,28 @@ class ModelPrice(StrictModel):
     source: str
 
 
+class BuiltInToolPrice(StrictModel):
+    webSearchPerCall: float = Field(ge=0)
+    effectiveDate: str
+    source: str
+
+
 class PricingRegistry(StrictModel):
-    schemaVersion: Literal["1.0.0"]
+    schemaVersion: Literal["1.0.0", "2.0.0"]
     version: str
     currency: Literal["USD"]
     models: list[ModelPrice]
+    builtInTools: BuiltInToolPrice | None = None
 
     def lookup(self, model: str) -> ModelPrice:
         match = next((item for item in self.models if item.modelId == model), None)
         if match is None:
             raise ValueError(f"unknown model pricing: {model}")
         return match
+
+    @property
+    def web_search_per_call(self) -> float:
+        return self.builtInTools.webSearchPerCall if self.builtInTools is not None else 0.0
 
 
 def load_pricing(path: str, expected_version: str) -> PricingRegistry:

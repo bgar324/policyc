@@ -58,6 +58,40 @@ async def test_two_call_ceiling_proves_no_third_call() -> None:
 
 
 @pytest.mark.asyncio
+async def test_web_search_fee_is_reserved_and_accounted() -> None:
+    config = BudgetConfig(
+        maxLogicalTrials=1,
+        maxCalls=1,
+        maxInputTokens=100,
+        maxOutputTokens=100,
+        maxCostUsd=0.0101,
+    )
+    ledger = BudgetLedger(config, price(), web_search_per_call=0.01)
+    reservation = await ledger.reserve(10, 10, "web-trial", max_built_in_tool_calls=1)
+    cost = await ledger.complete(reservation, 10, 0, 10, "web-trial", built_in_tool_calls=1)
+    assert cost == pytest.approx(0.01003)
+    snapshot = ledger.snapshot()
+    assert snapshot["actualBuiltInToolCalls"] == 1
+    assert snapshot["actualToolCostUsd"] == pytest.approx(0.01)
+    assert snapshot["actualCostUsd"] == pytest.approx(0.01003)
+
+
+@pytest.mark.asyncio
+async def test_web_search_fee_can_block_before_provider_call() -> None:
+    config = BudgetConfig(
+        maxLogicalTrials=1,
+        maxCalls=1,
+        maxInputTokens=100,
+        maxOutputTokens=100,
+        maxCostUsd=0.009,
+    )
+    ledger = BudgetLedger(config, price(), web_search_per_call=0.01)
+    with pytest.raises(BudgetExceeded):
+        await ledger.reserve(10, 10, "web-trial", max_built_in_tool_calls=1)
+    assert ledger.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_missing_usage_makes_accounting_unknown() -> None:
     config = BudgetConfig(maxLogicalTrials=1, maxCalls=1, maxInputTokens=100, maxOutputTokens=100, maxCostUsd=1)
     ledger = BudgetLedger(config, price())
