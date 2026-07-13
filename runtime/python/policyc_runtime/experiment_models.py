@@ -37,8 +37,21 @@ class ToolDefinition(StrictModel):
             "name": self.name,
             "description": self.description,
             "parameters": parameters,
-            "strict": True,
+            # Responses strict mode rejects an object unless every declared
+            # property is required. Preserve intentionally optional synthetic
+            # connector arguments by opting those schemas out of strict mode.
+            "strict": _strict_schema_compatible(parameters),
         }
+
+
+def _strict_schema_compatible(schema: dict[str, Any]) -> bool:
+    if schema.get("type") != "object" or schema.get("additionalProperties") is not False:
+        return False
+    properties = schema.get("properties")
+    required = schema.get("required", [])
+    if not isinstance(properties, dict) or not isinstance(required, list):
+        return False
+    return set(required) == set(properties)
 
 
 class ToolExpectation(StrictModel):

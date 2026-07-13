@@ -113,11 +113,43 @@ def test_invalid_max_tool_calls_is_rejected(tmp_path) -> None:
 )
 def test_synthetic_no_argument_functions_use_strict_openai_schema(parameters) -> None:  # type: ignore[no-untyped-def]
     tool = ToolDefinition(type="function", name="gmail", description="Synthetic tool", parameters=parameters)
-    assert tool.provider_dict()["parameters"] == {
+    provider_tool = tool.provider_dict()
+    assert provider_tool["parameters"] == {
         "type": "object",
         "properties": {},
         "additionalProperties": False,
     }
+    assert provider_tool["strict"] is True
+
+
+def test_function_schema_with_optional_fields_uses_non_strict_mode() -> None:
+    tool = ToolDefinition(
+        type="function",
+        name="calendar",
+        description="Synthetic calendar connector",
+        parameters={
+            "type": "object",
+            "properties": {"action": {"type": "string"}, "date": {"type": "string"}},
+            "required": ["action"],
+            "additionalProperties": False,
+        },
+    )
+    assert tool.provider_dict()["strict"] is False
+
+
+def test_function_schema_with_all_fields_required_keeps_strict_mode() -> None:
+    tool = ToolDefinition(
+        type="function",
+        name="lookup",
+        description="Synthetic lookup connector",
+        parameters={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    )
+    assert tool.provider_dict()["strict"] is True
 
 
 @pytest.mark.parametrize(
