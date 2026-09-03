@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadBehavioralCases } from "../src/experiment/cases.js";
+import { deriveInputLimit, INPUT_ESTIMATE_HEADROOM } from "../src/experiment/plan.js";
 
 test("loads and hashes the one-case smoke set", () => {
   const first = loadBehavioralCases("eval/behavioral/smoke-v1.jsonl");
@@ -52,4 +53,20 @@ test("template datasets cannot execute", () => {
     () => loadBehavioralCases("eval/behavioral/adversarial-template-v1.jsonl"),
     /template case cannot be executed/,
   );
+});
+
+test("derived input ceiling carries headroom over the estimate and honors an explicit override", () => {
+  // compiler-v0.8-smoke: 99,973 estimated, 84,359 actual after 11 of 12 calls, 12th trial needed 16,255.
+  const estimate = 99_973;
+  assert.ok(deriveInputLimit(estimate, 1) >= 84_359 + 16_255, "one smoke's observed overshoot must fit");
+  assert.equal(deriveInputLimit(estimate, 1), Math.ceil(estimate * INPUT_ESTIMATE_HEADROOM));
+  assert.equal(deriveInputLimit(estimate, 2), Math.ceil(estimate * INPUT_ESTIMATE_HEADROOM) * 2);
+  assert.equal(deriveInputLimit(estimate, 1, 5_000_000), 5_000_000);
+});
+
+test("compiler 0.8 development regressions are six copied held-out-v3 cases", () => {
+  const dataset = loadBehavioralCases("eval/behavioral/compiler-v0.8-regressions.jsonl");
+  assert.equal(dataset.split, "development");
+  assert.deepEqual(dataset.cases.map((item) => item.caseId), ["cv08-007", "cv08-010", "cv08-047", "cv08-051", "cv08-053", "cv08-058"]);
+  assert.equal(dataset.datasetHash, "e50214e49d5a37dee334d3dfe777b07f33386b704ce1f0198e6b8798b12843dc");
 });

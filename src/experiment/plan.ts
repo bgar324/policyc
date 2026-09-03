@@ -8,6 +8,18 @@ import { loadBehavioralCases } from "./cases.js";
 
 const STRATEGIES: CompilationStrategy[] = ["full_policy", "compiler_slice", "kernel_only", "direct_matches", "conservative_expanded"];
 const INPUT_TOKEN_OVERHEAD_PER_CALL = 64;
+/**
+ * Provider-side message framing and function schemas are not part of an
+ * artifact's token count, and the compiler-v0.8 smoke measured 37-76 extra
+ * input tokens per call. The derived input ceiling is a scheduler ceiling, and
+ * dollar exposure is bounded separately by --max-cost-usd, so it carries
+ * headroom instead of starving the last trial on a sub-percent estimate error.
+ */
+export const INPUT_ESTIMATE_HEADROOM = 1.1;
+
+export function deriveInputLimit(estimatedInputTokens: number, maxAttempts: number, override?: number): number {
+  return override ?? Math.ceil(estimatedInputTokens * INPUT_ESTIMATE_HEADROOM) * maxAttempts;
+}
 type Options = {
   cases: string; strategies: CompilationStrategy[]; provider: "fake" | "openai"; model: string;
   samples: number; concurrency: number; maxOutputTokens: number; maxCalls: number; maxInputTokens?: number;
@@ -48,7 +60,7 @@ export function runExperimentCommand(argv: string[]): void {
   const logicalTrials = casePlans.length * options.strategies.length * options.samples;
   const maxAttempts = options.retries + 1;
   const estimatedInputTokens = pendingArtifacts.reduce((sum, item) => sum + item.artifact.tokenCount.tokens * options.samples, 0) + logicalTrials * INPUT_TOKEN_OVERHEAD_PER_CALL;
-  const derivedInputLimit = options.maxInputTokens ?? estimatedInputTokens * maxAttempts;
+  const derivedInputLimit = deriveInputLimit(estimatedInputTokens, maxAttempts, options.maxInputTokens);
   const derivedOutputLimit = options.maxOutputTokensTotal ?? logicalTrials * options.maxOutputTokens * maxAttempts;
   if (options.provider === "openai" && options.maxCalls < logicalTrials) throw new Error(`--max-calls ${options.maxCalls} is below ${logicalTrials} logical trials`);
   const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
