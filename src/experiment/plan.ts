@@ -1,19 +1,30 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { canonicalJson, COMPILER_VERSION, createArtifact, sha256, type CompilationStrategy } from "../compiler/artifact.js";
+import { canonicalJson, COMPILER_VERSION, createArtifact, sha256, type CompilationStrategy, type CompiledPolicyArtifact } from "../compiler/artifact.js";
 import { generateCandidateSelections } from "../compiler/candidates.js";
+import { countTokens } from "../compiler/tokenCounter.js";
 import { loadPolicies } from "../policy/loader.js";
 import { loadBehavioralCases } from "./cases.js";
 
 const STRATEGIES: CompilationStrategy[] = ["full_policy", "compiler_slice", "kernel_only", "direct_matches", "conservative_expanded"];
 const INPUT_TOKEN_OVERHEAD_PER_CALL = 64;
 /**
- * Provider-side message framing and function schemas are not part of an
- * artifact's token count, and the compiler-v0.8 smoke measured 37-76 extra
- * input tokens per call. The derived input ceiling is a scheduler ceiling, and
- * dollar exposure is bounded separately by --max-cost-usd, so it carries
- * headroom instead of starving the last trial on a sub-percent estimate error.
+ * The provider bills the request (sent as `input`) and the function schemas on
+ * top of the artifact prompt. The compiler-v0.8 smoke measured that sum within
+ * 6-15 tokens of `countTokens(request) + countTokens(JSON tools)`, always below
+ * it, so estimating those inputs directly makes the reservation an upper bound.
+ */
+export function estimateCallInputTokens(artifactTokens: number, request: string, tools: unknown[], model?: string): number {
+  const requestTokens = countTokens(request, model).tokens;
+  const toolTokens = tools.length ? countTokens(JSON.stringify(tools), model).tokens : 0;
+  return artifactTokens + requestTokens + toolTokens + INPUT_TOKEN_OVERHEAD_PER_CALL;
+}
+
+/**
+ * The derived input ceiling is a scheduler ceiling; dollar exposure is bounded
+ * separately by --max-cost-usd. A 10% margin covers tokenizer drift between the
+ * local o200k count and provider accounting without starving the last trial.
  */
 export const INPUT_ESTIMATE_HEADROOM = 1.1;
 
@@ -40,7 +51,7 @@ export function runExperimentCommand(argv: string[]): void {
   const artifactDir = resolve(output, "artifacts");
   mkdirSync(artifactDir, { recursive: true });
   const createdAt = existingManifest?.createdAt ?? new Date().toISOString();
-  const pendingArtifacts: Array<{ path: string; artifact: ReturnType<typeof createArtifact> }> = [];
+  const pendingArtifacts: Array<{ path: string; artifact: CompiledPolicyArtifact; callInputTokens: number }> = [];
   const casePlans = caseSet.cases.map((testCase) => {
     const executionContext = {
       ...(testCase.artifactContext ?? {}),
@@ -52,14 +63,14 @@ export function runExperimentCommand(argv: string[]): void {
       if (!candidate) throw new Error(`unsupported strategy ${strategy}`);
       const artifact = createArtifact({ policies, selection: candidate.selection, request: testCase.request, context: executionContext, strategy, sourcePolicyId: "synthetic-enterprise-agent", sourcePolicyText, model: options.model, createdAt });
       const filename = `${testCase.caseId}--${strategy}--${artifact.candidateId}.json`;
-      pendingArtifacts.push({ path: resolve(artifactDir, filename), artifact });
+      pendingArtifacts.push({ path: resolve(artifactDir, filename), artifact, callInputTokens: estimateCallInputTokens(artifact.tokenCount.tokens, testCase.request, testCase.tools, options.model) });
       return { strategy, candidateId: artifact.candidateId, artifactPath: `artifacts/${filename}` };
     });
     return { caseId: testCase.caseId, case: testCase, candidates: selected };
   });
   const logicalTrials = casePlans.length * options.strategies.length * options.samples;
   const maxAttempts = options.retries + 1;
-  const estimatedInputTokens = pendingArtifacts.reduce((sum, item) => sum + item.artifact.tokenCount.tokens * options.samples, 0) + logicalTrials * INPUT_TOKEN_OVERHEAD_PER_CALL;
+  const estimatedInputTokens = pendingArtifacts.reduce((sum, item) => sum + item.callInputTokens * options.samples, 0);
   const derivedInputLimit = deriveInputLimit(estimatedInputTokens, maxAttempts, options.maxInputTokens);
   const derivedOutputLimit = options.maxOutputTokensTotal ?? logicalTrials * options.maxOutputTokens * maxAttempts;
   if (options.provider === "openai" && options.maxCalls < logicalTrials) throw new Error(`--max-calls ${options.maxCalls} is below ${logicalTrials} logical trials`);

@@ -37,7 +37,7 @@ Compiler 0.8 (unfrozen, development) loads 43 manually structured policy nodes f
 2. Graph validation rejects duplicate IDs/edges, missing references, self-dependencies, cycles, unreachable structural nodes, unknown validators, and invalid always-active configurations.
 3. Regex intent detection and structured artifact context select seed policies.
 4. Queue-based traversal adds the transitive `requires` closure.
-5. Specialization evaluates each selected node's authored predicate against the request and context. Compiler 0.8 has one predicate, `explicit_confirmation`: when one sentence of the request contains the user's own first-person confirmation of the same operation the context declares, without negation or reported speech, and names every field the full policy requires for that artifact and operation, the node's `satisfied` branch replaces its ask-for-confirmation instruction. Anything less leaves the node exactly as authored. Selection never changes, and the artifact records a `specializations` trace with the evidence.
+5. Specialization evaluates each selected node's authored predicate against the request and context. Compiler 0.8 has one predicate, `explicit_confirmation`. It holds when one sentence of the request contains the user's own first-person confirmation of the operation the context declares, with no negation, reported speech, or conditional, and that sentence names every field the full policy requires for the artifact and operation. Then the node's `satisfied` branch replaces its ask-for-confirmation instruction. Anything less leaves the node as authored. Selection never changes, and the artifact records a `specializations` trace with the evidence.
 6. Policies are ordered deterministically and emitted as a runtime prompt.
 7. The compiler serializes five experimental candidates:
    - `full_policy`
@@ -115,7 +115,7 @@ The demo runs the one-case `smoke-v1` dataset through `full_policy` and `compile
 
 ## Safe paired OpenAI experiments
 
-The supported entry point compiles only the requested strategies, validates the cases and fixed model pricing, creates one full-policy baseline per case, and delegates scheduling to Python. The default provider is `fake`; unknown providers fail closed. The pinned smoke model is `gpt-5-mini-2025-08-07`, using the versioned registry at `pricing/openai-v1.json`.
+The supported entry point compiles only the requested strategies, validates the cases and fixed model pricing, creates one full-policy baseline per case, and delegates scheduling to Python. The default provider is `fake`; unknown providers fail closed. The pinned smoke model is `gpt-5-mini-2025-08-07`, using the versioned registry at `pricing/openai-v2.json`, which also prices built-in web search. The derived input-token ceiling counts each call's prompt, request, and function-schema tokens plus 10% margin; `--max-input-tokens` overrides it.
 
 Dry-run the one-case experiment without a key or network access:
 
@@ -161,7 +161,7 @@ Use `development-v1.jsonl` for iteration, freeze compiler and cases, then run a 
 
 Confirmed compiler 0.5 held-out failures were copied—not moved or edited—into `eval/behavioral/compiler-v0.6-regression-v1.jsonl` as a nine-case development-only regression set. Its 18-call compiler 0.6 smoke produced eight both-pass pairs and one compiler-only pass under strategy-blind grading, with no compiler regressions. This is targeted development evidence, never fresh held-out evidence; the complete audit is in `eval/audits/compiler-v0.6-development-smoke.md`.
 
-The six redundant-confirmation regressions from held-out-v3 (hv3-007, 010, 047, 051, 053, 058) were copied the same way into `eval/behavioral/compiler-v0.8-regressions.jsonl` as the compiler 0.8 development set. Offline tests in `test/compiler.test.ts` assert that 0.8 specializes each of them and that twelve negative controls still ask. No paid 0.8 evidence exists yet.
+The six redundant-confirmation regressions from held-out-v3 (hv3-007, 010, 047, 051, 053, 058) were copied the same way into `eval/behavioral/compiler-v0.8-regressions.jsonl` as the compiler 0.8 development set. Offline tests in `test/compiler.test.ts` assert that 0.8 specializes each of them and that fifteen negative controls still ask. The 12-call Phase F smoke (`run_b9daf24a2c394e8d`, $0.0173) saw every compiled execution call the confirmed tool with exact arguments instead of re-asking; it is adapter and resume evidence on spent cases, not a preservation estimate. See `eval/audits/compiler-v0.8-smoke.md`.
 
 ### Blinded grading
 

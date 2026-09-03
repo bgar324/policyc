@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { loadBehavioralCases } from "../src/experiment/cases.js";
-import { deriveInputLimit, INPUT_ESTIMATE_HEADROOM } from "../src/experiment/plan.js";
+import { deriveInputLimit, estimateCallInputTokens, INPUT_ESTIMATE_HEADROOM } from "../src/experiment/plan.js";
+import { generateCandidateSelections } from "../src/compiler/candidates.js";
+import { emitRuntimePrompt } from "../src/compiler/emitter.js";
+import { countTokens } from "../src/compiler/tokenCounter.js";
+import { loadPolicies } from "../src/policy/loader.js";
 
 test("loads and hashes the one-case smoke set", () => {
   const first = loadBehavioralCases("eval/behavioral/smoke-v1.jsonl");
@@ -55,10 +59,24 @@ test("template datasets cannot execute", () => {
   );
 });
 
+test("per-call input estimates bound every provider-reported input from the compiler 0.8 smoke", () => {
+  // run_b9daf24a2c394e8d: provider-reported input tokens per compiler_slice call. The old
+  // estimate (artifact + 64) was 378-461 for these, 37-76 tokens short, and starved the last trial.
+  const observed: Record<string, number> = { "cv08-007": 429, "cv08-010": 471, "cv08-047": 498, "cv08-051": 458, "cv08-053": 489, "cv08-058": 447 };
+  const model = "gpt-5-mini-2025-08-07";
+  const policies = loadPolicies();
+  for (const item of loadBehavioralCases("eval/behavioral/compiler-v0.8-regressions.jsonl").cases) {
+    const context = { ...(item.artifactContext ?? {}), toolsAvailable: item.tools.map((tool) => tool.name) };
+    const selection = generateCandidateSelections(policies, item.request, context)[1].selection;
+    const artifactTokens = countTokens(emitRuntimePrompt(selection, item.request, context), model).tokens;
+    const estimate = estimateCallInputTokens(artifactTokens, item.request, item.tools, model);
+    assert.ok(estimate >= observed[item.caseId], `${item.caseId}: estimate ${estimate} below observed ${observed[item.caseId]}`);
+    assert.ok(estimate - observed[item.caseId] < 160, `${item.caseId}: estimate ${estimate} is not a tight bound`);
+  }
+});
+
 test("derived input ceiling carries headroom over the estimate and honors an explicit override", () => {
-  // compiler-v0.8-smoke: 99,973 estimated, 84,359 actual after 11 of 12 calls, 12th trial needed 16,255.
   const estimate = 99_973;
-  assert.ok(deriveInputLimit(estimate, 1) >= 84_359 + 16_255, "one smoke's observed overshoot must fit");
   assert.equal(deriveInputLimit(estimate, 1), Math.ceil(estimate * INPUT_ESTIMATE_HEADROOM));
   assert.equal(deriveInputLimit(estimate, 2), Math.ceil(estimate * INPUT_ESTIMATE_HEADROOM) * 2);
   assert.equal(deriveInputLimit(estimate, 1, 5_000_000), 5_000_000);
