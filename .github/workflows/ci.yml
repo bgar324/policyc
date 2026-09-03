@@ -25,5 +25,11 @@ jobs:
       - run: .venv/bin/pip install -e 'runtime/python[dev]'
       - run: pnpm build
       - run: pnpm test:all
-      - run: node dist/cli.js compile-candidates --input "latest policy news" --output /tmp/policyc-demo --model fake-v1
-      - run: .venv/bin/policyc-runtime run /tmp/policyc-demo/manifest.json
+      - run: >-
+          node dist/cli.js experiment
+          --cases eval/behavioral/smoke-v1.jsonl
+          --strategies full_policy,compiler_slice
+          --provider fake --model gpt-5-mini-2025-08-07
+          --samples 1 --concurrency 1 --max-output-tokens 1024
+          --max-calls 2 --max-cost-usd 0.02 --retries 0
+          --run-label ci-smoke --output /tmp/policyc-ci-smoke --yes
