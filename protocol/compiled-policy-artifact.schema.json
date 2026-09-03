@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://policyc.dev/schema/compiled-policy-artifact-1.0.0.json",
+  "$id": "https://policyc.dev/schema/compiled-policy-artifact-1.1.0.json",
   "title": "PolicyC compiled policy artifact",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "compilerVersion", "candidateId", "policyPackHash", "sourcePolicyId", "sourcePolicyHash", "request", "artifactContext", "selectedPolicyIds", "directlySelectedPolicyIds", "dependencyAddedPolicyIds", "criticalPolicyIds", "dependencyEdges", "selectionReasons", "orderedRuntimeInstructions", "compiledPrompt", "compiledPromptHash", "tokenCount", "compilationStrategy", "createdAt"],
   "properties": {
-    "schemaVersion": { "const": "1.0.0" },
+    "schemaVersion": { "enum": ["1.0.0", "1.1.0"] },
     "compilerVersion": { "type": "string" },
     "candidateId": { "type": "string", "pattern": "^cand_[a-f0-9]{16}$" },
     "policyPackHash": { "$ref": "#/$defs/hash" },
@@ -20,6 +20,7 @@
     "criticalPolicyIds": { "$ref": "#/$defs/strings" },
     "dependencyEdges": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["from", "requires"], "properties": { "from": { "type": "string" }, "requires": { "type": "string" } } } },
     "selectionReasons": { "type": "array", "items": { "type": "object" } },
+    "specializations": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["policyId", "predicate", "satisfied", "evidence"], "properties": { "policyId": { "type": "string" }, "predicate": { "enum": ["explicit_confirmation"] }, "satisfied": { "type": "boolean" }, "evidence": { "$ref": "#/$defs/strings" } } } },
     "orderedRuntimeInstructions": { "$ref": "#/$defs/strings" },
     "compiledPrompt": { "type": "string" },
     "compiledPromptHash": { "$ref": "#/$defs/hash" },

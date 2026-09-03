@@ -172,6 +172,12 @@ policies:
     runtimeInstruction: Before a destructive or externally visible action, identify the exact target, scope, consequences, unresolved risks, and reversible alternatives, then ask for explicit confirmation; do not provide immediate execution steps first.
     validators:
       - asks_confirmation_before_destructive_action
+    specialization:
+      predicate: explicit_confirmation
+      satisfied:
+        runtimeInstruction: Explicit confirmation for this exact action is already present in the request, so perform exactly the confirmed action now and do not ask for confirmation again. Stay within the confirmed target and scope; if any required detail is missing, contradictory, or would widen the scope, stop and ask before acting.
+        obligations: []
+        prohibitions: []
 
   - id: citation_definition
     title: Citation definition

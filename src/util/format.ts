@@ -33,6 +33,14 @@ export function formatSelection(selection: PolicySelection): string {
   const edges = selection.dependencyEdges.map((edge) => `${edge.from} -> ${edge.requires}`);
   lines.push("");
   lines.push(`Dependencies pulled in: ${edges.length ? edges.join(", ") : "none"}`);
+  if (selection.specializations?.length) {
+    lines.push("");
+    lines.push("Specializations:");
+    for (const record of selection.specializations) {
+      lines.push(`- ${record.policyId}: ${record.predicate} ${record.satisfied ? "satisfied" : "unsatisfied"}`);
+      for (const item of record.evidence) lines.push(`  ${item}`);
+    }
+  }
   return lines.join("\n");
 }
 

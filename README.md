@@ -31,14 +31,15 @@ The protocol boundary is defined by JSON Schemas under [`protocol/`](protocol/).
 
 ## Compiler pipeline
 
-Compiler 0.7 loads 43 manually structured policy nodes from six YAML packs. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
+Compiler 0.8 (unfrozen, development) loads 43 manually structured policy nodes from six YAML packs. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
 
 1. Zod validates required fields, enums, priorities, triggers, and unknown fields.
 2. Graph validation rejects duplicate IDs/edges, missing references, self-dependencies, cycles, unreachable structural nodes, unknown validators, and invalid always-active configurations.
 3. Regex intent detection and structured artifact context select seed policies.
 4. Queue-based traversal adds the transitive `requires` closure.
-5. Policies are ordered deterministically and emitted as a runtime prompt.
-6. The compiler serializes five experimental candidates:
+5. Specialization evaluates each selected node's authored predicate against the request and context. Compiler 0.8 has one predicate, `explicit_confirmation`: when one sentence of the request contains the user's own first-person confirmation of the same operation the context declares, without negation or reported speech, and names every field the full policy requires for that artifact and operation, the node's `satisfied` branch replaces its ask-for-confirmation instruction. Anything less leaves the node exactly as authored. Selection never changes, and the artifact records a `specializations` trace with the evidence.
+6. Policies are ordered deterministically and emitted as a runtime prompt.
+7. The compiler serializes five experimental candidates:
    - `full_policy`
    - `compiler_slice`
    - `kernel_only`
@@ -104,28 +105,13 @@ pnpm policyc inspect --policy current_info_requires_web
 pnpm policyc eval
 ```
 
-Generate cross-language experiment artifacts:
-
-```bash
-node dist/cli.js compile-candidates \
-  --input "what's the latest OpenAI news?" \
-  --output experiment \
-  --model fake-v1
-```
-
-Run and stream an offline experiment:
-
-```bash
-.venv/bin/policyc-runtime run experiment/manifest.json
-```
-
-Or run the complete demo:
+Run the complete offline demo:
 
 ```bash
 pnpm demo
 ```
 
-The demo compiles five candidates, executes three samples per candidate with maximum concurrency four, streams SSE-compatible events, atomically persists 15 trial results, and produces `report.json`. Its compliance results are fake-provider evidence only.
+The demo runs the one-case `smoke-v1` dataset through `full_policy` and `compiler_slice` with the deterministic fake provider, writes the run under `demo-run/`, and produces `report.json`. Its compliance results are fake-provider evidence only. The older `compile-candidates` command is removed; every experiment goes through `policyc experiment` with explicit strategies, samples, provider, model, and budgets.
 
 ## Safe paired OpenAI experiments
 
@@ -175,6 +161,8 @@ Use `development-v1.jsonl` for iteration, freeze compiler and cases, then run a 
 
 Confirmed compiler 0.5 held-out failures were copied—not moved or edited—into `eval/behavioral/compiler-v0.6-regression-v1.jsonl` as a nine-case development-only regression set. Its 18-call compiler 0.6 smoke produced eight both-pass pairs and one compiler-only pass under strategy-blind grading, with no compiler regressions. This is targeted development evidence, never fresh held-out evidence; the complete audit is in `eval/audits/compiler-v0.6-development-smoke.md`.
 
+The six redundant-confirmation regressions from held-out-v3 (hv3-007, 010, 047, 051, 053, 058) were copied the same way into `eval/behavioral/compiler-v0.8-regressions.jsonl` as the compiler 0.8 development set. Offline tests in `test/compiler.test.ts` assert that 0.8 specializes each of them and that twelve negative controls still ask. No paid 0.8 evidence exists yet.
+
 ### Blinded grading
 
 Every v2 run writes `blind/grading-packets.json` with opaque answer IDs and deterministically randomized answer order. It omits strategy names and token counts. The private mapping is stored separately as `blind/answer-map.private.json`. Manual grading requires no paid grader; any later model-grader result is evidence, not ground truth.
@@ -219,7 +207,7 @@ Completed responses can be regraded offline after a versioned evaluator correcti
 .venv/bin/python -m policyc_runtime.regrade runs/<run-directory>
 ```
 
-Evaluator 2.4 recognizes semantically equivalent unavailable-source disclosures and distinguishes visual references to an image “background” from first-person promises of asynchronous work. Derived regrades remain separate and hash-linked; original manifests, trials, raw responses, evaluations, and reports are immutable.
+The independent case evaluator is currently version 2.6.0 (`runtime/python/policyc_runtime/case_evaluator.py`). Evaluator 2.4 introduced recognition of semantically equivalent unavailable-source disclosures and distinguished visual references to an image “background” from first-person promises of asynchronous work; 2.5 corrected refusal wording and 2.6 added the `omits_terms` validator for held-out-v3. Derived regrades remain separate and hash-linked; original manifests, trials, raw responses, evaluations, and reports are immutable.
 
 The command writes a hash-linked addendum, derived report, and derived evaluations under `derived/evaluator-<version>/`. Original manifests, raw responses, trials, evaluations, and reports remain unchanged. Incomplete trials remain failures.
 
@@ -271,7 +259,7 @@ V2 runs additionally contain `raw/<trial>/attempt-*.json`, parsed `provider/*.js
 - The deterministic evaluator uses regular expressions and is not a complete judge of model behavior.
 - The 20-case pilot set is small and repository-authored; it is not held out and does not provide broad external validity.
 - The fake provider validates scheduling and reproducibility, not policy preservation.
-- The OpenAI adapter is contract-tested against mocked documented shapes but has not yet been verified by a live call.
+- The OpenAI adapter has executed 960 live model executions in paired experiments across three frozen held-out studies; its contract tests still use mocked documented shapes, and two provider-schema incidents (empty and optional function arguments) were found only under live traffic.
 - Network ambiguity prevents guaranteed exactly-once billing; PolicyC stops by default and surfaces the exposure.
 - Real-provider results require repeated trials and careful interpretation; no single run proves equivalence.
 - The API is an in-process research service, not a distributed production control plane.

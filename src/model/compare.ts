@@ -1,12 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { emitRuntimePrompt } from "../compiler/emitter.js";
+import { compileSelection } from "../compiler/specialize.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { severityWeight, type EvalCase, type FailureType } from "../eval/types.js";
 import { loadEvalCases } from "../eval/runner.js";
 import { loadPolicies } from "../policy/loader.js";
 import { obligationToString } from "../policy/triggers.js";
-import { selectPolicies } from "../policy/selector.js";
 import { runValidators } from "../validators/index.js";
 import type { Trace } from "../traces/types.js";
 import { buildSystemPrompt } from "./promptStrategies.js";
@@ -33,7 +33,7 @@ export async function compareModels(options: {
   for (const strategy of strategies) {
     const strategyTraces: ModelTrace[] = [];
     for (const testCase of cases) {
-      const selection = selectPolicies(policies, { input: testCase.input, context: testCase.context });
+      const selection = compileSelection(policies, testCase.input, testCase.context);
       const selectedPolicies = selection.policies;
       const compiledPrompt = emitRuntimePrompt(selection, testCase.input, testCase.context);
       const systemPrompt = buildSystemPrompt({ strategy, selection, input: testCase.input, context: testCase.context, fullPrompt });

@@ -3,13 +3,13 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { emitRuntimePrompt } from "./compiler/emitter.js";
+import { compileSelection } from "./compiler/specialize.js";
 import { countTokens, tokenReduction } from "./compiler/tokenCounter.js";
 import { runEval } from "./eval/runner.js";
 import { compareModels } from "./model/compare.js";
 import type { PromptStrategy } from "./model/types.js";
 import { getPolicyById, loadPolicies } from "./policy/loader.js";
 import type { ArtifactContext } from "./policy/types.js";
-import { selectPolicies } from "./policy/selector.js";
 import { formatJson, formatMetrics, formatModelComparison, formatPolicySummary, formatSelection } from "./util/format.js";
 import { runExperimentCommand } from "./experiment/plan.js";
 import { loadBehavioralCases } from "./experiment/cases.js";
@@ -84,14 +84,14 @@ async function main(): Promise<void> {
 
   if (command === "select") {
     if (!args.input) throw new Error("select requires --input");
-    const selection = selectPolicies(policies, { input: args.input, context: args.context });
+    const selection = compileSelection(policies, args.input, args.context);
     console.log(formatSelection(selection));
     return;
   }
 
   if (command === "compile") {
     if (!args.input) throw new Error("compile requires --input");
-    const selection = selectPolicies(policies, { input: args.input, context: args.context });
+    const selection = compileSelection(policies, args.input, args.context);
     const compiledPrompt = emitRuntimePrompt(selection, args.input, args.context);
     const fullPrompt = readFileSync("prompts/synthetic-enterprise-agent.md", "utf8");
     const fullCount = countTokens(fullPrompt, args.model);

@@ -2,6 +2,7 @@ import type { ArtifactContext, Policy, PolicySelection, PolicySelectionReason } 
 import { computeDependencyClosure } from "../policy/closure.js";
 import { selectPolicies } from "../policy/selector.js";
 import type { CompilationStrategy } from "./artifact.js";
+import { specializeSelection } from "./specialize.js";
 
 export function generateCandidateSelections(policies: Policy[], input: string, context?: ArtifactContext | null): Array<{ strategy: CompilationStrategy; selection: PolicySelection }> {
   const compiled = selectPolicies(policies, { input, context });
@@ -11,13 +12,14 @@ export function generateCandidateSelections(policies: Policy[], input: string, c
   const kernel = policies.filter((policy) => policy.alwaysActive);
   const expandedSeeds = uniquePolicies([...compiled.policies, ...policies.filter((policy) => policy.kind === "content_gated" && ["safety", "privacy", "tool"].includes(policy.severity))]);
   const expandedReasons: PolicySelectionReason[] = expandedSeeds.map((policy) => compiled.reasons.find((reason) => reason.policyId === policy.id) ?? { policyId: policy.id, reasons: ["conservative expansion"] });
+  const specialize = (selection: PolicySelection) => specializeSelection(selection, input, context);
 
   return [
     { strategy: "full_policy", selection: selectionFrom(policies, policies, policies.map((policy) => ({ policyId: policy.id, reasons: ["full policy baseline"] })), compiled.detectedIntents, []) },
-    { strategy: "compiler_slice", selection: compiled },
-    { strategy: "kernel_only", selection: selectionFrom(policies, kernel, kernel.map((policy) => ({ policyId: policy.id, reasons: ["always-active kernel"] })), compiled.detectedIntents, []) },
-    { strategy: "direct_matches", selection: selectionFrom(policies, directPolicies, directReasons, compiled.detectedIntents, []) },
-    { strategy: "conservative_expanded", selection: selectionFrom(policies, expandedSeeds, expandedReasons, compiled.detectedIntents, "closure") }
+    { strategy: "compiler_slice", selection: specialize(compiled) },
+    { strategy: "kernel_only", selection: specialize(selectionFrom(policies, kernel, kernel.map((policy) => ({ policyId: policy.id, reasons: ["always-active kernel"] })), compiled.detectedIntents, [])) },
+    { strategy: "direct_matches", selection: specialize(selectionFrom(policies, directPolicies, directReasons, compiled.detectedIntents, [])) },
+    { strategy: "conservative_expanded", selection: specialize(selectionFrom(policies, expandedSeeds, expandedReasons, compiled.detectedIntents, "closure")) }
   ];
 }
 

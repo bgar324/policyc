@@ -101,6 +101,19 @@ export type Prohibition = {
   detail?: string;
 };
 
+export type SpecializationPredicate = "explicit_confirmation";
+
+export type PolicyBranch = {
+  runtimeInstruction: string;
+  obligations: Obligation[];
+  prohibitions: Prohibition[];
+};
+
+export type PolicySpecialization = {
+  predicate: SpecializationPredicate;
+  satisfied: PolicyBranch;
+};
+
 export type Policy = {
   id: string;
   title: string;
@@ -115,6 +128,7 @@ export type Policy = {
   prohibitions: Prohibition[];
   runtimeInstruction: string;
   validators: string[];
+  specialization?: PolicySpecialization;
   pack?: string;
 };
 
@@ -139,11 +153,19 @@ export type PolicySelectionReason = {
   dependencyOf?: string[];
 };
 
+export type SpecializationRecord = {
+  policyId: string;
+  predicate: SpecializationPredicate;
+  satisfied: boolean;
+  evidence: string[];
+};
+
 export type PolicySelection = {
   policies: Policy[];
   reasons: PolicySelectionReason[];
   detectedIntents: IntentTrigger[];
   dependencyEdges: Array<{ from: string; requires: string }>;
+  specializations?: SpecializationRecord[];
 };
 
 export type PolicyPackFile = {

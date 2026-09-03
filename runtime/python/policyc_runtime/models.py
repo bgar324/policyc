@@ -30,8 +30,15 @@ class SelectionReason(StrictModel):
     dependencyOf: list[str] | None = None
 
 
+class SpecializationRecord(StrictModel):
+    policyId: str
+    predicate: Literal["explicit_confirmation"]
+    satisfied: bool
+    evidence: list[str]
+
+
 class CompiledArtifact(StrictModel):
-    schemaVersion: Literal["1.0.0"]
+    schemaVersion: Literal["1.0.0", "1.1.0"]
     compilerVersion: str
     candidateId: str
     policyPackHash: str
@@ -45,6 +52,7 @@ class CompiledArtifact(StrictModel):
     criticalPolicyIds: list[str]
     dependencyEdges: list[DependencyEdge]
     selectionReasons: list[SelectionReason]
+    specializations: list[SpecializationRecord] = Field(default_factory=list)
     orderedRuntimeInstructions: list[str]
     compiledPrompt: str
     compiledPromptHash: str

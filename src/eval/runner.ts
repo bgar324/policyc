@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { emitRuntimePrompt } from "../compiler/emitter.js";
+import { specializeSelection } from "../compiler/specialize.js";
 import { loadPolicies } from "../policy/loader.js";
 import type { Policy } from "../policy/types.js";
 import { obligationToString } from "../policy/triggers.js";
@@ -33,8 +34,11 @@ export function runEval(): MetricsReport {
 }
 
 function runEvalCase(testCase: EvalCase, policies: Policy[], fullPrompt: string): EvalCaseResult {
+  // Selector metrics score the raw selection; the emitted prompt, mock trace, and
+  // validators see the specialized policies the model would actually receive.
   const selection = selectPolicies(policies, { input: testCase.input, context: testCase.context });
-  const compiledPrompt = emitRuntimePrompt(selection, testCase.input, testCase.context);
+  const specialized = specializeSelection(selection, testCase.input, testCase.context);
+  const compiledPrompt = emitRuntimePrompt(specialized, testCase.input, testCase.context);
   const tokenCounts = countBaselineTokens(fullPrompt, compiledPrompt);
   const selectedPolicyIds = selection.policies.map((policy) => policy.id);
   const selectedPolicyIdsForPrecision = selection.policies
@@ -49,8 +53,8 @@ function runEvalCase(testCase: EvalCase, policies: Policy[], fullPrompt: string)
   const recall = testCase.expectedActivePolicies.length ? intersection / testCase.expectedActivePolicies.length : 1;
   const dependencyClosureComplete = selection.policies.every((policy) => policy.requires.every((requiredId) => selectedPolicySet.has(requiredId)));
   const missingDependencies = findMissingExpectedDependencies(testCase.expectedDependencies ?? [], selectedPolicySet);
-  const trace = createMockTrace(testCase, selection.policies, selectedPolicyIds, compiledPrompt);
-  const validatorResults = runValidators(trace, selection.policies);
+  const trace = createMockTrace(testCase, specialized.policies, selectedPolicyIds, compiledPrompt);
+  const validatorResults = runValidators(trace, specialized.policies);
   const validatorFailures = validatorResults.filter((result) => !result.passed);
   const failedValidators = validatorFailures.map((result) => ({
     id: result.id,

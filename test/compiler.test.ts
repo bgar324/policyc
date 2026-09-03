@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -212,6 +212,110 @@ test("compiler 0.7 covers spent held-out-v2 deterministic regressions", () => {
   assert.match(image.prompt, /Available tools: image_generate/);
   assert.match(image.prompt, /call_tool:image_generate/);
   assert.doesNotMatch(image.prompt, /tool is unavailable/i);
+});
+
+test("compiler 0.8 executes already-confirmed exact actions instead of re-asking", () => {
+  const policies = loadPolicies();
+  const compile = (input: string, context: Parameters<typeof generateCandidateSelections>[2]) => {
+    const selection = generateCandidateSelections(policies, input, context)[1].selection;
+    return { selection, prompt: emitRuntimePrompt(selection, input, context) };
+  };
+  const cases = readFileSync("eval/behavioral/compiler-v0.8-regressions.jsonl", "utf8")
+    .split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as { caseId: string; request: string; artifactContext: Record<string, unknown>; tools: Array<{ name: string }> });
+  assert.equal(cases.length, 6);
+
+  for (const item of cases) {
+    const context = { ...item.artifactContext, toolsAvailable: item.tools.map((tool) => tool.name) } as NonNullable<Parameters<typeof generateCandidateSelections>[2]>;
+    const { selection, prompt } = compile(item.request, context);
+    const confirmationNodes = selection.policies.filter((policy) => policy.specialization?.predicate === "explicit_confirmation");
+    assert.ok(confirmationNodes.length > 0, `${item.caseId}: confirmation policy must stay selected`);
+    assert.doesNotMatch(prompt, /ask_confirmation/, `${item.caseId}: must not re-ask`);
+    assert.doesNotMatch(prompt, /destructive_action_without_confirmation/, item.caseId);
+    assert.match(prompt, new RegExp(`call_tool:${item.tools[0].name}`), `${item.caseId}: confirmed action routes to its tool`);
+    assert.match(prompt, /already (present|confirmed)/i, item.caseId);
+    assert.match(prompt, /do not ask (for confirmation )?again/i, item.caseId);
+    assert.match(prompt, /confirmed (target|scope|action|change|message|recipient)/i, `${item.caseId}: scope stays bounded`);
+    const records = (selection.specializations ?? []).filter((record) => record.predicate === "explicit_confirmation");
+    assert.equal(records.length, confirmationNodes.length, `${item.caseId}: one trace record per specialized node`);
+    assert.ok(records.every((record) => record.satisfied && record.evidence.length > 0), `${item.caseId}: trace must carry evidence`);
+  }
+
+  const stillAsks = (input: string, context: Parameters<typeof generateCandidateSelections>[2], label: string) => {
+    const { selection, prompt } = compile(input, context);
+    assert.match(prompt, /ask_confirmation/, label);
+    assert.doesNotMatch(prompt, /do not ask (for confirmation )?again/i, label);
+    assert.ok((selection.specializations ?? []).every((record) => !record.satisfied), `${label}: no satisfied trace record`);
+  };
+  stillAsks(
+    "I confirm deleting the one thread titled 'Travel receipts — June'.",
+    { artifactType: "email", operation: "archive", toolsAvailable: ["gmail"] },
+    "confirmed action differs from the requested operation",
+  );
+  stillAsks(
+    "Send them a confirmation email about the venue change.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "'confirmation' as the subject is not authorization",
+  );
+  stillAsks(
+    "I confirm sending this one email to pat@example.com with no attachments: 'The demo is postponed.' Send this email now.",
+    { artifactType: "email", toolsAvailable: ["gmail"] },
+    "no operation context",
+  );
+  stillAsks(
+    "Before I confirm sending anything, list exactly what the email to pat@example.com would contain.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "subordinate clause is not authorization",
+  );
+  stillAsks(
+    "Publishing the draft pricing page would make it visible in production. Publish it now.",
+    { toolsAvailable: [] },
+    "imperative without confirmation",
+  );
+  stillAsks(
+    "I confirm I will not send it yet; just draft the email to pat@example.com.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "negated confirmed clause",
+  );
+  stillAsks(
+    "I confirm sending the email.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "no concrete target in the confirmed clause",
+  );
+  stillAsks(
+    "If the client agrees, I confirm sending the summary to pat@example.com.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "sentence-level conditional",
+  );
+  stillAsks(
+    "I confirm creating 'Design sync'.",
+    { artifactType: "calendar_event", operation: "create", toolsAvailable: ["calendar"] },
+    "calendar action missing date, time, zone, and scope",
+  );
+  stillAsks(
+    "I confirm sending to pat@example.com.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "email action missing body and attachment scope",
+  );
+  stillAsks(
+    "I confirm sending no email to pat@example.com; keep 'The demo is postponed.' as a draft with no attachments.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "negated object after the action word",
+  );
+  stillAsks(
+    "I heard Pat confirm sending this one email to pat@example.com with body 'Demo postponed.' and no attachments.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "third party is the confirming subject",
+  );
+  stillAsks(
+    "Pat wrote: \"I confirm sending this one email to pat@example.com with no attachments: 'Demo postponed.'\" Send this email now.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "quoted third-party confirmation",
+  );
+  stillAsks(
+    "I will ask Pat and confirm sending this one email to pat@example.com with body 'Demo postponed.' and no attachments.",
+    { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
+    "future intent is not present confirmation",
+  );
 });
 
 test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {

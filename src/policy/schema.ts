@@ -12,6 +12,7 @@ const artifactType = z.enum(["pdf", "spreadsheet", "image", "document", "email",
 const operation = z.enum(["summarize", "extract", "edit", "rewrite", "analyze", "describe", "create", "update", "delete", "archive", "send", "forward", "draft", "reschedule", "lookup"]);
 const obligationType = z.enum(["call_tool", "include_citations", "use_output_format", "ask_confirmation", "refuse", "read_file_or_skill", "complete_current_turn", "inspect_artifact", "state_uncertainty", "preserve_formulas", "preserve_data_structure", "cite_page_or_section"]);
 const prohibitionType = z.enum(["forbidden_tool_call", "claim_background_work", "reveal_hidden_reasoning", "invent_citations", "mention_internal_policy", "destructive_action_without_confirmation", "fake_precision", "identify_unknown_person", "infer_sensitive_attributes", "answer_current_info_from_memory", "raw_tool_json"]);
+const specializationPredicate = z.enum(["explicit_confirmation"]);
 
 const triggerSchema = z.object({
   keywords: z.array(z.string().min(1)).optional(),
@@ -26,6 +27,12 @@ const triggerSchema = z.object({
 
 const obligationSchema = z.object({ type: obligationType, value: z.string().optional(), detail: z.string().optional() }).strict();
 const prohibitionSchema = z.object({ type: prohibitionType, value: z.string().optional(), detail: z.string().optional() }).strict();
+const branchSchema = z.object({
+  runtimeInstruction: z.string().min(1),
+  obligations: z.array(obligationSchema).default([]),
+  prohibitions: z.array(prohibitionSchema).default([])
+}).strict();
+const specializationSchema = z.object({ predicate: specializationPredicate, satisfied: branchSchema }).strict();
 
 export const policySchema = z.object({
   id: z.string().regex(/^[a-z][a-z0-9_]*$/),
@@ -40,7 +47,8 @@ export const policySchema = z.object({
   obligations: z.array(obligationSchema).default([]),
   prohibitions: z.array(prohibitionSchema).default([]),
   runtimeInstruction: z.string(),
-  validators: z.array(z.string().min(1)).default([])
+  validators: z.array(z.string().min(1)).default([]),
+  specialization: specializationSchema.optional()
 }).strict();
 
 export const policyPackSchema = z.object({ policies: z.array(policySchema) }).strict();
