@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { canonicalJson } from "../src/compiler/artifact.js";
 import { loadBehavioralCases } from "../src/experiment/cases.js";
-import { deriveInputLimit, estimateCallInputTokens, INPUT_ESTIMATE_HEADROOM } from "../src/experiment/plan.js";
+import { deriveInputLimit, estimateCallInputTokens, INPUT_ESTIMATE_HEADROOM, providerToolPayload, type ProviderToolPayload } from "../src/experiment/plan.js";
 import { generateCandidateSelections } from "../src/compiler/candidates.js";
 import { emitRuntimePrompt } from "../src/compiler/emitter.js";
 import { countTokens } from "../src/compiler/tokenCounter.js";
@@ -73,6 +75,23 @@ test("per-call input estimates bound every provider-reported input from the comp
     assert.ok(estimate >= observed[item.caseId], `${item.caseId}: estimate ${estimate} below observed ${observed[item.caseId]}`);
     assert.ok(estimate - observed[item.caseId] < 160, `${item.caseId}: estimate ${estimate} is not a tight bound`);
   }
+});
+
+test("providerToolPayload mirrors the Python provider_dict payloads byte for byte", () => {
+  // Fixture written by runtime/python/tests/test_tool_payload_parity.py from ToolDefinition.provider_dict().
+  const expected: unknown = JSON.parse(readFileSync("protocol/fixtures/tool-payload-parity.json", "utf8"));
+  const actual: Record<string, ProviderToolPayload[]> = {};
+  for (const item of loadBehavioralCases("eval/behavioral/compiler-v0.8-regressions.jsonl").cases) {
+    actual[item.caseId] = item.tools.map(providerToolPayload);
+  }
+  actual["web"] = [providerToolPayload({ type: "web_search", name: "web" })];
+  actual["empty-parameters"] = [providerToolPayload({ type: "function", name: "ping", description: "Ping.", parameters: { type: "object", properties: {}, additionalProperties: true } })];
+  actual["strict-eligible"] = [providerToolPayload({ type: "function", name: "echo", description: "Echo.", parameters: { type: "object", properties: { text: { type: "string" } }, required: ["text"], additionalProperties: false } })];
+  assert.equal(canonicalJson(actual), canonicalJson(expected));
+  const [strictEligible] = actual["strict-eligible"];
+  const [gmail] = actual["cv08-007"];
+  assert.ok(strictEligible.type === "function" && strictEligible.strict === true);
+  assert.ok(gmail.type === "function" && gmail.strict === false);
 });
 
 test("derived input ceiling carries headroom over the estimate and honors an explicit override", () => {

@@ -18,7 +18,7 @@ This is the Phase G regression run from the compiler 1.0 handoff: three samples 
 
 - Provider calls: 36 of 36; 36 raw attempts persisted; 0 failed, 0 ambiguous, 0 unknown-usage attempts
 - Recorded cost: $0.04003845 (full_policy $0.02536245 over 18 calls; compiler_slice $0.014676 over 18 calls)
-- Input tokens: 302,013 actual against 299,919 estimated and 335,165 ceiling. The pre-fix derivation (estimate with no request or tool-schema tokens) would have been 299,919 and would have starved the last trial again; the corrected estimate held.
+- Input tokens: 302,013 actual against a 335,165 manifest ceiling. This run executed under the intermediate fix: the planner's enlarged ceiling held, but the runtime still reserved `artifact + 64` per trial (299,919 in total, 2,094 below actual), so per-call reservations were not yet upper bounds and the run succeeded on ceiling margin alone. The planner estimate has since been persisted per candidate and the runtime reserves from it; the runtime's own spend plan for this shape now reports 304,803 (`eval/audits/compiler-v0.8-smoke.md`, incident section).
 - Output tokens: 13,314
 - Prompt cache: 17 of 18 full_policy calls were served 15,872-16,256 cached input tokens (275,968 total); no compiled call was cached
 

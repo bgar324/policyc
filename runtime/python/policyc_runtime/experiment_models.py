@@ -87,6 +87,10 @@ class CandidateRef(StrictModel):
     strategy: str
     candidateId: str
     artifactPath: str
+    # Per-call input reservation computed by the planner from the artifact prompt,
+    # request, and provider tool payload. Manifests written before compiler 0.8
+    # omit it; the runtime then falls back to artifact tokens plus fixed overhead.
+    estimatedInputTokens: int | None = Field(default=None, ge=0)
 
 
 class CasePlan(StrictModel):

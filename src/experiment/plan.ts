@@ -5,19 +5,51 @@ import { canonicalJson, COMPILER_VERSION, createArtifact, sha256, type Compilati
 import { generateCandidateSelections } from "../compiler/candidates.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { loadPolicies } from "../policy/loader.js";
-import { loadBehavioralCases } from "./cases.js";
+import { loadBehavioralCases, type BehavioralCase } from "./cases.js";
 
 const STRATEGIES: CompilationStrategy[] = ["full_policy", "compiler_slice", "kernel_only", "direct_matches", "conservative_expanded"];
 const INPUT_TOKEN_OVERHEAD_PER_CALL = 64;
+
+type CaseTool = BehavioralCase["tools"][number];
+
+export type ProviderToolPayload =
+  | { type: "web_search"; search_context_size: "low" }
+  | { type: "function"; name: string; description: string; parameters: Record<string, unknown>; strict: boolean };
+
 /**
- * The provider bills the request (sent as `input`) and the function schemas on
- * top of the artifact prompt. The compiler-v0.8 smoke measured that sum within
- * 6-15 tokens of `countTokens(request) + countTokens(JSON tools)`, always below
- * it, so estimating those inputs directly makes the reservation an upper bound.
+ * Mirror of `ToolDefinition.provider_dict()` in
+ * `runtime/python/policyc_runtime/experiment_models.py`: the payload the
+ * provider bills is the normalized schema with `strict`, not the dataset row.
+ * `test/experiment.test.ts` pins the two against each other.
  */
-export function estimateCallInputTokens(artifactTokens: number, request: string, tools: unknown[], model?: string): number {
+export function providerToolPayload(tool: CaseTool): ProviderToolPayload {
+  if (tool.type === "web_search") return { type: "web_search", search_context_size: "low" };
+  const empty = { type: "object", properties: {}, additionalProperties: true };
+  const parameters = Object.keys(tool.parameters).length === 0 || canonicalJson(tool.parameters) === canonicalJson(empty)
+    ? { type: "object", properties: {}, additionalProperties: false }
+    : tool.parameters;
+  return { type: "function", name: tool.name, description: tool.description, parameters, strict: strictSchemaCompatible(parameters) };
+}
+
+function strictSchemaCompatible(schema: Record<string, unknown>): boolean {
+  if (schema.type !== "object" || schema.additionalProperties !== false) return false;
+  const properties = schema.properties;
+  const required = schema.required ?? [];
+  if (!properties || typeof properties !== "object" || !Array.isArray(required)) return false;
+  const names = Object.keys(properties);
+  return required.length === names.length && names.every((name) => required.includes(name));
+}
+
+/**
+ * The provider bills the request (sent as `input`) and the tool payloads on top
+ * of the artifact prompt. The compiler-v0.8 smoke measured that sum within 6-15
+ * tokens below `countTokens(request) + countTokens(JSON tools)`, so counting
+ * them directly makes the per-call reservation an upper bound on that data. The
+ * fixed overhead covers provider message framing.
+ */
+export function estimateCallInputTokens(artifactTokens: number, request: string, tools: CaseTool[], model?: string): number {
   const requestTokens = countTokens(request, model).tokens;
-  const toolTokens = tools.length ? countTokens(JSON.stringify(tools), model).tokens : 0;
+  const toolTokens = tools.length ? countTokens(JSON.stringify(tools.map(providerToolPayload)), model).tokens : 0;
   return artifactTokens + requestTokens + toolTokens + INPUT_TOKEN_OVERHEAD_PER_CALL;
 }
 
@@ -63,8 +95,9 @@ export function runExperimentCommand(argv: string[]): void {
       if (!candidate) throw new Error(`unsupported strategy ${strategy}`);
       const artifact = createArtifact({ policies, selection: candidate.selection, request: testCase.request, context: executionContext, strategy, sourcePolicyId: "synthetic-enterprise-agent", sourcePolicyText, model: options.model, createdAt });
       const filename = `${testCase.caseId}--${strategy}--${artifact.candidateId}.json`;
-      pendingArtifacts.push({ path: resolve(artifactDir, filename), artifact, callInputTokens: estimateCallInputTokens(artifact.tokenCount.tokens, testCase.request, testCase.tools, options.model) });
-      return { strategy, candidateId: artifact.candidateId, artifactPath: `artifacts/${filename}` };
+      const callInputTokens = estimateCallInputTokens(artifact.tokenCount.tokens, testCase.request, testCase.tools, options.model);
+      pendingArtifacts.push({ path: resolve(artifactDir, filename), artifact, callInputTokens });
+      return { strategy, candidateId: artifact.candidateId, artifactPath: `artifacts/${filename}`, estimatedInputTokens: callInputTokens };
     });
     return { caseId: testCase.caseId, case: testCase, candidates: selected };
   });

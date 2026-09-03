@@ -13,8 +13,9 @@ from .blind_grading import build_blind_packets
 from .budget import BudgetExceeded, BudgetLedger
 from .case_evaluator import evaluate_case
 from .catalog import RunCatalog
-from .experiment_models import BehavioralCase, LoadedPairedRun
+from .experiment_models import BehavioralCase, LoadedPairedRun, PairedRunManifest
 from .hashing import stable_id
+from .models import CompiledArtifact
 from .paired_report import build_paired_report
 from .persistence import RunStore
 from .pricing import load_pricing
@@ -38,6 +39,19 @@ class PairedTrialSpec:
     sample_index: int
     dispatch_order_index: int
     case: BehavioralCase
+
+
+def estimated_input_tokens(manifest: PairedRunManifest, artifact: CompiledArtifact, case_id: str, strategy: str) -> int:
+    """Per-call input reservation. Prefer the planner's estimate, which counts the
+    request and provider tool payload; fall back to artifact tokens plus fixed
+    overhead for manifests written before that field existed."""
+    for plan in manifest.casePlans:
+        if plan.caseId != case_id:
+            continue
+        for candidate in plan.candidates:
+            if candidate.strategy == strategy and candidate.estimatedInputTokens is not None:
+                return candidate.estimatedInputTokens
+    return artifact.tokenCount.tokens + manifest.inputTokenOverheadPerCall
 
 
 class PairedExperimentRuntime:
@@ -271,7 +285,7 @@ class PairedExperimentRuntime:
         start_attempt = int(previous.get("attemptCount", 0)) + 1
         for attempt in range(start_attempt, manifest.retryPolicy.maxAttempts + 1):
             try:
-                estimated_input = artifact.tokenCount.tokens + manifest.inputTokenOverheadPerCall
+                estimated_input = estimated_input_tokens(manifest, artifact, spec.case_id, spec.strategy)
                 max_built_in_tool_calls = (
                     int(manifest.modelParameters.get("max_tool_calls", 0))
                     if any(item.type == "web_search" for item in spec.case.tools)
@@ -532,18 +546,13 @@ def spend_plan(loaded: LoadedPairedRun) -> dict[str, Any]:
     registry = load_pricing(manifest.pricing.registryPath, manifest.pricing.registryVersion)
     price = registry.lookup(manifest.model)
     logical_trials = len(loaded.artifacts) * manifest.sampleCount
-    logical_input = (
-        sum(artifact.tokenCount.tokens for artifact in loaded.artifacts.values()) * manifest.sampleCount
-        + logical_trials * manifest.inputTokenOverheadPerCall
-    )
+    per_call = {
+        key: estimated_input_tokens(manifest, artifact, *key.split(":", 1))
+        for key, artifact in loaded.artifacts.items()
+    }
+    logical_input = sum(per_call.values()) * manifest.sampleCount
     input_by_strategy = {
-        strategy: sum(
-            artifact.tokenCount.tokens for key, artifact in loaded.artifacts.items() if key.endswith(f":{strategy}")
-        )
-        * manifest.sampleCount
-        + len([key for key in loaded.artifacts if key.endswith(f":{strategy}")])
-        * manifest.sampleCount
-        * manifest.inputTokenOverheadPerCall
+        strategy: sum(tokens for key, tokens in per_call.items() if key.endswith(f":{strategy}")) * manifest.sampleCount
         for strategy in manifest.strategies
     }
     logical_output_cap = (
