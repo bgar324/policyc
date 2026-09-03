@@ -62,7 +62,7 @@ test("held-out v4 is frozen at 60 independently declared cases", () => {
   assert.equal(new Set(dataset.cases.map((item) => item.caseId)).size, 60);
   assert.equal(new Set(dataset.cases.map((item) => item.request)).size, 60);
   assert.ok(dataset.cases.every((item) => item.criticalObligationIds.length > 0));
-  assert.equal(dataset.datasetHash, "2c19952831d74beddffc2dddc7efd9504f811369c6f5848c5a9b18b9e3a6cfbf");
+  assert.equal(dataset.datasetHash, "197dee9fe2719f20848d81e5a4144218e217690b1a1c5c1f3aa2922d66efdfb1");
 });
 
 test("template datasets cannot execute", () => {

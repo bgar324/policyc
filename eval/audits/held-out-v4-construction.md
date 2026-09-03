@@ -5,7 +5,7 @@
 - Path: `eval/behavioral/held-out-v4.jsonl`
 - Cases: 60
 - Dataset version/split: `held-out-v4` / `held-out`
-- Canonical SHA-256: `2c19952831d74beddffc2dddc7efd9504f811369c6f5848c5a9b18b9e3a6cfbf`
+- Canonical SHA-256: `197dee9fe2719f20848d81e5a4144218e217690b1a1c5c1f3aa2922d66efdfb1` (supersedes `2c19952831d74beddffc2dddc7efd9504f811369c6f5848c5a9b18b9e3a6cfbf`, frozen at `de05e6f`; see "Post-freeze correction")
 - Frozen compiler: 0.8.0 at `2e5fc441eeffacf576f389b17f352287987c73dc` (`eval/audits/compiler-v0.8-freeze.md`)
 - Authoring brief: `eval/authoring/held-out-v4/authoring-brief.md`, committed at `9cb1227` before any author ran
 - Synthetic source-prompt SHA-256: `961150058da20550d6004e52bdbd9a35954028d182883b3a4fcf19ff71ec803a`
@@ -35,6 +35,12 @@ Each author cross-audited another author's batch under the same isolation bounda
 The coordinating agent applied only dataset wording, label, schema-compatibility, and harness-observability repairs. Every transformation is replayable in `eval/authoring/held-out-v4/revisions.jq`; the original authored JSONL and audit reports remain intact. Medium findings of the form "a validator cannot observe tool arguments or post-tool prose" were left to the rubric and the strategy-blind semantic reviewers, as in held-out v3. Findings that were label errors, self-containment gaps, inverted or vacuous validators, or rubric wording that failed a correct answer were repaired.
 
 Verification round one (same auditor per batch, revised batch plus their prior audit plus the revision script): all three returned `pass: true` with zero high findings and five residual mediums. A second revision round addressed those five; a fresh isolated verifier found two of the five repairs incomplete (hv4-042's term choice, hv4-054's obligation text left contradicting its reframed request). A third revision round fixed both; a second fresh verifier returned `pass: true` with zero high, zero medium, and two low findings of the known nonempty-cannot-check-a-two-part-answer class, which the rubric carries. No selector or compiler change was made in response to these cases.
+
+## Post-freeze correction
+
+After the `de05e6f` freeze, a review found that `hv4-042` still carried `artifactContext.operation: "archive"` while its request ("get rid of them") deliberately leaves archive-versus-delete open and its critical obligation is to ask which one is meant. The planner passes artifact context into candidate selection, so that field would have pre-resolved the ambiguity for the compiler strategy only. This is the same defect repaired in `hv4-019` during round one and missed here. The field was removed by one added `revisions.jq` transformation; no other case changed. A sweep of every case whose critical obligation is asking for confirmation found no other instance: the remaining ask-side cases either carry no operation or state the operation in the request and hinge on scope, second-hand permission, or range instead.
+
+The corrected dataset was re-frozen under the hash above. The prior preregistration's single permitted dry run (`run_9332cb6c03fc44a5`, against the superseded hash under a $1.50 ceiling) compiled 120 candidate artifacts, was refused by the budget guard at a $2.53 worst case before any provider call, and its directory was then deleted rather than preserved, contrary to that preregistration. No compiled prompt was inspected and no model response exists, so no behavioral evidence was spent; the superseding preregistration records this and authorizes a replacement dry run that must be preserved.
 
 Audit files: `audit-{a-by-c,b-by-a,c-by-b}.json`, `verification-{a-by-c,b-by-a,c-by-b}.json`, `verification-final-1.json`, `verification-final-2.json`.
 
