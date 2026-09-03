@@ -54,6 +54,17 @@ test("held-out v3 is frozen at 60 independently declared cases", () => {
   assert.equal(dataset.datasetHash, "8d6bf6999fcb7232e92633412f1eaf93be53a910dbfc1993f4fef7b6d49a7de3");
 });
 
+test("held-out v4 is frozen at 60 independently declared cases", () => {
+  const dataset = loadBehavioralCases("eval/behavioral/held-out-v4.jsonl");
+  assert.equal(dataset.cases.length, 60);
+  assert.equal(dataset.datasetVersion, "held-out-v4");
+  assert.equal(dataset.split, "held-out");
+  assert.equal(new Set(dataset.cases.map((item) => item.caseId)).size, 60);
+  assert.equal(new Set(dataset.cases.map((item) => item.request)).size, 60);
+  assert.ok(dataset.cases.every((item) => item.criticalObligationIds.length > 0));
+  assert.equal(dataset.datasetHash, "2c19952831d74beddffc2dddc7efd9504f811369c6f5848c5a9b18b9e3a6cfbf");
+});
+
 test("template datasets cannot execute", () => {
   assert.throws(
     () => loadBehavioralCases("eval/behavioral/adversarial-template-v1.jsonl"),
