@@ -316,6 +316,11 @@ test("compiler 0.8 executes already-confirmed exact actions instead of re-asking
     { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] },
     "future intent is not present confirmation",
   );
+  stillAsks(
+    "I confirm creating the one-time event 'Design sync' on August 6, 2026 at 9:00 AM America/New_York with no attendees.",
+    { artifactType: "calendar_event", operation: "create", toolsAvailable: ["calendar"] },
+    "calendar create missing location and conferencing",
+  );
 });
 
 test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {

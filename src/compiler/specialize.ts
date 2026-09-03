@@ -63,6 +63,8 @@ const ATTACHMENT_SCOPE = /\battach/i;
 const ATTENDEE_SCOPE = /\b(?:attendees?|invitees?|invite|for only me|only me|just me|private)\b/i;
 const RECURRENCE_SCOPE = /\b(?:recurr\w*|one-time|one time|once|single|series|occurrences?)\b/i;
 const OCCURRENCE_SCOPE = /\b(?:occurrences?|series|all future|only the|this instance)\b/i;
+const LOCATION_SCOPE = /\b(?:location|room|on-?site|in[- ]person|virtual|remote)\b/i;
+const CONFERENCING_SCOPE = /\b(?:conferenc\w*|video|zoom|google meet|teams|dial-?in|call link)\b/i;
 
 type FieldRule = Array<[string, RegExp]>;
 const CALENDAR_CHANGE: FieldRule = [["event", QUOTED], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE]];
@@ -81,7 +83,8 @@ const REQUIRED_FIELDS: Partial<Record<ArtifactType, Partial<Record<OperationTrig
     delete: [["exact thread", QUOTED]],
   },
   calendar_event: {
-    create: [["title", QUOTED], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE], ["attendee scope", ATTENDEE_SCOPE], ["recurrence scope", RECURRENCE_SCOPE]],
+    // The source policy: "Confirm title, attendees, date, time, time zone, location, conferencing, and recurrence."
+    create: [["title", QUOTED], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE], ["attendee scope", ATTENDEE_SCOPE], ["location", LOCATION_SCOPE], ["conferencing", CONFERENCING_SCOPE], ["recurrence scope", RECURRENCE_SCOPE]],
     reschedule: CALENDAR_CHANGE,
     update: CALENDAR_CHANGE,
     delete: CALENDAR_CHANGE,

@@ -60,6 +60,13 @@ class CompiledArtifact(StrictModel):
     compilationStrategy: str
     createdAt: datetime
 
+    @model_validator(mode="before")
+    @classmethod
+    def _require_specializations_from_1_1(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.get("schemaVersion") == "1.1.0" and "specializations" not in data:
+            raise ValueError("schemaVersion 1.1.0 artifacts must record specializations")
+        return data
+
 
 class RetryPolicy(StrictModel):
     maxAttempts: int = Field(default=3, ge=1, le=20)
