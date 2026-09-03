@@ -2,7 +2,7 @@
 
 ## Revision history
 
-Revision 1 (`a615e62`) preregistered dataset hash `2c19952831d74beddffc2dddc7efd9504f811369c6f5848c5a9b18b9e3a6cfbf` with a $1.50 scheduler ceiling. Its single permitted dry run, `run_9332cb6c03fc44a5` from commit `a615e62`, compiled 120 candidate artifacts and reported 3,029,931 logical input tokens, a 737,280 output cap, a $0.30 web-search reserve, and a $2.53204275 worst case; the runtime refused it against the ceiling before any provider call. The run directory was then deleted instead of preserved, which revision 1 did not permit; the figures above are the record of it. Separately, a post-freeze review found `hv4-042` carried a pre-resolved `artifactContext.operation`, corrected in `eval/authoring/held-out-v4/revisions.jq` and re-frozen (`eval/audits/held-out-v4-construction.md`, "Post-freeze correction"). This revision supersedes revision 1 in full and authorizes exactly one replacement dry run, which must be preserved under `runs/`. The scheduler cost ceiling is left unset here: it is the user's decision, to be fixed in this document by a further revision before the replacement dry run, after the user has weighed the observed $2.53 worst case against the credit balance.
+Revision 1 (`a615e62`) preregistered dataset hash `2c19952831d74beddffc2dddc7efd9504f811369c6f5848c5a9b18b9e3a6cfbf` with a $1.50 scheduler ceiling. Its single permitted dry run, `run_9332cb6c03fc44a5` from commit `a615e62`, compiled 120 candidate artifacts and reported 3,029,931 logical input tokens, a 737,280 output cap, a $0.30 web-search reserve, and a $2.53204275 worst case; the runtime refused it against the ceiling before any provider call. The run directory was then deleted instead of preserved, which revision 1 did not permit; the figures above are the record of it. Separately, a post-freeze review found `hv4-042` carried a pre-resolved `artifactContext.operation`, corrected in `eval/authoring/held-out-v4/revisions.jq` and re-frozen at `b9262c5` (`eval/audits/held-out-v4-construction.md`, "Post-freeze correction"). An interim draft of this revision was committed at `b9262c5` with the ceiling unset; it was never executable and is superseded here. This revision supersedes revision 1 and that draft in full, fixes the ceiling at $2.60, and authorizes exactly one replacement dry run, which must be preserved under `runs/`.
 
 ## Research question
 
@@ -14,7 +14,7 @@ For frozen compiler 0.8, does a request-specific compiler slice preserve the cri
 - Dataset version/split: `held-out-v4` / `held-out`
 - Cases: 60
 - Canonical dataset SHA-256: `197dee9fe2719f20848d81e5a4144218e217690b1a1c5c1f3aa2922d66efdfb1`
-- Dataset freeze commit: the commit that introduces this revision
+- Dataset freeze commit: `b9262c5`
 - Construction record: `eval/audits/held-out-v4-construction.md`
 - Compiler: 0.8.0, frozen at `2e5fc441eeffacf576f389b17f352287987c73dc` (`eval/audits/compiler-v0.8-freeze.md`)
 - Strategies: `full_policy`, `compiler_slice`
@@ -36,9 +36,11 @@ Compiler 0.8, the dataset, evaluator behavior, grading rules, thresholds, and an
 - `max_tool_calls`: 1 per response
 - Maximum built-in web searches: 30
 - Web-search context: low
-- Configured scheduler cost ceiling: UNSET, to be fixed by the user in the next revision (observed worst case for this shape: $2.53204275)
+- Configured scheduler cost ceiling: $2.60
 
-Before paid execution, generate exactly one zero-cost dry run from the clean preregistration commit, preserve its directory under `runs/`, and record its run ID, exact commit, prompt-token totals, and logical worst-case cost. If the dry run's worst case exceeds the ceiling, do not execute and do not raise the ceiling in place; revise the protocol under a new preregistration. Paid execution requires a new explicit user authorization naming the synthetic content, the 360-request cap, the 30-search cap, and the fixed scheduler ceiling.
+Before paid execution, generate exactly one zero-cost dry run from the clean preregistration commit, preserve its directory under `runs/`, and record its run ID, exact commit, prompt-token totals, and logical worst-case cost. If the dry run's worst case exceeds the ceiling, do not execute and do not raise the ceiling in place; revise the protocol under a new preregistration. Paid execution requires a new explicit user authorization naming the synthetic content, the 360-request cap, the 30-search cap, and the $2.60 scheduler ceiling.
+
+The user chose this ceiling on 2026-09-03 knowing that the provider credit balance was about $1.66, below the $2.53 worst case, and that every prior study and development run has cost 0.18 to 0.27 of its worst case. If the provider rejects calls for insufficient credit before all 360 executions complete, those trials are recorded as failed, the run stops, and the preregistered coverage gate decides whether the study is conclusive; the dataset is spent either way.
 
 The scheduler ceiling is not an external billing-account guarantee. In-flight requests and provider-reported search-content tokens can overshoot it. Actual usage and cost from provider responses, including failed attempts, must be retained and reported.
 
