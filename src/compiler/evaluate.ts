@@ -5,15 +5,9 @@ import { deterministicFrontend } from "../ir/deterministicFrontend.js";
 import { guardedFrontend, type Frontend, type RequestState } from "../ir/requestState.js";
 import { MASK_ORIGIN, maskFor, stateMasks, type Mask } from "../ir/obligations.js";
 import { limitInstruction } from "./limits.js";
-import type { AuthorizationReader } from "./authorization.js";
 
 /** The frontend used when none is injected: the deterministic baseline, guarded. */
 export const defaultFrontend: Frontend = guardedFrontend(deterministicFrontend(), "deterministic");
-
-/** Builds a guarded frontend around an injected authorization reader. */
-export function frontendWithReader(reader: AuthorizationReader): Frontend {
-  return guardedFrontend(deterministicFrontend(reader), "deterministic");
-}
 
 /** One read, then selection and partial evaluation: the path a single compiled prompt goes through. */
 export function compileSelection(policies: Policy[], input: string, context?: ArtifactContext | null, frontend: Frontend = defaultFrontend): PolicySelection {

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
-import { guardedReader, parsePersistedAuthorizationReads, persistedReader } from "../src/compiler/authorization.js";
-import { defaultFrontend, frontendWithReader } from "../src/compiler/evaluate.js";
+import { parsePersistedReads, persistedFrontend, type ExtractedRead } from "../src/ir/persistedFrontend.js";
+import { defaultFrontend } from "../src/compiler/evaluate.js";
 import type { Frontend } from "../src/ir/requestState.js";
 import { loadBehavioralCases } from "../src/experiment/cases.js";
 import { deriveInputLimit, estimateCallInputTokens, INPUT_ESTIMATE_HEADROOM, providerToolPayload, type ProviderToolPayload } from "../src/experiment/plan.js";
@@ -122,36 +122,28 @@ test("compiler 0.8 development regressions are six copied held-out-v3 cases", ()
   assert.equal(dataset.datasetHash, "e50214e49d5a37dee334d3dfe777b07f33386b704ce1f0198e6b8798b12843dc");
 });
 
-test("persisted authorization reads are schema-validated and drive the planner path", () => {
-  // Malformed JSON is rejected at the boundary, before any specialization.
-  assert.throws(() => parsePersistedAuthorizationReads({ readerId: "x", reads: { "a": { state: "yes", evidence: [] } } }));
-  assert.throws(() => parsePersistedAuthorizationReads({ readerId: "x", reads: { "a": { state: "present", evidence: [], extra: 1 } } }));
-
+test("persisted reads drive the planner path and change the run's identity", () => {
   const policies = loadPolicies();
   const item = loadBehavioralCases("eval/behavioral/compiler-v0.9-regressions.jsonl").cases.find((c) => c.caseId === "cv09-041v4")!;
   const context = { ...(item.artifactContext ?? {}), toolsAvailable: item.tools.map((tool) => tool.name) };
+  const absent: ExtractedRead = { authorization: "absent", limit: "none", purpose: "none", permittedTask: false, format: "none", operationNamed: true, operationNegated: false, fields: {}, evidence: ["fixture"] };
 
-  // A reader that says absent for this request must leave the ask in place on
-  // every strategy the planner emits, and the trace must name the reader.
-  const absentReads = parsePersistedAuthorizationReads({ readerId: "fixture-absent", reads: { [item.caseId]: { state: "absent", evidence: ["fixture"] } } });
-  const viaAbsent = generateCandidateSelections(policies, item.request, context, frontendWithReader(guardedReader(persistedReader(absentReads, item.caseId), "fixture-absent")));
+  // A read that says absent for this request must leave the ask in place on
+  // every strategy the planner emits, and the trace must name the frontend.
+  const viaAbsent = generateCandidateSelections(policies, item.request, context, persistedFrontend(parsePersistedReads({ frontendId: "fixture-absent", reads: { [item.caseId]: absent } }), item.caseId));
   const absentSlice = viaAbsent.find((c) => c.strategy === "compiler_slice")!.selection;
   assert.equal(absentSlice.requestState?.authorization, "absent");
-  assert.ok(absentSlice.requestState?.evidence.some((e) => /read by fixture-absent/.test(e)));
+  assert.equal(absentSlice.requestState?.frontend, "fixture-absent");
   assert.ok((absentSlice.evaluations ?? []).every((r) => r.branchId !== "already_authorized" || r.truth !== "true"));
   assert.match(emitRuntimePrompt(absentSlice, item.request, context), /ask_confirmation/);
 
-  // The baseline reads this request as present; the two readers must produce
-  // different artifacts, so a run's identity cannot silently mix readers.
+  // The deterministic frontend reads this request as present; the two frontends
+  // must produce different artifacts, so a run's identity cannot silently mix them.
   const viaBaseline = generateCandidateSelections(policies, item.request, context);
   const baselineSlice = viaBaseline.find((c) => c.strategy === "compiler_slice")!.selection;
+  assert.equal(baselineSlice.requestState?.authorization, "present");
   const artifactFor = (selection: typeof baselineSlice) => createArtifact({ policies, selection, request: item.request, context, strategy: "compiler_slice", sourcePolicyId: "s", sourcePolicyText: "t", model: "gpt-4o", createdAt: "2026-01-01T00:00:00.000Z" });
   assert.notEqual(artifactFor(baselineSlice).candidateId, artifactFor(absentSlice).candidateId);
-
-  // A request with no persisted entry reads absent and says so; it does not fall back to the baseline.
-  const noEntry = guardedReader(persistedReader(absentReads, "some-other-case"), "fixture-absent")("anything");
-  assert.equal(noEntry.state, "absent");
-  assert.match(noEntry.evidence[0], /no persisted read from fixture-absent/);
 });
 
 test("the frontend is read exactly once per request and every candidate is evaluated against that read", () => {

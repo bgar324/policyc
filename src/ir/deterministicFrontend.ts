@@ -1,5 +1,5 @@
 import type { ArtifactContext, ArtifactType, OperationTrigger } from "../policy/types.js";
-import { baselineAuthorizationReader, type AuthorizationReader } from "../compiler/authorization.js";
+import { baselineAuthorizationReader } from "../compiler/authorization.js";
 import { evaluateExplicitLimit } from "../compiler/limits.js";
 import { detectIntents } from "../policy/triggers.js";
 import { provesAction, resolveDeliverable, type Frontend, type RequestState } from "./requestState.js";
@@ -10,16 +10,17 @@ import { provesAction, resolveDeliverable, type Frontend, type RequestState } fr
  * naming and negation, and purpose detection. It is the offline baseline; its
  * recall on fresh phrasing is measured by
  * `eval/behavioral/compiler-v0.9-paraphrases.jsonl` and is known to be low for
- * authorization. Any other frontend (a persisted extractor output) produces the
- * same `RequestState` and plugs in at the same seam.
+ * authorization. Any other frontend (a persisted extractor output, see
+ * `persistedFrontend.ts`) produces the same `RequestState` and plugs in at the
+ * same seam.
  */
-export function deterministicFrontend(reader: AuthorizationReader = baselineAuthorizationReader): Frontend {
+export function deterministicFrontend(): Frontend {
   return (input, context) => {
     const evidence: string[] = [];
     const operation = context?.operation;
     const toolsAvailable = context?.toolsAvailable?.map((tool) => tool.toLowerCase());
 
-    const authorization = reader(input);
+    const authorization = baselineAuthorizationReader(input);
     evidence.push(...authorization.evidence.map((line) => `authorization: ${line}`));
 
     const limit = evaluateExplicitLimit(input, context);
@@ -167,6 +168,11 @@ const REQUIRED_FIELDS: Partial<Record<ArtifactType, Partial<Record<OperationTrig
     delete: CALENDAR_CHANGE,
   },
 };
+
+/** The names of the fields the policy requires for the declared operation; empty when no rule exists. */
+export function requiredFieldNames(context: ArtifactContext | null | undefined): string[] {
+  return context ? (requiredFields(context) ?? []).map(([name]) => name) : [];
+}
 
 function requiredFields(context: ArtifactContext): FieldRule | undefined {
   if (!context.artifactType || !context.operation) return undefined;

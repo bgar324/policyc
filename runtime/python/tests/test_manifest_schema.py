@@ -1,8 +1,8 @@
 """The paired-run manifest schema under protocol/ is the cross-language contract,
 but nothing had validated a real manifest against it, so it drifted (it lacked
-estimatedInputTokens and authorizationReader while the planner wrote both).
-This test plans manifests through the real CLI, under the baseline reader and a
-persisted reader, and validates each against the schema; it also validates the
+estimatedInputTokens and the frontend record while the planner wrote both).
+This test plans manifests through the real CLI, under the deterministic frontend
+and a persisted one, and validates each against the schema; it also validates the
 last frozen held-out manifest so historical evidence stays loadable."""
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import jsonschema
 import pytest
 from pydantic import ValidationError
 
-from policyc_runtime.experiment_models import AuthorizationReaderRecord, PairedRunManifest
+from policyc_runtime.experiment_models import FrontendRecord, PairedRunManifest
 from policyc_runtime.paired_manifest import load_paired_run
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -68,26 +68,35 @@ def _plan(output: Path, extra: list[str]) -> dict:
 def test_baseline_manifest_validates_against_protocol_schema(tmp_path: Path) -> None:
     manifest = _plan(tmp_path / "baseline", [])
     jsonschema.validate(manifest, SCHEMA)
-    assert manifest["authorizationReader"] == {"readerId": "baseline"}
+    assert manifest["frontend"] == {"frontendId": "deterministic"}
     loaded = load_paired_run(tmp_path / "baseline" / "manifest.v2.json")
-    assert loaded.manifest.authorizationReader.readerId == "baseline"
+    assert loaded.manifest.frontend.frontendId == "deterministic"
 
 
-def test_persisted_reader_manifest_records_file_hash_and_validates(tmp_path: Path) -> None:
+READ = {
+    "authorization": "absent",
+    "limit": "none",
+    "purpose": "none",
+    "permittedTask": False,
+    "format": "none",
+    "operationNamed": True,
+    "operationNegated": False,
+    "fields": {"recipient": True, "body": True, "attachment scope": True},
+    "evidence": ["fixture"],
+}
+
+
+def test_persisted_frontend_manifest_records_file_hash_and_validates(tmp_path: Path) -> None:
     reads = tmp_path / "reads.json"
-    reads.write_text(
-        json.dumps(
-            {"readerId": "fixture-absent", "reads": {"cv09-041v4": {"state": "absent", "evidence": ["fixture"]}}}
-        )
-    )
-    manifest = _plan(tmp_path / "fixture", ["--authorization-reads", str(reads)])
+    reads.write_text(json.dumps({"frontendId": "fixture-absent", "reads": {"cv09-041v4": READ}}))
+    manifest = _plan(tmp_path / "fixture", ["--request-state-reads", str(reads)])
     jsonschema.validate(manifest, SCHEMA)
-    record = manifest["authorizationReader"]
-    assert record["readerId"] == "fixture-absent"
+    record = manifest["frontend"]
+    assert record["frontendId"] == "fixture-absent"
     assert record["readsSha256"] == hashlib.sha256(reads.read_bytes()).hexdigest()
     assert Path(record["readsPath"]) == reads.resolve()
     baseline = _plan(tmp_path / "baseline2", [])
-    assert manifest["compilerHash"] != baseline["compilerHash"], "reader identity must change the compiler hash"
+    assert manifest["compilerHash"] != baseline["compilerHash"], "frontend identity must change the compiler hash"
 
 
 def test_historical_manifest_still_validates() -> None:
@@ -99,10 +108,10 @@ def test_historical_manifest_still_validates() -> None:
     # schema requires it, so validate what the runtime would load, not the raw file.
     loaded = PairedRunManifest.model_validate(manifest)
     jsonschema.validate(loaded.model_dump(mode="json", by_alias=True, exclude_none=True), SCHEMA)
-    assert loaded.authorizationReader.readerId == "baseline"
+    assert loaded.frontend.frontendId == "deterministic"
 
 
-def test_persisted_reader_without_hash_is_rejected() -> None:
+def test_persisted_frontend_without_hash_is_rejected() -> None:
     with pytest.raises(ValidationError, match="readsSha256"):
-        AuthorizationReaderRecord(readerId="some-extractor")
-    assert AuthorizationReaderRecord(readerId="baseline").readsSha256 is None
+        FrontendRecord(frontendId="some-extractor")
+    assert FrontendRecord(frontendId="deterministic").readsSha256 is None

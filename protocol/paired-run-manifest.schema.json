@@ -26,7 +26,7 @@
     "outputDirectory",
     "rawResponseRetention",
     "createdAt",
-    "authorizationReader"
+    "frontend"
   ],
   "properties": {
     "schemaVersion": {
@@ -185,14 +185,14 @@
       "type": "string",
       "format": "date-time"
     },
-    "authorizationReader": {
+    "frontend": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "readerId"
+        "frontendId"
       ],
       "properties": {
-        "readerId": {
+        "frontendId": {
           "type": "string",
           "minLength": 1
         },
@@ -204,7 +204,7 @@
           "pattern": "^[a-f0-9]{64}$"
         }
       },
-      "description": "Authorization reader that produced this run's compiled artifacts. readerId 'baseline' means the deterministic in-process reader and carries no file; any persisted reader records the exact file hash."
+      "description": "Frontend that produced this run's request states and therefore its compiled artifacts. frontendId 'deterministic' means the in-process baseline; any other id names a persisted reads file (readsPath) whose sha256 is readsSha256."
     }
   }
 }

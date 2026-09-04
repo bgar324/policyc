@@ -47,24 +47,6 @@ export type AuthorizationRead = z.infer<typeof authorizationReadSchema>;
  */
 export type AuthorizationReader = (input: string) => AuthorizationRead;
 
-/**
- * Wraps a reader so its output is validated and its failures fail closed: a
- * thrown error or an invalid shape becomes `absent`, with the reason recorded.
- */
-export function guardedReader(reader: AuthorizationReader, name: string): AuthorizationReader {
-  return (input) => {
-    let raw: unknown;
-    try {
-      raw = reader(input);
-    } catch (error) {
-      return { state: "absent", evidence: [`${name} reader failed: ${error instanceof Error ? error.message : String(error)}`] };
-    }
-    const parsed = authorizationReadSchema.safeParse(raw);
-    if (!parsed.success) return { state: "absent", evidence: [`${name} reader returned an invalid read: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`] };
-    return parsed.data;
-  };
-}
-
 const SETTLED_FIRST_PERSON = /\b(?:I|we|ive|i've|we've|i’ve|we’ve)\s+(?:(?:explicitly|hereby|now|also|formally|fully|again|do|already|myself)\s+)*(?:confirm|authorize|approve|sign(?:ed)? off|have (?:already )?(?:reviewed|checked|been through|cleared|approved|signed off)|(?:'ve|’ve) (?:already )?(?:reviewed|checked|been through|cleared|approved|signed off)|been through|reviewed|checked|cleared)\b/i;
 const SETTLED_THIRD_PARTY = /\b(?!I\b|we\b)(?:[A-Z][a-z]+|[a-z]+|everyone|everybody|the team|legal|finance|my manager|she|he|they)(?:'s|’s)?\s+(?:already\s+|has\s+|have\s+|all\s+)*(?:signed off|confirmed|approved|cleared|okayed|ok'd|said (?:it's|its) fine|is fine with)\b/i;
 const NO_REASK = /\b(?:no need to (?:loop back|check back|check with me|come back to me|ask(?: me)?|confirm(?: with me)?|re-?confirm|double[- ]check)|(?:i )?(?:don'?t|do not) need (?:another|a) (?:readback|confirmation|check|sign-?off)|(?:don'?t|do not) ask me anything|no readback|skip the (?:confirmation|readback|check)|without (?:asking|checking) (?:me )?(?:again|first))\b/i;
@@ -80,38 +62,6 @@ const QUESTION = /\?\s*$/;
 /** True when an odd number of double quotes precede `index`, i.e. inside someone else's words. */
 function insideQuotation(text: string, index: number): boolean {
   return ((text.slice(0, index).match(/["“”]/g)?.length ?? 0) % 2) === 1;
-}
-
-/**
- * Persisted reads: a JSON map from a request key (the case ID the planner
- * passes, or the request text) to a read produced earlier by some extractor.
- * This is the boundary for anything that arrives as JSON, including a future
- * model-assisted extractor's output: every entry is parsed by the schema here,
- * before specialization, and a malformed entry rejects the whole file.
- */
-export const persistedAuthorizationReadsSchema = z.object({
-  readerId: z.string().min(1),
-  reads: z.record(z.string(), authorizationReadSchema),
-}).strict();
-
-export type PersistedAuthorizationReads = z.infer<typeof persistedAuthorizationReadsSchema>;
-
-export function parsePersistedAuthorizationReads(raw: unknown): PersistedAuthorizationReads {
-  return persistedAuthorizationReadsSchema.parse(raw);
-}
-
-/**
- * A reader backed by persisted reads. Keys are looked up by exact request text
- * first and then by the caller-supplied key; a request with no entry reads as
- * `absent` (fail closed) and says so, rather than falling back to the baseline
- * silently, so an artifact trace always shows which reader produced its read.
- */
-export function persistedReader(persisted: PersistedAuthorizationReads, key?: string): AuthorizationReader {
-  return (input) => {
-    const hit = persisted.reads[input] ?? (key ? persisted.reads[key] : undefined);
-    if (!hit) return { state: "absent", evidence: [`no persisted read from ${persisted.readerId} for this request`] };
-    return { ...hit, evidence: [`read by ${persisted.readerId}`, ...hit.evidence] };
-  };
 }
 
 /**

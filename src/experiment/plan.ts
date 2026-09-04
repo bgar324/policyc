@@ -3,8 +3,7 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { canonicalJson, COMPILER_VERSION, createArtifact, sha256, type CompilationStrategy, type CompiledPolicyArtifact } from "../compiler/artifact.js";
 import { generateCandidateSelections } from "../compiler/candidates.js";
-import { guardedReader, parsePersistedAuthorizationReads, persistedReader } from "../compiler/authorization.js";
-import { frontendWithReader } from "../compiler/evaluate.js";
+import { parsePersistedReads, persistedFrontend } from "../ir/persistedFrontend.js";
 import type { Frontend } from "../ir/requestState.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { loadPolicies } from "../policy/loader.js";
@@ -73,20 +72,20 @@ type Options = {
   yes: boolean; retryAmbiguous: boolean;
   runLabel?: string;
   /** Path to a persisted, schema-validated authorization-read file; absent means the deterministic baseline. */
-  authorizationReads?: string;
+  requestStateReads?: string;
 };
 
-/** Manifest record of the reader; the exact file hash makes a persisted reader's identity reproducible. */
-export type AuthorizationReaderRecord = { readerId: string; readsPath?: string; readsSha256?: string };
-type ReaderSource = { record: AuthorizationReaderRecord; frontendFor: (caseId: string) => Frontend | undefined };
+/** Manifest record of the frontend; the exact file hash makes a persisted frontend's identity reproducible. */
+export type FrontendRecord = { frontendId: string; readsPath?: string; readsSha256?: string };
+type FrontendSource = { record: FrontendRecord; frontendFor: (caseId: string) => Frontend | undefined };
 
-function loadReaderSource(path: string | undefined): ReaderSource {
-  if (!path) return { record: { readerId: "baseline" }, frontendFor: () => undefined };
+function loadFrontendSource(path: string | undefined): FrontendSource {
+  if (!path) return { record: { frontendId: "deterministic" }, frontendFor: () => undefined };
   const text = readFileSync(path, "utf8");
-  const persisted = parsePersistedAuthorizationReads(JSON.parse(text));
+  const persisted = parsePersistedReads(JSON.parse(text));
   return {
-    record: { readerId: persisted.readerId, readsPath: resolve(path), readsSha256: sha256(text) },
-    frontendFor: (caseId) => frontendWithReader(guardedReader(persistedReader(persisted, caseId), persisted.readerId)),
+    record: { frontendId: persisted.frontendId, readsPath: resolve(path), readsSha256: sha256(text) },
+    frontendFor: (caseId) => persistedFrontend(persisted, caseId),
   };
 }
 
@@ -103,13 +102,13 @@ export function runExperimentCommand(argv: string[]): void {
   mkdirSync(artifactDir, { recursive: true });
   const createdAt = existingManifest?.createdAt ?? new Date().toISOString();
   const pendingArtifacts: Array<{ path: string; artifact: CompiledPolicyArtifact; callInputTokens: number }> = [];
-  const readerSource = loadReaderSource(options.authorizationReads);
+  const frontendSource = loadFrontendSource(options.requestStateReads);
   const casePlans = caseSet.cases.map((testCase) => {
     const executionContext = {
       ...(testCase.artifactContext ?? {}),
       toolsAvailable: testCase.tools.map((tool) => tool.name),
     };
-    const available = generateCandidateSelections(policies, testCase.request, executionContext, readerSource.frontendFor(testCase.caseId));
+    const available = generateCandidateSelections(policies, testCase.request, executionContext, frontendSource.frontendFor(testCase.caseId));
     const selected = options.strategies.map((strategy) => {
       const candidate = available.find((item) => item.strategy === strategy);
       if (!candidate) throw new Error(`unsupported strategy ${strategy}`);
@@ -127,12 +126,12 @@ export function runExperimentCommand(argv: string[]): void {
   const derivedInputLimit = deriveInputLimit(estimatedInputTokens, maxAttempts, options.maxInputTokens);
   const derivedOutputLimit = options.maxOutputTokensTotal ?? logicalTrials * options.maxOutputTokens * maxAttempts;
   if (options.provider === "openai" && options.maxCalls < logicalTrials) throw new Error(`--max-calls ${options.maxCalls} is below ${logicalTrials} logical trials`);
-  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, authorizationReader: readerSource.record, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
+  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, frontend: frontendSource.record, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
   const identityCore = {
     schemaVersion: "2.0.0", experimentName: "paired-policy-preservation", dataset: { path: resolve(options.cases), hash: caseSet.datasetHash, version: caseSet.datasetVersion, split: caseSet.split },
     ...(options.runLabel ? { runLabel: options.runLabel } : {}),
     sourceControl,
-    compilerHash, authorizationReader: readerSource.record, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
+    compilerHash, frontend: frontendSource.record, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
     modelParameters: { max_output_tokens: options.maxOutputTokens, max_tool_calls: 1, store: false }, sampleCount: options.samples,
     inputTokenOverheadPerCall: INPUT_TOKEN_OVERHEAD_PER_CALL,
     maxConcurrency: options.concurrency, timeoutSeconds: 60,
@@ -203,6 +202,6 @@ function parseOptions(argv: string[]): Options {
     maxCalls: integer("--max-calls"), maxInputTokens: values.has("--max-input-tokens") ? integer("--max-input-tokens") : undefined,
     maxOutputTokensTotal: values.has("--max-output-tokens-total") ? integer("--max-output-tokens-total") : undefined,
     maxCostUsd, retries: integer("--retries", 0, true), output: required("--output"), dryRun: flags.has("--dry-run"), yes: flags.has("--yes"), retryAmbiguous: flags.has("--retry-ambiguous"), runLabel,
-    authorizationReads: values.get("--authorization-reads")
+    requestStateReads: values.get("--request-state-reads")
   };
 }

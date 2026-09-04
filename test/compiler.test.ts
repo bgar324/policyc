@@ -7,9 +7,10 @@ import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
 import { generateCandidateSelections } from "../src/compiler/candidates.js";
 import { countTokens } from "../src/compiler/tokenCounter.js";
 import { emitRuntimePrompt } from "../src/compiler/emitter.js";
-import { baselineAuthorizationReader, guardedReader, type AuthorizationRead } from "../src/compiler/authorization.js";
+import { baselineAuthorizationReader } from "../src/compiler/authorization.js";
+import { parsePersistedReads, persistedFrontend, type ExtractedRead } from "../src/ir/persistedFrontend.js";
 import { evaluateExplicitLimit } from "../src/compiler/limits.js";
-import { compileSelection, defaultFrontend, findConflicts, frontendWithReader } from "../src/compiler/evaluate.js";
+import { compileSelection, defaultFrontend, findConflicts } from "../src/compiler/evaluate.js";
 import type { Frontend } from "../src/ir/requestState.js";
 import { computeDependencyClosure } from "../src/policy/closure.js";
 import { loadPolicies } from "../src/policy/loader.js";
@@ -516,7 +517,7 @@ test("compiler 0.9 paraphrase fixtures: authorization and limit reads on phrasin
   const unsafe: string[] = [];
   for (const item of fixtures) {
     if (item.kind === "authorization") {
-      const read = guardedReader(baselineAuthorizationReader, "baseline")(item.text);
+      const read = baselineAuthorizationReader(item.text);
       if (read.state !== item.expect) misses.push(`${item.id}: expected ${item.expect}, read ${read.state}`);
       if (read.state === "present" && item.expect !== "present") unsafe.push(`${item.id}: read present on a ${item.expect} case`);
     } else {
@@ -530,21 +531,38 @@ test("compiler 0.9 paraphrase fixtures: authorization and limit reads on phrasin
   assert.deepEqual(unsafe, [], "no read may fail in the unsafe direction");
 });
 
-test("authorization reader boundary validates output and fails closed", () => {
-  const broken = guardedReader(() => ({ state: "present", evidence: [] }) as unknown as AuthorizationRead, "broken");
-  assert.equal(broken("I confirm sending it").state, "absent");
-  const throwing = guardedReader(() => { throw new Error("provider unavailable"); }, "throwing");
-  const read = throwing("I confirm sending it");
-  assert.equal(read.state, "absent");
-  assert.match(read.evidence[0], /provider unavailable/);
-  // An injected reader that asserts authorization still cannot execute without the fields.
+const READ: ExtractedRead = { authorization: "present", limit: "none", purpose: "none", permittedTask: false, format: "none", operationNamed: true, operationNegated: false, fields: { recipient: true, body: true, "attachment scope": true }, evidence: ["fixture"] };
+
+test("persisted frontend boundary validates reads and fails closed", () => {
+  // Malformed JSON is rejected at the boundary, before any compilation.
+  assert.throws(() => parsePersistedReads({ frontendId: "x", reads: { a: { ...READ, authorization: "yes" } } }));
+  assert.throws(() => parsePersistedReads({ frontendId: "x", reads: { a: { ...READ, extra: 1 } } }));
+  assert.throws(() => parsePersistedReads({ frontendId: "", reads: {} }));
+
   const policies = loadPolicies();
-  const always = guardedReader(() => ({ state: "present", evidence: ["injected"] }), "always");
-  const selection = compileSelection(policies, "send the note to pat@example.com", { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] }, frontendWithReader(always));
-  assert.equal(selection.requestState?.authorization, "present");
-  const records = (selection.evaluations ?? []).filter((record) => record.branchId === "already_authorized");
-  assert.ok(records.length > 0 && records.every((record) => record.truth !== "true"), "missing fields must block execution even when the reader says present");
-  assert.ok(records.some((record) => record.evidence.some((line) => /fields complete: false/.test(line))));
+  const context = { artifactType: "email" as const, operation: "send" as const, toolsAvailable: ["gmail"] };
+  // A read that asserts authorization with every field executes; the trace names the frontend.
+  const complete = persistedFrontend(parsePersistedReads({ frontendId: "fixture", reads: { "case-1": READ } }), "case-1");
+  const executes = compileSelection(policies, "send the note to pat@example.com", context, complete);
+  assert.equal(executes.requestState?.frontend, "fixture");
+  assert.ok(executes.requestState?.evidence[0] === "read by fixture");
+  assert.ok(executes.evaluations!.some((r) => r.branchId === "already_authorized" && r.truth === "true"));
+  assert.ok(!executes.policies.some((policy) => policy.obligations.some((o) => o.type === "ask_confirmation")));
+
+  // The same read minus a field, or naming a field the policy does not require, still asks.
+  const partial = persistedFrontend(parsePersistedReads({ frontendId: "fixture", reads: { "case-1": { ...READ, fields: { recipient: true, body: true, tone: true } } } }), "case-1");
+  const asks = compileSelection(policies, "send the note to pat@example.com", context, partial);
+  assert.equal(asks.requestState?.authorization, "present");
+  assert.equal(asks.requestState?.fields["attachment scope"], false);
+  assert.ok(asks.requestState?.evidence.some((line) => /fields not read, treated as missing: attachment scope/.test(line)));
+  assert.ok(asks.policies.some((policy) => policy.obligations.some((o) => o.type === "ask_confirmation")), "missing fields must block execution even when the read says present");
+
+  // A request with no entry reads conservatively and says so; it never falls back to the deterministic frontend.
+  const none = persistedFrontend(parsePersistedReads({ frontendId: "fixture", reads: { "case-1": READ } }), "some-other-case");
+  const conservative = compileSelection(policies, "priya already signed off, send it now", context, none);
+  assert.equal(conservative.requestState?.authorization, "absent");
+  assert.equal(conservative.requestState?.limit, "ambiguous");
+  assert.match(conservative.requestState!.evidence[0], /no persisted read from fixture/);
 });
 
 test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {
