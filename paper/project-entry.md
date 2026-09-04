@@ -40,7 +40,7 @@ TypeScript · Python · OpenAI API · SQLite
 
 ## Compact two-bullet version
 
-- Built **PolicyC**, a TypeScript/Python compiler that transforms a 43-node policy graph into dependency-closed, request-specific prompts, cutting held-out model input by **89.69–98.23%** and uncached-equivalent cost by **55.36–67.80%**.
+- Built **PolicyC**, a TypeScript/Python compiler that transforms a 44-node policy graph into dependency-closed, request-specific prompts, cutting held-out model input by **89.69–98.23%** and uncached-equivalent cost by **55.36–67.80%**.
 - Created a safety-bounded, resumable `asyncio` experiment platform with immutable provenance, blind grading, and SQLite history; ran **1,680 GPT-5 mini executions for $4.90** and converted behavioral regressions into exact compiler test cases.
 
 ## Portfolio description
