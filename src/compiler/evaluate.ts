@@ -3,7 +3,7 @@ import { selectPolicies } from "../policy/selector.js";
 import { evaluateCondition } from "../ir/conditions.js";
 import { deterministicFrontend } from "../ir/deterministicFrontend.js";
 import { guardedFrontend, type Frontend, type RequestState } from "../ir/requestState.js";
-import { MASK_ORIGIN, maskFor, stateMasks, type Mask } from "../ir/obligations.js";
+import { MASK_ORIGIN, maskFor, stateMasks, toolEffect, type Mask } from "../ir/obligations.js";
 import { limitInstruction } from "./limits.js";
 
 /** The frontend used when none is injected: the deterministic baseline, guarded. */
@@ -85,11 +85,24 @@ export function evaluateSelection(selection: PolicySelection, state: RequestStat
   });
 
   const userMask = [...active].find((mask) => MASK_ORIGIN[mask] === "user");
-  const limit = userMask && state.limit !== "none" && !selection.policies.some((policy) => policy.mandated)
-    ? { verdict: state.limit, instruction: limitInstruction(state.limit, state.toolsAvailable ?? []) }
-    : undefined;
+  const mandated = selection.policies.some((policy) => policy.mandated);
+  let limit: PolicySelection["limit"];
+  if (userMask && state.limit !== "none" && !mandated) {
+    limit = { verdict: state.limit, instruction: limitInstruction(state.limit, state.toolsAvailable ?? []) };
+  } else if (active.has("ask")) {
+    // Ask outranks act, said in words the model can apply to its tools: the
+    // available acting tools that no surviving obligation requires must wait
+    // for the user's answer. Reads never wait; a required tool is exempt.
+    const required = new Set(policies.flatMap((policy) => policy.obligations.filter((o) => o.type === "call_tool" && o.value).map((o) => o.value!.toLowerCase())));
+    const waiting = (state.toolsAvailable ?? []).filter((tool) => toolEffect(tool) === "act" && !required.has(tool));
+    if (waiting.length) limit = { verdict: "ask", instruction: askInstruction(waiting) };
+  }
 
   return { ...selection, policies, requestState: state, evaluations, limit, conflicts: findConflicts(policies, limit !== undefined) };
+}
+
+export function askInstruction(tools: string[]): string {
+  return `This turn ends in a question, not an action: do not call ${[...tools].sort().join(", ")} until the user has confirmed the exact target, scope, and operation in a later turn.`;
 }
 
 export function unavailableToolInstruction(tool: string): string {

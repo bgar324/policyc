@@ -181,8 +181,12 @@ export type PolicySelection = {
   requestState?: RequestState;
   /** Every branch evaluation, in node order. */
   evaluations?: EvaluationRecord[];
-  /** Present when the request bounds this turn; the emitter prints the instruction as a rule. */
-  limit?: { verdict: "limited" | "ambiguous"; instruction: string };
+  /**
+   * Present when this turn may not act: the user bounded it (`limited`,
+   * `ambiguous`), or the resolved program asks for confirmation first (`ask`).
+   * The emitter prints the instruction as the first active rule.
+   */
+  limit?: { verdict: "limited" | "ambiguous" | "ask"; instruction: string };
   /** Contradictions between resolved nodes, found at compile time. */
   conflicts?: string[];
 };

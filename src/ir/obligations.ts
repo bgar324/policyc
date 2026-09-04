@@ -57,3 +57,13 @@ export function maskFor(obligation: Obligation, active: ReadonlySet<Mask>, manda
 export function isToolBound(obligation: Obligation): boolean {
   return obligation.type === "call_tool" || obligation.type === "inspect_artifact";
 }
+
+/**
+ * What calling a tool does, by the synthetic connectors' naming convention:
+ * `web` and names ending in `_read`, `_inspect`, or `_search` only read; every
+ * other tool alters user data or external state, which is the source prompt's
+ * definition of a destructive action. Only acting tools wait behind an ask.
+ */
+export function toolEffect(tool: string): "read" | "act" {
+  return tool === "web" || /_(?:read|inspect|search)$/.test(tool) ? "read" : "act";
+}

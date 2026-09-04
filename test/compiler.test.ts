@@ -507,6 +507,12 @@ test("a blanket approval that does not name the change compiles to a stronger as
   assert.match(prompt, /an approval cannot cover a change it does not name/);
   assert.match(prompt, /- ask_confirmation/);
   assert.doesNotMatch(prompt, /- call_tool:spreadsheet_edit/);
+  // Ask outranks act, said for the tools: the acting tool waits; a read tool never does; a required tool is exempt.
+  assert.match(prompt, /^- This turn ends in a question, not an action: do not call spreadsheet_edit until/m);
+  const mixed = compileSelection(policies, "approved in advance, no need to ask me anything: check the latest filing deadline online and then overwrite the model", { ...context, toolsAvailable: ["spreadsheet_edit", "spreadsheet_inspect", "web"] }, approved);
+  const guard = emitRuntimePrompt(mixed, "x", { ...context, toolsAvailable: ["spreadsheet_edit", "spreadsheet_inspect", "web"] }).split("\n").find((line) => line.includes("This turn ends in a question"))!;
+  assert.match(guard, /do not call spreadsheet_edit until/);
+  assert.doesNotMatch(guard, /spreadsheet_inspect|web/);
 });
 
 test("compile-time conflicts name both nodes", () => {
