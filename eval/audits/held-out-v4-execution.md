@@ -96,4 +96,4 @@ Class 1 is now the largest and was untouched by 0.8. Any next iteration should s
 - Do not describe compiler 0.8 as an improvement over 0.7; the two were tested on different sets, and on the one class 0.8 changed it produced no fresh-case gain.
 - Do not cite the 66% uncached-equivalent reduction without the 75.76% preservation beside it.
 - Held-out v4 is spent. Every case may become development evidence; no future compiler may be evaluated on it as fresh.
-- The 21 incomplete trials are failures, not excluded; the 90.56% coverage figure includes their loss.
+- The 21 incomplete trials are operational failures. The 17 pairs they affect were excluded from the paired semantic estimates and never counted as passes, while their loss is reflected in the 90.56% coverage gate, as the preregistration specifies.
