@@ -74,12 +74,18 @@ type Options = {
   authorizationReads?: string;
 };
 
-type ReaderSource = { readerId: string; readerFor: (caseId: string) => AuthorizationReader | undefined };
+/** Manifest record of the reader; the exact file hash makes a persisted reader's identity reproducible. */
+export type AuthorizationReaderRecord = { readerId: string; readsPath?: string; readsSha256?: string };
+type ReaderSource = { record: AuthorizationReaderRecord; readerFor: (caseId: string) => AuthorizationReader | undefined };
 
 function loadReaderSource(path: string | undefined): ReaderSource {
-  if (!path) return { readerId: "baseline", readerFor: () => undefined };
-  const persisted = parsePersistedAuthorizationReads(JSON.parse(readFileSync(path, "utf8")));
-  return { readerId: persisted.readerId, readerFor: (caseId) => guardedReader(persistedReader(persisted, caseId), persisted.readerId) };
+  if (!path) return { record: { readerId: "baseline" }, readerFor: () => undefined };
+  const text = readFileSync(path, "utf8");
+  const persisted = parsePersistedAuthorizationReads(JSON.parse(text));
+  return {
+    record: { readerId: persisted.readerId, readsPath: resolve(path), readsSha256: sha256(text) },
+    readerFor: (caseId) => guardedReader(persistedReader(persisted, caseId), persisted.readerId),
+  };
 }
 
 export function runExperimentCommand(argv: string[]): void {
@@ -119,12 +125,12 @@ export function runExperimentCommand(argv: string[]): void {
   const derivedInputLimit = deriveInputLimit(estimatedInputTokens, maxAttempts, options.maxInputTokens);
   const derivedOutputLimit = options.maxOutputTokensTotal ?? logicalTrials * options.maxOutputTokens * maxAttempts;
   if (options.provider === "openai" && options.maxCalls < logicalTrials) throw new Error(`--max-calls ${options.maxCalls} is below ${logicalTrials} logical trials`);
-  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, authorizationReader: readerSource.readerId, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
+  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, authorizationReader: readerSource.record, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
   const identityCore = {
     schemaVersion: "2.0.0", experimentName: "paired-policy-preservation", dataset: { path: resolve(options.cases), hash: caseSet.datasetHash, version: caseSet.datasetVersion, split: caseSet.split },
     ...(options.runLabel ? { runLabel: options.runLabel } : {}),
     sourceControl,
-    compilerHash, authorizationReader: readerSource.readerId, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
+    compilerHash, authorizationReader: readerSource.record, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
     modelParameters: { max_output_tokens: options.maxOutputTokens, max_tool_calls: 1, store: false }, sampleCount: options.samples,
     inputTokenOverheadPerCall: INPUT_TOKEN_OVERHEAD_PER_CALL,
     maxConcurrency: options.concurrency, timeoutSeconds: 60,

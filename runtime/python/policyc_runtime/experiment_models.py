@@ -83,6 +83,18 @@ class BehavioralCase(StrictModel):
     template: bool = False
 
 
+class AuthorizationReaderRecord(StrictModel):
+    readerId: str = Field(min_length=1)
+    readsPath: str | None = None
+    readsSha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+
+    @model_validator(mode="after")
+    def persisted_readers_carry_a_hash(self) -> AuthorizationReaderRecord:
+        if self.readerId != "baseline" and self.readsSha256 is None:
+            raise ValueError("a persisted authorization reader must record readsSha256")
+        return self
+
+
 class CandidateRef(StrictModel):
     strategy: str
     candidateId: str
@@ -165,7 +177,9 @@ class PairedRunManifest(StrictModel):
     compilerHash: str
     # Identity of the authorization reader that produced this run's compiled artifacts;
     # manifests written before compiler 0.9 omit it and mean the deterministic baseline.
-    authorizationReader: str = "baseline"
+    authorizationReader: AuthorizationReaderRecord = Field(
+        default_factory=lambda: AuthorizationReaderRecord(readerId="baseline")
+    )
     casePlans: list[CasePlan] = Field(min_length=1)
     strategies: list[str] = Field(min_length=2)
     provider: Literal["fake", "openai"]
