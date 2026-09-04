@@ -23,7 +23,8 @@ export const conditionSchema = z.object({
   operationNamed: z.boolean().optional(),
   operationNegated: z.boolean().optional(),
   purpose: z.enum(["sensitive_attribute_read", "identification", "none"]).optional(),
-  deliverable: z.enum(["text", "action", "unknown"]).optional(),
+  permittedTask: z.boolean().optional(),
+  deliverable: z.enum(["text", "open", "unresolved"]).optional(),
 }).strict();
 
 export type Condition = z.infer<typeof conditionSchema>;
@@ -46,8 +47,9 @@ export function evaluateCondition(condition: Condition, state: RequestState): { 
   if (condition.operationNamed !== undefined) clause(`operation named is ${condition.operationNamed}`, state.operationNamed === condition.operationNamed ? "true" : "false");
   if (condition.operationNegated !== undefined) clause(`operation negated is ${condition.operationNegated}`, state.operationNegated === condition.operationNegated ? "true" : "false");
   if (condition.purpose !== undefined) clause(`purpose is ${condition.purpose}`, state.purpose === condition.purpose ? "true" : "false");
+  if (condition.permittedTask !== undefined) clause(`permitted task is ${condition.permittedTask}`, state.permittedTask === condition.permittedTask ? "true" : "false");
   if (condition.deliverable !== undefined) {
-    clause(`deliverable is ${condition.deliverable}`, state.deliverable === "unknown" && condition.deliverable !== "unknown" ? "unknown" : (state.deliverable === condition.deliverable ? "true" : "false"));
+    clause(`deliverable is ${condition.deliverable}`, state.deliverable === "unresolved" && condition.deliverable !== "unresolved" ? "unknown" : (state.deliverable === condition.deliverable ? "true" : "false"));
   }
   return { truth, evidence };
 }

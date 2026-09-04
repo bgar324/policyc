@@ -9,7 +9,8 @@ import { countTokens } from "../src/compiler/tokenCounter.js";
 import { emitRuntimePrompt } from "../src/compiler/emitter.js";
 import { baselineAuthorizationReader, guardedReader, type AuthorizationRead } from "../src/compiler/authorization.js";
 import { evaluateExplicitLimit } from "../src/compiler/limits.js";
-import { compileSelection, findConflicts, frontendWithReader } from "../src/compiler/evaluate.js";
+import { compileSelection, defaultFrontend, findConflicts, frontendWithReader } from "../src/compiler/evaluate.js";
+import type { Frontend } from "../src/ir/requestState.js";
 import { computeDependencyClosure } from "../src/policy/closure.js";
 import { loadPolicies } from "../src/policy/loader.js";
 import type { Policy } from "../src/policy/types.js";
@@ -408,32 +409,76 @@ test("compiler 0.9 held-back regressions meet the generic contract", () => {
   }
 });
 
-test("compiler 0.9 IR: every corpus case records state, evaluates every branch, and compiles without conflicts", () => {
+test("compiler 0.9 IR: every corpus case resolves each node to its first true branch or its authored default, and compiles without conflicts", () => {
   const policies = loadPolicies();
   const corpus = ["eval/behavioral/held-out-v4.jsonl", "eval/behavioral/compiler-v0.9-regressions.jsonl", "eval/behavioral/compiler-v0.9-regressions-heldback.jsonl"]
     .flatMap((path) => loadRegressions(path));
   assert.ok(corpus.length >= 80);
-  let unknownFallthroughs = 0;
+  let branchesTaken = 0;
+  let masked = 0;
   for (const item of corpus) {
     const { selection } = compileCase(policies, item);
     const state = selection.requestState;
     assert.ok(state && state.frontend === "deterministic", `${item.caseId}: request state recorded`);
     assert.deepEqual(state.toolsAvailable, item.tools.map((tool) => tool.name.toLowerCase()), `${item.caseId}: state carries the available tools`);
+    const records = selection.evaluations ?? [];
     for (const policy of selection.policies) {
-      for (const branch of policy.branches ?? []) {
-        const record = selection.evaluations?.find((r) => r.policyId === policy.id && r.branchId === branch.id);
+      const authored = policies.find((p) => p.id === policy.id)!;
+      const branches = authored.branches ?? [];
+      const truths = branches.map((branch) => {
+        const record = records.find((r) => r.policyId === policy.id && r.branchId === branch.id);
         assert.ok(record && record.evidence.length > 0, `${item.caseId}: ${policy.id}/${branch.id} evaluated with evidence`);
-        if (record.truth !== "true") {
-          // Unknown and false both fall through to the node's conservative default.
-          const authored = policies.find((p) => p.id === policy.id)!;
-          assert.equal(policy.runtimeInstruction, authored.runtimeInstruction, `${item.caseId}: ${policy.id} keeps its conservative text`);
-          if (record.truth === "unknown") unknownFallthroughs += 1;
-        }
-      }
+        return record.truth;
+      });
+      const taken = branches[truths.indexOf("true")];
+      const expected = taken ?? authored;
+      if (taken) branchesTaken += 1;
+      const lowered = records.find((r) => r.policyId === policy.id && r.branchId.startsWith("unavailable:"));
+      if (!lowered) assert.equal(policy.runtimeInstruction, expected.runtimeInstruction, `${item.caseId}: ${policy.id} emits ${taken ? `branch ${taken.id}` : "its authored default"}`);
+      assert.deepEqual(policy.prohibitions, expected.prohibitions, `${item.caseId}: ${policy.id} prohibitions follow the resolution`);
+      // Obligations are the resolution's, minus what a recorded mask or lowering withheld; nothing else may add or remove one.
+      const withheld = records.filter((r) => r.policyId === policy.id && (r.branchId.startsWith("mask:") || r.branchId.startsWith("unavailable:")));
+      masked += withheld.length;
+      assert.ok(policy.obligations.every((obligation) => expected.obligations.some((o) => o.type === obligation.type && o.value === obligation.value)), `${item.caseId}: ${policy.id} adds no obligation`);
+      if (withheld.length === 0) assert.deepEqual(policy.obligations, expected.obligations, `${item.caseId}: ${policy.id} keeps every obligation when nothing withheld one`);
+      else assert.ok(policy.obligations.length < expected.obligations.length, `${item.caseId}: ${policy.id} recorded a withholding that removed nothing`);
     }
     assert.deepEqual(selection.conflicts, [], `${item.caseId}: compiled program is consistent`);
   }
-  assert.ok(unknownFallthroughs >= 0);
+  assert.ok(branchesTaken > 0, "the corpus exercises at least one taken branch");
+  assert.ok(masked > 0, "the corpus exercises at least one mask or lowering");
+});
+
+test("an undecidable condition falls through to the conservative branch and is recorded as unknown", () => {
+  const policies = loadPolicies();
+  const context = { artifactType: "email" as const, operation: "send" as const, toolsAvailable: ["gmail"] };
+  // A frontend that asserts authorization but cannot decide the fields: the only
+  // honest state for an extractor that read intent without reading scope.
+  const undecided: Frontend = (input, ctx) => ({ ...defaultFrontend(input, ctx), authorization: "present", operationNamed: true, operationNegated: false, fields: {}, frontend: "undecided" });
+  const selection = compileSelection(policies, "send it to pat@example.com", context, undecided);
+  const sendNode = selection.policies.find((policy) => policy.id === "send_email_requires_explicit_request")!;
+  const authored = policies.find((policy) => policy.id === sendNode.id)!;
+  const record = selection.evaluations!.find((r) => r.policyId === sendNode.id && r.branchId === "already_authorized")!;
+  assert.equal(record.truth, "unknown");
+  assert.ok(record.evidence.includes("fields complete: unknown"));
+  assert.equal(sendNode.runtimeInstruction, authored.runtimeInstruction);
+  assert.ok(sendNode.obligations.some((obligation) => obligation.type === "ask_confirmation"), "unknown must ask, never execute");
+});
+
+test("masks are applied from the declared table: a forbidden purpose beside a permitted task keeps inspection", () => {
+  const policies = loadPolicies();
+  const context = { artifactType: "image" as const, features: ["person", "chart"], toolsAvailable: ["image_inspect"] };
+  const request = "whats this chart showing, and tell me who he is";
+  const sole: Frontend = (input, ctx) => ({ ...defaultFrontend(input, ctx), purpose: "identification", permittedTask: false, frontend: "sole" });
+  const mixed: Frontend = (input, ctx) => ({ ...defaultFrontend(input, ctx), purpose: "identification", permittedTask: true, frontend: "mixed" });
+  const withheld = compileSelection(policies, request, context, sole);
+  const kept = compileSelection(policies, request, context, mixed);
+  assert.ok(!withheld.policies.some((policy) => policy.obligations.some((o) => o.type === "inspect_artifact")), "a sole forbidden purpose withholds inspection");
+  assert.ok(withheld.evaluations!.some((r) => r.branchId === "mask:forbidden_purpose"));
+  assert.ok(kept.policies.some((policy) => policy.obligations.some((o) => o.type === "inspect_artifact")), "a permitted task beside it keeps inspection");
+  assert.ok(!kept.evaluations!.some((r) => r.branchId === "mask:forbidden_purpose"));
+  // The refusal itself is a prohibition and is never masked.
+  assert.ok(kept.policies.some((policy) => policy.prohibitions.some((p) => p.type === "identify_unknown_person")));
 });
 
 test("compile-time conflicts name both nodes", () => {
@@ -441,7 +486,7 @@ test("compile-time conflicts name both nodes", () => {
   const web = policies.find((policy) => policy.id === "current_info_requires_web")!;
   const noWeb = { ...policies.find((policy) => policy.id === "privacy_floor")!, prohibitions: [{ type: "forbidden_tool_call" as const, value: "web" }] };
   assert.deepEqual(findConflicts([web, noWeb], false), ["tool web required by current_info_requires_web and forbidden by privacy_floor"]);
-  assert.deepEqual(findConflicts([web], true), ["tool web required by current_info_requires_web while the turn is limited to text"]);
+  assert.deepEqual(findConflicts([web], true), ["tool web required by current_info_requires_web while the limit instruction withholds tools"]);
   assert.deepEqual(findConflicts([noWeb], false), []);
 });
 

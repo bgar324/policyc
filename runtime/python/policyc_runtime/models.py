@@ -44,12 +44,13 @@ class RequestState(StrictModel):
     artifactType: str | None = None
     authorization: Literal["present", "reported", "conditional", "absent"]
     limit: Literal["limited", "ambiguous", "none"]
-    deliverable: Literal["text", "action", "unknown"]
+    deliverable: Literal["text", "open", "unresolved"]
     purpose: Literal["sensitive_attribute_read", "identification", "none"]
+    permittedTask: bool
     fields: dict[str, bool]
     operationNamed: bool
     operationNegated: bool
-    toolsAvailable: list[str]
+    toolsAvailable: list[str] | None = None
     frontend: str = Field(min_length=1)
     evidence: list[str]
 

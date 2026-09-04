@@ -2,7 +2,7 @@ import type { ArtifactContext, ArtifactType, OperationTrigger } from "../policy/
 import { baselineAuthorizationReader, type AuthorizationReader } from "../compiler/authorization.js";
 import { evaluateExplicitLimit } from "../compiler/limits.js";
 import { detectIntents } from "../policy/triggers.js";
-import type { Frontend, RequestState } from "./requestState.js";
+import { provesAction, resolveDeliverable, type Frontend, type RequestState } from "./requestState.js";
 
 /**
  * The deterministic frontend. It populates request state from phrase patterns:
@@ -17,7 +17,7 @@ export function deterministicFrontend(reader: AuthorizationReader = baselineAuth
   return (input, context) => {
     const evidence: string[] = [];
     const operation = context?.operation;
-    const toolsAvailable = (context?.toolsAvailable ?? []).map((tool) => tool.toLowerCase());
+    const toolsAvailable = context?.toolsAvailable?.map((tool) => tool.toLowerCase());
 
     const authorization = reader(input);
     evidence.push(...authorization.evidence.map((line) => `authorization: ${line}`));
@@ -25,8 +25,8 @@ export function deterministicFrontend(reader: AuthorizationReader = baselineAuth
     const limit = evaluateExplicitLimit(input, context);
     evidence.push(...limit.evidence.map((line) => `limit: ${line}`));
 
-    const purpose = detectPurpose(input, context);
-    if (purpose !== "none") evidence.push(`purpose: ${purpose}`);
+    const { purpose, permittedTask } = detectPurpose(input, context);
+    if (purpose !== "none") evidence.push(`purpose: ${purpose}${permittedTask ? " beside a permitted task" : ""}`);
 
     const fields: Record<string, boolean> = {};
     const rule = context ? requiredFields(context) : undefined;
@@ -44,7 +44,9 @@ export function deterministicFrontend(reader: AuthorizationReader = baselineAuth
     if (operation && !operationNamed) evidence.push(`request does not name the ${operation} action`);
     if (operationNegated) evidence.push(`the ${operation} action is negated in the request`);
 
-    const deliverable = limit.verdict === "limited" ? "text" : limit.verdict === "none" && operation ? "action" : "unknown";
+    const proved = provesAction({ authorization: authorization.state, operationNamed, operationNegated, fields });
+    const deliverable = resolveDeliverable(limit.verdict, proved);
+    if (limit.verdict === "ambiguous") evidence.push(proved ? "ambiguous limit resolved by the proved action" : "ambiguous limit unresolved");
 
     return {
       operation,
@@ -53,6 +55,7 @@ export function deterministicFrontend(reader: AuthorizationReader = baselineAuth
       limit: limit.verdict,
       deliverable,
       purpose,
+      permittedTask,
       fields,
       operationNamed,
       operationNegated,
@@ -63,13 +66,16 @@ export function deterministicFrontend(reader: AuthorizationReader = baselineAuth
   };
 }
 
-function detectPurpose(input: string, context: ArtifactContext | null | undefined): RequestState["purpose"] {
+function detectPurpose(input: string, context: ArtifactContext | null | undefined): Pick<RequestState, "purpose" | "permittedTask"> {
   // Purpose is read from the same intent triggers the selector uses, so the
-  // frontend and selection never disagree about what the request is for.
+  // frontend and selection never disagree about what the request is for. This
+  // frontend cannot tell a forbidden purpose stated beside a permitted task
+  // from one stated alone, so it reports no permitted task; a frontend that
+  // reads the request as a whole may.
   const intents = detectIntents(input, context);
-  if (intents.includes("sensitive_attribute")) return "sensitive_attribute_read";
-  if (intents.includes("identification")) return "identification";
-  return "none";
+  if (intents.includes("sensitive_attribute")) return { purpose: "sensitive_attribute_read", permittedTask: false };
+  if (intents.includes("identification")) return { purpose: "identification", permittedTask: false };
+  return { purpose: "none", permittedTask: false };
 }
 
 // Action words that name each operation.

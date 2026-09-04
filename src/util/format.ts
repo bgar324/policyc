@@ -36,14 +36,14 @@ export function formatSelection(selection: PolicySelection): string {
   if (selection.requestState) {
     const state = selection.requestState;
     lines.push("");
-    lines.push(`Request state (${state.frontend}): operation=${state.operation ?? "-"} authorization=${state.authorization} limit=${state.limit} deliverable=${state.deliverable} purpose=${state.purpose} named=${state.operationNamed} negated=${state.operationNegated}`);
+    lines.push(`Request state (${state.frontend}): operation=${state.operation ?? "-"} authorization=${state.authorization} limit=${state.limit} deliverable=${state.deliverable} purpose=${state.purpose}${state.permittedTask ? "+task" : ""} named=${state.operationNamed} negated=${state.operationNegated} tools=${state.toolsAvailable ? state.toolsAvailable.join(",") || "none" : "undeclared"}`);
     const fields = Object.entries(state.fields);
     if (fields.length) lines.push(`  fields: ${fields.map(([name, present]) => `${name}=${present ? "stated" : "missing"}`).join(", ")}`);
     for (const item of state.evidence) lines.push(`  ${item}`);
   }
   if (selection.evaluations?.length) {
     lines.push("");
-    lines.push("Branch evaluations:");
+    lines.push("Evaluations:");
     for (const record of selection.evaluations) {
       lines.push(`- ${record.policyId} / ${record.branchId}: ${record.truth}`);
       for (const item of record.evidence) lines.push(`  ${item}`);

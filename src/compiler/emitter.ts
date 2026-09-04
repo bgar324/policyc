@@ -2,43 +2,18 @@ import type { ArtifactContext, PolicySelection } from "../policy/types.js";
 import { obligationToString, prohibitionToString } from "../policy/triggers.js";
 
 export function emitRuntimePrompt(selection: PolicySelection, input: string, context?: ArtifactContext | null): string {
+  // The emitter prints the resolved program. Every decision about which text
+  // and which obligations a node contributes was made in `evaluate.ts` and is
+  // recorded in the selection; nothing here re-reads the request or the state.
   const taskType = inferTaskType(selection, context);
   const availableTools = context && Object.prototype.hasOwnProperty.call(context, "toolsAvailable")
     ? new Set((context.toolsAvailable ?? []).map((tool) => tool.toLowerCase()))
     : undefined;
-  const unavailableRequiredTools = new Set(
-    selection.policies
-      .flatMap((policy) => policy.obligations)
-      .filter((obligation) => obligation.type === "call_tool" && obligation.value)
-      .map((obligation) => obligation.value!.toLowerCase())
-      .filter((tool) => availableTools !== undefined && !availableTools.has(tool)),
-  );
   const activeRules = selection.policies
     .filter((policy) => policy.kind !== "universal" && policy.runtimeInstruction)
-    .map((policy) => {
-      const unavailable = policy.obligations
-        .find((obligation) => obligation.type === "call_tool" && obligation.value && unavailableRequiredTools.has(obligation.value.toLowerCase()));
-      return unavailable
-        ? `- The required ${unavailable.value} tool is unavailable. Do not answer as though it was used; state the limitation briefly.`
-        : `- ${policy.runtimeInstruction}`;
-    });
-
-  // Emission precedence. Inspection is a tool call on synthetic connectors, so it
-  // must not be listed as required when the same selection asks for confirmation
-  // first (ask outranks act) or when a privacy prohibition covers the request's
-  // stated purpose (declining outranks inspecting for that purpose).
-  const asksFirst = selection.policies.some((policy) => policy.obligations.some((obligation) => obligation.type === "ask_confirmation"));
-  const purposeForbidden = selection.detectedIntents.includes("sensitive_attribute") || selection.detectedIntents.includes("identification");
+    .map((policy) => `- ${policy.runtimeInstruction}`);
   const obligations = unique(
-    selection.policies.flatMap((policy) => (policy.kind === "universal" ? [] : policy.obligations.flatMap((obligation) => {
-      if (obligation.type === "call_tool" && obligation.value && unavailableRequiredTools.has(obligation.value.toLowerCase())) {
-        return [];
-      }
-      if (obligation.type === "inspect_artifact" && (asksFirst || purposeForbidden)) {
-        return [];
-      }
-      return [`- ${obligationToString(obligation)}`];
-    })))
+    selection.policies.flatMap((policy) => (policy.kind === "universal" ? [] : policy.obligations.map((obligation) => `- ${obligationToString(obligation)}`)))
   );
   const prohibitions = unique(
     selection.policies.flatMap((policy) => (policy.kind === "universal"

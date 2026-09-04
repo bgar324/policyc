@@ -3,13 +3,13 @@ import { computeDependencyClosure } from "../policy/closure.js";
 import { selectPolicies } from "../policy/selector.js";
 import type { CompilationStrategy } from "./artifact.js";
 import type { Frontend } from "../ir/requestState.js";
-import { evaluateSelection } from "./evaluate.js";
+import { evaluateSelection, readRequestState } from "./evaluate.js";
 
 /**
  * Builds every candidate strategy for one request. `frontend` produces the
- * request state every candidate is evaluated against; the planner passes the
- * same frontend for every candidate so a run's artifacts share one read, and
- * each artifact records the state and every branch evaluation.
+ * request state; the planner passes the same frontend for every candidate so
+ * a run's artifacts share one read. Every compiled candidate records the state
+ * and every evaluation; the full-policy baseline records the state only.
  */
 export function generateCandidateSelections(policies: Policy[], input: string, context?: ArtifactContext | null, frontend?: Frontend): Array<{ strategy: CompilationStrategy; selection: PolicySelection }> {
   const compiled = selectPolicies(policies, { input, context });
@@ -22,7 +22,9 @@ export function generateCandidateSelections(policies: Policy[], input: string, c
   const specialize = (selection: PolicySelection) => evaluateSelection(selection, input, context, frontend);
 
   return [
-    { strategy: "full_policy", selection: selectionFrom(policies, policies, policies.map((policy) => ({ policyId: policy.id, reasons: ["full policy baseline"] })), compiled.detectedIntents, []) },
+    // The full-policy baseline is not compiled: its prompt is the source text.
+    // It records the same request state so the paired artifacts share one read.
+    { strategy: "full_policy", selection: { ...selectionFrom(policies, policies, policies.map((policy) => ({ policyId: policy.id, reasons: ["full policy baseline"] })), compiled.detectedIntents, []), requestState: readRequestState(input, context, frontend), evaluations: [], conflicts: [] } },
     { strategy: "compiler_slice", selection: specialize(compiled) },
     { strategy: "kernel_only", selection: specialize(selectionFrom(policies, kernel, kernel.map((policy) => ({ policyId: policy.id, reasons: ["always-active kernel"] })), compiled.detectedIntents, [])) },
     { strategy: "direct_matches", selection: specialize(selectionFrom(policies, directPolicies, directReasons, compiled.detectedIntents, [])) },

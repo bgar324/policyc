@@ -15,7 +15,7 @@ import type { ArtifactContext } from "../policy/types.js";
 
 export const authorizationStateSchema = z.enum(["present", "reported", "conditional", "absent"]);
 export const limitStateSchema = z.enum(["limited", "ambiguous", "none"]);
-export const deliverableSchema = z.enum(["text", "action", "unknown"]);
+export const deliverableSchema = z.enum(["text", "open", "unresolved"]);
 export const purposeSchema = z.enum(["sensitive_attribute_read", "identification", "none"]);
 
 export const requestStateSchema = z.object({
@@ -26,18 +26,30 @@ export const requestStateSchema = z.object({
   authorization: authorizationStateSchema,
   /** Whether the user has bounded this turn to a text answer. */
   limit: limitStateSchema,
-  /** What the user asked for: prose, an action on a tool, or undecidable. */
+  /**
+   * What the user allows this turn: `text` when they bounded it to a text
+   * answer; `open` when nothing bounds it, or an ambiguous bound is resolved by
+   * the request proving the declared action (see `resolveDeliverable`);
+   * `unresolved` when the bound is ambiguous and nothing resolves it.
+   */
   deliverable: deliverableSchema,
   /** A purpose the source policy forbids serving regardless of tool. */
   purpose: purposeSchema,
+  /**
+   * Whether the request also asks for a task the policy permits. A forbidden
+   * purpose alone withholds inspection; a forbidden purpose beside a permitted
+   * task does not, because the permitted task still needs the artifact read.
+   * False when `purpose` is none, or when the frontend cannot tell.
+   */
+  permittedTask: z.boolean(),
   /** Fields the source policy requires for the operation, and whether each is stated. */
   fields: z.record(z.string(), z.boolean()),
   /** Whether the request names the declared operation at all ("move", "send it"). */
   operationNamed: z.boolean(),
   /** Whether the request negates the declared operation itself ("archive them, not delete"). */
   operationNegated: z.boolean(),
-  /** Tools listed as available to the model on this turn. */
-  toolsAvailable: z.array(z.string()),
+  /** Tools listed as available to the model on this turn; absent when the context declares none. */
+  toolsAvailable: z.array(z.string()).optional(),
   /** Which frontend produced this state, so an artifact trace names its source. */
   frontend: z.string().min(1),
   /** Human-readable justification for every non-default reading. */
@@ -52,10 +64,27 @@ export type LimitState = z.infer<typeof limitStateSchema>;
 export type Frontend = (input: string, context: ArtifactContext | null | undefined) => RequestState;
 
 /** True when every field the policy requires is stated. Undefined when no rule exists for the operation. */
-export function fieldsComplete(state: RequestState): boolean | undefined {
+export function fieldsComplete(state: Pick<RequestState, "fields">): boolean | undefined {
   const names = Object.keys(state.fields);
   if (names.length === 0) return undefined;
   return names.every((name) => state.fields[name]);
+}
+
+/**
+ * The request proves the declared action when the user authorized it in their
+ * own voice, named it without negating it, and stated every field the policy
+ * requires. This is the same fact a confirmation node's `already_authorized`
+ * branch tests; it is defined once here so the deliverable and the branches
+ * cannot disagree.
+ */
+export function provesAction(state: Pick<RequestState, "authorization" | "operationNamed" | "operationNegated" | "fields">): boolean {
+  return state.authorization === "present" && state.operationNamed && !state.operationNegated && fieldsComplete(state) === true;
+}
+
+export function resolveDeliverable(limit: LimitState, proved: boolean): RequestState["deliverable"] {
+  if (limit === "limited") return "text";
+  if (limit === "none" || proved) return "open";
+  return "unresolved";
 }
 
 /**
@@ -76,7 +105,7 @@ export function guardedFrontend(frontend: Frontend, name: string): Frontend {
     if (!parsed.success) {
       return conservativeState(context, name, `${name} frontend returned an invalid state: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`);
     }
-    return parsed.data;
+    return { ...parsed.data, toolsAvailable: parsed.data.toolsAvailable?.map((tool) => tool.toLowerCase()) };
   };
 }
 
@@ -86,12 +115,13 @@ export function conservativeState(context: ArtifactContext | null | undefined, f
     artifactType: context?.artifactType,
     authorization: "absent",
     limit: "ambiguous",
-    deliverable: "unknown",
+    deliverable: "unresolved",
     purpose: "none",
+    permittedTask: false,
     fields: {},
     operationNamed: false,
     operationNegated: false,
-    toolsAvailable: (context?.toolsAvailable ?? []).map((tool) => tool.toLowerCase()),
+    toolsAvailable: context?.toolsAvailable?.map((tool) => tool.toLowerCase()),
     frontend,
     evidence: [reason],
   };
