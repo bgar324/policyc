@@ -80,7 +80,9 @@ The built-in evaluator is intentionally small and deterministic. Model graders c
 
 ### Latest frozen result
 
-Compiler 0.7 did not pass its preregistered held-out-v3 test. In 360 GPT-5 mini executions over 60 independently authored cases, exhaustive strategy-blind semantic review measured 130 both-pass, 33 full-only, 11 compiler-only, and six both-fail pairs. Conditional critical-obligation preservation was 130/163 = **79.75%** (Wilson 95%: 72.93%--85.21%), versus the 95% target. The compiler reduced mean actual input tokens by **93.75%** and uncached-equivalent cost by **59.46%**, but total billed cost fell only **12.14%** because the compiled condition made more paid searches. The run cost **$0.9333**. See [`eval/audits/held-out-v3-execution.md`](eval/audits/held-out-v3-execution.md) for the immutable hashes, incident accounting, blind-review provenance, gate decisions, and regression breakdown.
+Compiler 0.8 did not pass its preregistered held-out-v4 test. In 360 GPT-5 mini executions over 60 independently authored cases (339 completed, 163 complete pairs), exhaustive strategy-blind semantic review measured 100 both-pass, 32 full-only, 11 compiler-only, and 20 both-fail pairs. Conditional critical-obligation preservation was 100/132 = **75.76%** (Wilson 95%: 67.79%--82.27%), versus the 95% target, across 17 regressed cases. The compiler reduced mean actual input tokens by **94.76%**, uncached-equivalent cost by **66.00%**, and billed cost by **18.03%**. The run cost **$1.0653**. Compiler 0.8's confirmation specialization matched none of the four act-side confirmation cases the authors wrote, so on fresh data its behavior was identical to compiler 0.7; the largest failure class was calling a tool the user had asked not to use (14 of 32 regressions). See [`eval/audits/held-out-v4-execution.md`](eval/audits/held-out-v4-execution.md).
+
+The prior result, compiler 0.7 on held-out-v3, was 130/163 = 79.75% preservation with 93.75% input reduction (`eval/audits/held-out-v3-execution.md`). The two sets differ, so the versions are not a controlled comparison.
 
 ## Setup
 
