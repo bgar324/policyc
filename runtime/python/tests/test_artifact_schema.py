@@ -77,6 +77,7 @@ STATE = {
     "deliverable": "open",
     "purpose": "none",
     "permittedTask": False,
+    "format": "none",
     "fields": {"recipient": True, "body": True, "attachment scope": True},
     "operationNamed": True,
     "operationNegated": False,

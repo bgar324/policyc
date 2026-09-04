@@ -17,6 +17,7 @@ export const authorizationStateSchema = z.enum(["present", "reported", "conditio
 export const limitStateSchema = z.enum(["limited", "ambiguous", "none"]);
 export const deliverableSchema = z.enum(["text", "open", "unresolved"]);
 export const purposeSchema = z.enum(["sensitive_attribute_read", "identification", "none"]);
+export const formatSchema = z.enum(["requested", "none"]);
 
 export const requestStateSchema = z.object({
   /** The operation the artifact context declares, when it declares one. */
@@ -42,6 +43,12 @@ export const requestStateSchema = z.object({
    * False when `purpose` is none, or when the frontend cannot tell.
    */
   permittedTask: z.boolean(),
+  /**
+   * Whether the user stated the shape of the answer themselves ("return only
+   * the rewrite", "just the list, no notes"). A stated format outranks a
+   * policy's generic output template; `none` leaves the template in force.
+   */
+  format: formatSchema,
   /** Fields the source policy requires for the operation, and whether each is stated. */
   fields: z.record(z.string(), z.boolean()),
   /** Whether the request names the declared operation at all ("move", "send it"). */
@@ -118,6 +125,7 @@ export function conservativeState(context: ArtifactContext | null | undefined, f
     deliverable: "unresolved",
     purpose: "none",
     permittedTask: false,
+    format: "none",
     fields: {},
     operationNamed: false,
     operationNegated: false,

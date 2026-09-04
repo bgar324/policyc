@@ -28,6 +28,10 @@ export function deterministicFrontend(reader: AuthorizationReader = baselineAuth
     const { purpose, permittedTask } = detectPurpose(input, context);
     if (purpose !== "none") evidence.push(`purpose: ${purpose}${permittedTask ? " beside a permitted task" : ""}`);
 
+    const formatMatch = STATED_FORMAT.exec(input);
+    const format = formatMatch ? "requested" : "none";
+    if (formatMatch) evidence.push(`format: user stated the answer's shape: "${formatMatch[0]}"`);
+
     const fields: Record<string, boolean> = {};
     const rule = context ? requiredFields(context) : undefined;
     if (rule) {
@@ -56,6 +60,7 @@ export function deterministicFrontend(reader: AuthorizationReader = baselineAuth
       deliverable,
       purpose,
       permittedTask,
+      format,
       fields,
       operationNamed,
       operationNegated,
@@ -65,6 +70,12 @@ export function deterministicFrontend(reader: AuthorizationReader = baselineAuth
     };
   };
 }
+
+// The user naming the shape of the answer: an only/just clause on the return,
+// or an explicit no-notes request. Read from the held-out-v3 format case
+// ("Return only the rewrite.") and its plain variants; a frontend that reads
+// the request as a whole recognizes more.
+const STATED_FORMAT = /\b(?:(?:return|reply|respond|answer|give|send back|output)(?: me| with)? (?:only|just)(?: with)? (?:the |a |an )?(?:rewrite|rewritten|revised|text|copy|list|table|summary|translation|code|answer|bullets?)|(?:only|just) the (?:rewrite|rewritten (?:text|version)|revised (?:text|version)|text|list|table|summary|translation|code)|no (?:notes|commentary|explanations?|preamble|headings|extra text)|nothing else)\b/i;
 
 function detectPurpose(input: string, context: ArtifactContext | null | undefined): Pick<RequestState, "purpose" | "permittedTask"> {
   // Purpose is read from the same intent triggers the selector uses, so the

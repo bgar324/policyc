@@ -481,6 +481,22 @@ test("masks are applied from the declared table: a forbidden purpose beside a pe
   assert.ok(kept.policies.some((policy) => policy.prohibitions.some((p) => p.type === "identify_unknown_person")));
 });
 
+test("a user-stated output format replaces the writing template; a plain rewrite keeps it", () => {
+  const policies = loadPolicies();
+  const stated = compileCase(policies, loadRegressions("eval/behavioral/compiler-v0.9-regressions.jsonl").find((c) => c.caseId === "cv09-018v3")!);
+  assert.equal(stated.selection.requestState?.format, "requested");
+  assert.ok(stated.selection.evaluations!.some((r) => r.branchId === "user_stated_format" && r.truth === "true"));
+  assert.doesNotMatch(stated.prompt, /Draft\/Notes/, "the template must not be emitted beside a stated format");
+  assert.match(stated.prompt, /return exactly that and nothing else/);
+  assert.doesNotMatch(stated.prompt, /use_output_format/);
+
+  const context = { artifactType: "document" as const, operation: "rewrite" as const, toolsAvailable: [] };
+  const plain = compileSelection(policies, "Make this customer note sound more confident, but do not add any promise or warranty: 'We are investigating.'", context);
+  assert.equal(plain.requestState?.format, "none");
+  assert.match(emitRuntimePrompt(plain, "x", context), /Draft\/Notes/);
+  assert.ok(plain.policies.some((policy) => policy.obligations.some((o) => o.type === "use_output_format")));
+});
+
 test("compile-time conflicts name both nodes", () => {
   const policies = loadPolicies();
   const web = policies.find((policy) => policy.id === "current_info_requires_web")!;

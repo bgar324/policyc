@@ -47,6 +47,7 @@ class RequestState(StrictModel):
     deliverable: Literal["text", "open", "unresolved"]
     purpose: Literal["sensitive_attribute_read", "identification", "none"]
     permittedTask: bool
+    format: Literal["requested", "none"]
     fields: dict[str, bool]
     operationNamed: bool
     operationNegated: bool

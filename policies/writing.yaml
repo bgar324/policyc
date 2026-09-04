@@ -18,6 +18,12 @@ policies:
     runtimeInstruction: Return the revised text first using a compact Draft/Notes writing format.
     validators:
       - uses_writing_format
+    branches:
+      - id: user_stated_format
+        when: { format: requested }
+        runtimeInstruction: The user has stated the shape of the answer; return exactly that and nothing else. Add no wrapper, headings, notes, or commentary the user did not ask for.
+        obligations: []
+        prohibitions: []
 
   - id: do_not_browse_for_simple_rewrites
     title: Do not browse for simple rewrites

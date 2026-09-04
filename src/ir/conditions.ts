@@ -24,6 +24,7 @@ export const conditionSchema = z.object({
   operationNegated: z.boolean().optional(),
   purpose: z.enum(["sensitive_attribute_read", "identification", "none"]).optional(),
   permittedTask: z.boolean().optional(),
+  format: z.enum(["requested", "none"]).optional(),
   deliverable: z.enum(["text", "open", "unresolved"]).optional(),
 }).strict();
 
@@ -48,6 +49,7 @@ export function evaluateCondition(condition: Condition, state: RequestState): { 
   if (condition.operationNegated !== undefined) clause(`operation negated is ${condition.operationNegated}`, state.operationNegated === condition.operationNegated ? "true" : "false");
   if (condition.purpose !== undefined) clause(`purpose is ${condition.purpose}`, state.purpose === condition.purpose ? "true" : "false");
   if (condition.permittedTask !== undefined) clause(`permitted task is ${condition.permittedTask}`, state.permittedTask === condition.permittedTask ? "true" : "false");
+  if (condition.format !== undefined) clause(`format is ${condition.format}`, state.format === condition.format ? "true" : "false");
   if (condition.deliverable !== undefined) {
     clause(`deliverable is ${condition.deliverable}`, state.deliverable === "unresolved" && condition.deliverable !== "unresolved" ? "unknown" : (state.deliverable === condition.deliverable ? "true" : "false"));
   }
