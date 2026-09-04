@@ -7,9 +7,9 @@ import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
 import { generateCandidateSelections } from "../src/compiler/candidates.js";
 import { countTokens } from "../src/compiler/tokenCounter.js";
 import { emitRuntimePrompt } from "../src/compiler/emitter.js";
-import { guardedReader } from "../src/compiler/authorization.js";
+import { baselineAuthorizationReader, guardedReader, type AuthorizationRead } from "../src/compiler/authorization.js";
 import { evaluateExplicitLimit } from "../src/compiler/limits.js";
-import { compileSelection, defaultAuthorizationReader } from "../src/compiler/specialize.js";
+import { compileSelection, findConflicts, frontendWithReader } from "../src/compiler/evaluate.js";
 import { computeDependencyClosure } from "../src/policy/closure.js";
 import { loadPolicies } from "../src/policy/loader.js";
 import type { Policy } from "../src/policy/types.js";
@@ -230,7 +230,7 @@ test("compiler 0.8 executes already-confirmed exact actions instead of re-asking
   for (const item of cases) {
     const context = { ...item.artifactContext, toolsAvailable: item.tools.map((tool) => tool.name) } as NonNullable<Parameters<typeof generateCandidateSelections>[2]>;
     const { selection, prompt } = compile(item.request, context);
-    const confirmationNodes = selection.policies.filter((policy) => policy.specialization?.predicate === "explicit_confirmation");
+    const confirmationNodes = selection.policies.filter((policy) => policy.branches?.some((branch) => branch.id === "already_authorized"));
     assert.ok(confirmationNodes.length > 0, `${item.caseId}: confirmation policy must stay selected`);
     assert.doesNotMatch(prompt, /ask_confirmation/, `${item.caseId}: must not re-ask`);
     assert.doesNotMatch(prompt, /destructive_action_without_confirmation/, item.caseId);
@@ -238,16 +238,17 @@ test("compiler 0.8 executes already-confirmed exact actions instead of re-asking
     assert.match(prompt, /already (present|confirmed)/i, item.caseId);
     assert.match(prompt, /do not ask (for confirmation )?again/i, item.caseId);
     assert.match(prompt, /confirmed (target|scope|action|change|message|recipient)/i, `${item.caseId}: scope stays bounded`);
-    const records = (selection.specializations ?? []).filter((record) => record.predicate === "explicit_confirmation");
-    assert.equal(records.length, confirmationNodes.length, `${item.caseId}: one trace record per specialized node`);
-    assert.ok(records.every((record) => record.satisfied && record.evidence.length > 0), `${item.caseId}: trace must carry evidence`);
+    const records = (selection.evaluations ?? []).filter((record) => record.branchId === "already_authorized");
+    assert.equal(records.length, confirmationNodes.length, `${item.caseId}: one evaluation per branch-bearing node`);
+    assert.ok(records.every((record) => record.truth === "true" && record.evidence.length > 0), `${item.caseId}: evaluation must be true with evidence`);
+    assert.equal(selection.requestState?.authorization, "present", `${item.caseId}: request state must read authorization present`);
   }
 
   const stillAsks = (input: string, context: Parameters<typeof generateCandidateSelections>[2], label: string) => {
     const { selection, prompt } = compile(input, context);
     assert.match(prompt, /ask_confirmation/, label);
     assert.doesNotMatch(prompt, /do not ask (for confirmation )?again/i, label);
-    assert.ok((selection.specializations ?? []).every((record) => !record.satisfied), `${label}: no satisfied trace record`);
+    assert.ok((selection.evaluations ?? []).every((record) => record.branchId !== "already_authorized" || record.truth !== "true"), `${label}: no authorized branch may evaluate true`);
   };
   stillAsks(
     "I confirm deleting the one thread titled 'Travel receipts — June'.",
@@ -353,7 +354,7 @@ function assertRegressionContract(policies: Policy[], item: RegressionCase) {
   if (asks) {
     assert.match(prompt, /ask_confirmation/, `${item.caseId}: ask-side case must ask`);
     assert.match(prompt, /exact (target|action|event|thread|recipient)/i, `${item.caseId}: ask must name what to pin down`);
-    assert.ok((selection.specializations ?? []).every((record) => record.predicate !== "explicit_confirmation" || !record.satisfied), `${item.caseId}: ask-side case must not be specialized to execute`);
+    assert.ok((selection.evaluations ?? []).every((record) => record.branchId !== "already_authorized" || record.truth !== "true"), `${item.caseId}: ask-side case must not resolve to execute`);
   }
 }
 
@@ -363,8 +364,7 @@ test("compiler 0.9 visible regressions: explicit limits suppress tool obligation
   for (const item of cases.filter((c) => c.tags.includes("class-limit") && c.toolExpectation.forbidden.length)) {
     const { selection, prompt } = compileCase(policies, item);
     assertRegressionContract(policies, item);
-    const limit = (selection.specializations ?? []).find((record) => record.predicate === "explicit_limit");
-    assert.ok(limit?.satisfied, `${item.caseId}: explicit_limit must be recorded as satisfied`);
+    assert.notEqual(selection.requestState?.limit, "none", `${item.caseId}: request state must carry a limit`);
     assert.match(prompt, /do not call|without calling|no tool call/i, `${item.caseId}: prompt must state the limit in prose`);
   }
 });
@@ -388,8 +388,8 @@ test("compiler 0.9 visible regressions: open-phrasing authorization executes wit
   for (const item of cases.filter((c) => c.tags.includes("class-authorization"))) {
     const { selection, prompt } = compileCase(policies, item);
     assertRegressionContract(policies, item);
-    const records = (selection.specializations ?? []).filter((record) => record.predicate === "explicit_confirmation");
-    assert.ok(records.length > 0 && records.every((record) => record.satisfied), `${item.caseId}: authorization must be read as satisfied: ${JSON.stringify(records.map((r) => r.evidence))}`);
+    const records = (selection.evaluations ?? []).filter((record) => record.branchId === "already_authorized");
+    assert.ok(records.length > 0 && records.every((record) => record.truth === "true"), `${item.caseId}: authorized branch must evaluate true: ${JSON.stringify(selection.requestState?.evidence)}`);
     assert.match(prompt, /do not ask (for confirmation )?again/i, item.caseId);
   }
   // Authorization asserted but fields unresolved must still ask (the fail-safe direction).
@@ -398,14 +398,51 @@ test("compiler 0.9 visible regressions: open-phrasing authorization executes wit
 });
 
 test("compiler 0.9 held-back regressions meet the generic contract", () => {
-  // This file is never read while writing predicates; only its per-case tool
+  // This file is never read while writing frontends or conditions; only its per-case tool
   // expectations and ask-side labels are checked, through the same contract
-  // as the visible slice. A predicate that passes the visible slice and fails
+  // as the visible slice. A change that passes the visible slice and fails
   // here does not ship.
   const policies = loadPolicies();
   for (const item of loadRegressions("eval/behavioral/compiler-v0.9-regressions-heldback.jsonl")) {
     assertRegressionContract(policies, item);
   }
+});
+
+test("compiler 0.9 IR: every corpus case records state, evaluates every branch, and compiles without conflicts", () => {
+  const policies = loadPolicies();
+  const corpus = ["eval/behavioral/held-out-v4.jsonl", "eval/behavioral/compiler-v0.9-regressions.jsonl", "eval/behavioral/compiler-v0.9-regressions-heldback.jsonl"]
+    .flatMap((path) => loadRegressions(path));
+  assert.ok(corpus.length >= 80);
+  let unknownFallthroughs = 0;
+  for (const item of corpus) {
+    const { selection } = compileCase(policies, item);
+    const state = selection.requestState;
+    assert.ok(state && state.frontend === "deterministic", `${item.caseId}: request state recorded`);
+    assert.deepEqual(state.toolsAvailable, item.tools.map((tool) => tool.name.toLowerCase()), `${item.caseId}: state carries the available tools`);
+    for (const policy of selection.policies) {
+      for (const branch of policy.branches ?? []) {
+        const record = selection.evaluations?.find((r) => r.policyId === policy.id && r.branchId === branch.id);
+        assert.ok(record && record.evidence.length > 0, `${item.caseId}: ${policy.id}/${branch.id} evaluated with evidence`);
+        if (record.truth !== "true") {
+          // Unknown and false both fall through to the node's conservative default.
+          const authored = policies.find((p) => p.id === policy.id)!;
+          assert.equal(policy.runtimeInstruction, authored.runtimeInstruction, `${item.caseId}: ${policy.id} keeps its conservative text`);
+          if (record.truth === "unknown") unknownFallthroughs += 1;
+        }
+      }
+    }
+    assert.deepEqual(selection.conflicts, [], `${item.caseId}: compiled program is consistent`);
+  }
+  assert.ok(unknownFallthroughs >= 0);
+});
+
+test("compile-time conflicts name both nodes", () => {
+  const policies = loadPolicies();
+  const web = policies.find((policy) => policy.id === "current_info_requires_web")!;
+  const noWeb = { ...policies.find((policy) => policy.id === "privacy_floor")!, prohibitions: [{ type: "forbidden_tool_call" as const, value: "web" }] };
+  assert.deepEqual(findConflicts([web, noWeb], false), ["tool web required by current_info_requires_web and forbidden by privacy_floor"]);
+  assert.deepEqual(findConflicts([web], true), ["tool web required by current_info_requires_web while the turn is limited to text"]);
+  assert.deepEqual(findConflicts([noWeb], false), []);
 });
 
 type Paraphrase = { id: string; kind: "authorization" | "limit"; expect: string; text: string; tools?: string[] };
@@ -418,7 +455,7 @@ test("compiler 0.9 paraphrase fixtures: authorization and limit reads on phrasin
   const unsafe: string[] = [];
   for (const item of fixtures) {
     if (item.kind === "authorization") {
-      const read = defaultAuthorizationReader(item.text);
+      const read = guardedReader(baselineAuthorizationReader, "baseline")(item.text);
       if (read.state !== item.expect) misses.push(`${item.id}: expected ${item.expect}, read ${read.state}`);
       if (read.state === "present" && item.expect !== "present") unsafe.push(`${item.id}: read present on a ${item.expect} case`);
     } else {
@@ -433,7 +470,7 @@ test("compiler 0.9 paraphrase fixtures: authorization and limit reads on phrasin
 });
 
 test("authorization reader boundary validates output and fails closed", () => {
-  const broken = guardedReader(() => ({ state: "present", evidence: [] }) as unknown as ReturnType<typeof defaultAuthorizationReader>, "broken");
+  const broken = guardedReader(() => ({ state: "present", evidence: [] }) as unknown as AuthorizationRead, "broken");
   assert.equal(broken("I confirm sending it").state, "absent");
   const throwing = guardedReader(() => { throw new Error("provider unavailable"); }, "throwing");
   const read = throwing("I confirm sending it");
@@ -442,10 +479,11 @@ test("authorization reader boundary validates output and fails closed", () => {
   // An injected reader that asserts authorization still cannot execute without the fields.
   const policies = loadPolicies();
   const always = guardedReader(() => ({ state: "present", evidence: ["injected"] }), "always");
-  const selection = compileSelection(policies, "send the note to pat@example.com", { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] }, always);
-  const records = (selection.specializations ?? []).filter((record) => record.predicate === "explicit_confirmation");
-  assert.ok(records.length > 0 && records.every((record) => !record.satisfied), "missing fields must block execution even when the reader says present");
-  assert.ok(records.some((record) => record.evidence.some((line) => /missing send fields/.test(line))));
+  const selection = compileSelection(policies, "send the note to pat@example.com", { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] }, frontendWithReader(always));
+  assert.equal(selection.requestState?.authorization, "present");
+  const records = (selection.evaluations ?? []).filter((record) => record.branchId === "already_authorized");
+  assert.ok(records.length > 0 && records.every((record) => record.truth !== "true"), "missing fields must block execution even when the reader says present");
+  assert.ok(records.some((record) => record.evidence.some((line) => /fields complete: false/.test(line))));
 });
 
 test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {

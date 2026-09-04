@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { emitRuntimePrompt } from "../compiler/emitter.js";
-import { compileSelection } from "../compiler/specialize.js";
+import { compileSelection } from "../compiler/evaluate.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { severityWeight, type EvalCase, type FailureType } from "../eval/types.js";
 import { loadEvalCases } from "../eval/runner.js";

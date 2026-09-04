@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { emitRuntimePrompt } from "../compiler/emitter.js";
-import { specializeSelection } from "../compiler/specialize.js";
+import { evaluateSelection } from "../compiler/evaluate.js";
 import { loadPolicies } from "../policy/loader.js";
 import type { Policy } from "../policy/types.js";
 import { obligationToString } from "../policy/triggers.js";
@@ -37,7 +37,7 @@ function runEvalCase(testCase: EvalCase, policies: Policy[], fullPrompt: string)
   // Selector metrics score the raw selection; the emitted prompt, mock trace, and
   // validators see the specialized policies the model would actually receive.
   const selection = selectPolicies(policies, { input: testCase.input, context: testCase.context });
-  const specialized = specializeSelection(selection, testCase.input, testCase.context);
+  const specialized = evaluateSelection(selection, testCase.input, testCase.context);
   const compiledPrompt = emitRuntimePrompt(specialized, testCase.input, testCase.context);
   const tokenCounts = countBaselineTokens(fullPrompt, compiledPrompt);
   const selectedPolicyIds = selection.policies.map((policy) => policy.id);

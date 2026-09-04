@@ -18,9 +18,9 @@ policies:
     runtimeInstruction: Before any destructive email or calendar action, state the exact action you would take, the exact target (which messages, thread, label, or event, and how many), the scope (one occurrence or the series; which date range), and whether it is reversible, then ask for explicit confirmation. Do not perform, and do not give step-by-step execution instructions for, the action before that confirmation.
     validators:
       - asks_confirmation_before_destructive_action
-    specialization:
-      predicate: explicit_confirmation
-      satisfied:
+    branches:
+      - id: already_authorized
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: The user has already confirmed this exact email or calendar action, so perform only the confirmed action with the available tool now and do not ask for confirmation again. Do not perform any additional or broader mailbox or calendar change.
         obligations: []
         prohibitions: []
@@ -45,9 +45,9 @@ policies:
     runtimeInstruction: Treat sending email as externally visible and require explicit send intent plus confirmation.
     validators:
       - asks_confirmation_before_destructive_action
-    specialization:
-      predicate: explicit_confirmation
-      satisfied:
+    branches:
+      - id: already_authorized
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: Explicit send intent and confirmation are already present in the request, so send exactly the confirmed message to the confirmed recipient with the available gmail tool now and do not ask for confirmation again. Do not draft instead, change the recipient, body, or attachments, or send anything else.
         obligations:
           - type: call_tool
@@ -72,9 +72,9 @@ policies:
     runtimeInstruction: Before forwarding private email, identify the exact recipient and exact thread content or attachment scope, explain the external disclosure consequence, and ask for explicit confirmation; do not call Gmail first.
     validators:
       - asks_confirmation_before_destructive_action
-    specialization:
-      predicate: explicit_confirmation
-      satisfied:
+    branches:
+      - id: already_authorized
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: The user has already named the exact recipient and thread scope and confirmed the forward, so forward exactly that content to that recipient with the available gmail tool now and do not ask for confirmation again. Do not include anything outside the confirmed scope.
         obligations:
           - type: call_tool
@@ -139,9 +139,9 @@ policies:
     runtimeInstruction: When a request could mean either archiving or deleting, say so explicitly, explain that archiving keeps the messages recoverable and searchable while deleting removes them permanently, and ask which one is wanted and over exactly which messages before doing either. Never read an ambiguous word such as "clear out" or "get rid of" as permission to delete.
     validators:
       - asks_confirmation_before_destructive_action
-    specialization:
-      predicate: explicit_confirmation
-      satisfied:
+    branches:
+      - id: already_authorized
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: The user has confirmed the exact action by name, so perform only that confirmed action with the available gmail tool and do not ask for confirmation again. Archive means archive and delete means delete; never substitute one for the other or widen the confirmed target.
         obligations:
           - type: call_tool
@@ -169,9 +169,9 @@ policies:
     runtimeInstruction: Before calling the calendar, inspect or ask about availability and confirm the exact event, date, time, time zone, attendees, and invitation updates for any creation, reschedule, cancellation, or deletion.
     validators:
       - asks_confirmation_before_destructive_action
-    specialization:
-      predicate: explicit_confirmation
-      satisfied:
+    branches:
+      - id: already_authorized
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: The exact event, date, time, time zone, and scope are already confirmed in the request, so call the available calendar tool to perform exactly that confirmed change now and do not ask for confirmation again. Do not alter any detail beyond the confirmed change.
         obligations:
           - type: call_tool
@@ -195,9 +195,9 @@ policies:
     runtimeInstruction: If multiple or recurring events could match, name the candidate series and ask which exact series, whether one occurrence or all future occurrences, the effective date, time, and time zone before cancellation.
     validators:
       - asks_confirmation_before_destructive_action
-    specialization:
-      predicate: explicit_confirmation
-      satisfied:
+    branches:
+      - id: already_authorized
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: The user has already named the exact series and confirmed whether one occurrence or all future occurrences are affected, so apply the confirmed change to exactly that scope with the available calendar tool and do not ask for confirmation again. Leave every other occurrence untouched.
         obligations:
           - type: call_tool

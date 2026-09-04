@@ -2,16 +2,16 @@ import type { ArtifactContext, Policy, PolicySelection, PolicySelectionReason } 
 import { computeDependencyClosure } from "../policy/closure.js";
 import { selectPolicies } from "../policy/selector.js";
 import type { CompilationStrategy } from "./artifact.js";
-import type { AuthorizationReader } from "./authorization.js";
-import { specializeSelection } from "./specialize.js";
+import type { Frontend } from "../ir/requestState.js";
+import { evaluateSelection } from "./evaluate.js";
 
 /**
- * Builds every candidate strategy for one request. `reader` is the authorization
- * reader the specialization stage uses; the planner passes the same reader for
- * every candidate so a run's artifacts are produced under one read, and the
- * artifact trace records what it returned.
+ * Builds every candidate strategy for one request. `frontend` produces the
+ * request state every candidate is evaluated against; the planner passes the
+ * same frontend for every candidate so a run's artifacts share one read, and
+ * each artifact records the state and every branch evaluation.
  */
-export function generateCandidateSelections(policies: Policy[], input: string, context?: ArtifactContext | null, reader?: AuthorizationReader): Array<{ strategy: CompilationStrategy; selection: PolicySelection }> {
+export function generateCandidateSelections(policies: Policy[], input: string, context?: ArtifactContext | null, frontend?: Frontend): Array<{ strategy: CompilationStrategy; selection: PolicySelection }> {
   const compiled = selectPolicies(policies, { input, context });
   const directIds = new Set(compiled.reasons.filter((reason) => !reason.reasons.every((item) => item === "dependency closure")).map((reason) => reason.policyId));
   const directPolicies = compiled.policies.filter((policy) => directIds.has(policy.id));
@@ -19,7 +19,7 @@ export function generateCandidateSelections(policies: Policy[], input: string, c
   const kernel = policies.filter((policy) => policy.alwaysActive);
   const expandedSeeds = uniquePolicies([...compiled.policies, ...policies.filter((policy) => policy.kind === "content_gated" && ["safety", "privacy", "tool"].includes(policy.severity))]);
   const expandedReasons: PolicySelectionReason[] = expandedSeeds.map((policy) => compiled.reasons.find((reason) => reason.policyId === policy.id) ?? { policyId: policy.id, reasons: ["conservative expansion"] });
-  const specialize = (selection: PolicySelection) => specializeSelection(selection, input, context, reader);
+  const specialize = (selection: PolicySelection) => evaluateSelection(selection, input, context, frontend);
 
   return [
     { strategy: "full_policy", selection: selectionFrom(policies, policies, policies.map((policy) => ({ policyId: policy.id, reasons: ["full policy baseline"] })), compiled.detectedIntents, []) },

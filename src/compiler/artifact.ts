@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import type { ArtifactContext, Policy, PolicySelection, PolicySelectionReason, SpecializationRecord } from "../policy/types.js";
+import type { ArtifactContext, EvaluationRecord, Policy, PolicySelection, PolicySelectionReason } from "../policy/types.js";
+import type { RequestState } from "../ir/requestState.js";
 import { emitRuntimePrompt } from "./emitter.js";
 import { countTokens, type TokenCount } from "./tokenCounter.js";
 
-export const PROTOCOL_VERSION = "1.1.0";
+export const PROTOCOL_VERSION = "1.2.0";
 export const COMPILER_VERSION = "0.9.0";
 export type CompilationStrategy = "full_policy" | "compiler_slice" | "kernel_only" | "direct_matches" | "conservative_expanded";
 
@@ -22,7 +23,9 @@ export type CompiledPolicyArtifact = {
   criticalPolicyIds: string[];
   dependencyEdges: Array<{ from: string; requires: string }>;
   selectionReasons: PolicySelectionReason[];
-  specializations: SpecializationRecord[];
+  requestState: RequestState | null;
+  evaluations: EvaluationRecord[];
+  conflicts: string[];
   orderedRuntimeInstructions: string[];
   compiledPrompt: string;
   compiledPromptHash: string;
@@ -61,7 +64,9 @@ export function createArtifact(options: {
     criticalPolicyIds: options.selection.policies.filter((policy) => ["safety", "privacy", "tool"].includes(policy.severity)).map((policy) => policy.id),
     dependencyEdges: [...options.selection.dependencyEdges].sort((a, b) => `${a.from}:${a.requires}`.localeCompare(`${b.from}:${b.requires}`)),
     selectionReasons: options.selection.policies.map((policy) => options.selection.reasons.find((reason) => reason.policyId === policy.id) ?? { policyId: policy.id, reasons: ["selected"] }),
-    specializations: options.selection.specializations ?? [],
+    requestState: options.selection.requestState ?? null,
+    evaluations: options.selection.evaluations ?? [],
+    conflicts: options.selection.conflicts ?? [],
     orderedRuntimeInstructions: options.selection.policies.map((policy) => policy.runtimeInstruction).filter(Boolean),
     compiledPrompt,
     compiledPromptHash: sha256(compiledPrompt),

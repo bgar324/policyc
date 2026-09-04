@@ -3,7 +3,9 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { canonicalJson, COMPILER_VERSION, createArtifact, sha256, type CompilationStrategy, type CompiledPolicyArtifact } from "../compiler/artifact.js";
 import { generateCandidateSelections } from "../compiler/candidates.js";
-import { guardedReader, parsePersistedAuthorizationReads, persistedReader, type AuthorizationReader } from "../compiler/authorization.js";
+import { guardedReader, parsePersistedAuthorizationReads, persistedReader } from "../compiler/authorization.js";
+import { frontendWithReader } from "../compiler/evaluate.js";
+import type { Frontend } from "../ir/requestState.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { loadPolicies } from "../policy/loader.js";
 import { loadBehavioralCases, type BehavioralCase } from "./cases.js";
@@ -76,15 +78,15 @@ type Options = {
 
 /** Manifest record of the reader; the exact file hash makes a persisted reader's identity reproducible. */
 export type AuthorizationReaderRecord = { readerId: string; readsPath?: string; readsSha256?: string };
-type ReaderSource = { record: AuthorizationReaderRecord; readerFor: (caseId: string) => AuthorizationReader | undefined };
+type ReaderSource = { record: AuthorizationReaderRecord; frontendFor: (caseId: string) => Frontend | undefined };
 
 function loadReaderSource(path: string | undefined): ReaderSource {
-  if (!path) return { record: { readerId: "baseline" }, readerFor: () => undefined };
+  if (!path) return { record: { readerId: "baseline" }, frontendFor: () => undefined };
   const text = readFileSync(path, "utf8");
   const persisted = parsePersistedAuthorizationReads(JSON.parse(text));
   return {
     record: { readerId: persisted.readerId, readsPath: resolve(path), readsSha256: sha256(text) },
-    readerFor: (caseId) => guardedReader(persistedReader(persisted, caseId), persisted.readerId),
+    frontendFor: (caseId) => frontendWithReader(guardedReader(persistedReader(persisted, caseId), persisted.readerId)),
   };
 }
 
@@ -107,7 +109,7 @@ export function runExperimentCommand(argv: string[]): void {
       ...(testCase.artifactContext ?? {}),
       toolsAvailable: testCase.tools.map((tool) => tool.name),
     };
-    const available = generateCandidateSelections(policies, testCase.request, executionContext, readerSource.readerFor(testCase.caseId));
+    const available = generateCandidateSelections(policies, testCase.request, executionContext, readerSource.frontendFor(testCase.caseId));
     const selected = options.strategies.map((strategy) => {
       const candidate = available.find((item) => item.strategy === strategy);
       if (!candidate) throw new Error(`unsupported strategy ${strategy}`);

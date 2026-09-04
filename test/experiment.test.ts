@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
 import { guardedReader, parsePersistedAuthorizationReads, persistedReader } from "../src/compiler/authorization.js";
+import { frontendWithReader } from "../src/compiler/evaluate.js";
 import { loadBehavioralCases } from "../src/experiment/cases.js";
 import { deriveInputLimit, estimateCallInputTokens, INPUT_ESTIMATE_HEADROOM, providerToolPayload, type ProviderToolPayload } from "../src/experiment/plan.js";
 import { generateCandidateSelections } from "../src/compiler/candidates.js";
@@ -132,9 +133,11 @@ test("persisted authorization reads are schema-validated and drive the planner p
   // A reader that says absent for this request must leave the ask in place on
   // every strategy the planner emits, and the trace must name the reader.
   const absentReads = parsePersistedAuthorizationReads({ readerId: "fixture-absent", reads: { [item.caseId]: { state: "absent", evidence: ["fixture"] } } });
-  const viaAbsent = generateCandidateSelections(policies, item.request, context, guardedReader(persistedReader(absentReads, item.caseId), "fixture-absent"));
+  const viaAbsent = generateCandidateSelections(policies, item.request, context, frontendWithReader(guardedReader(persistedReader(absentReads, item.caseId), "fixture-absent")));
   const absentSlice = viaAbsent.find((c) => c.strategy === "compiler_slice")!.selection;
-  assert.ok((absentSlice.specializations ?? []).some((r) => r.predicate === "explicit_confirmation" && !r.satisfied && r.evidence.some((e) => /read by fixture-absent/.test(e))));
+  assert.equal(absentSlice.requestState?.authorization, "absent");
+  assert.ok(absentSlice.requestState?.evidence.some((e) => /read by fixture-absent/.test(e)));
+  assert.ok((absentSlice.evaluations ?? []).every((r) => r.branchId !== "already_authorized" || r.truth !== "true"));
   assert.match(emitRuntimePrompt(absentSlice, item.request, context), /ask_confirmation/);
 
   // The baseline reads this request as present; the two readers must produce

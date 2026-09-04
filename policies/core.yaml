@@ -172,9 +172,9 @@ policies:
     runtimeInstruction: Before a destructive or externally visible action, name the exact target (which branch, commit, file, page, or record), the exact scope, who will see the result, what could go wrong, and whether it can be undone, and if the request refers to content you have not been given (an approved text, a file, a list of values), ask for that content rather than inventing it. Then ask for explicit confirmation. Do not give execution steps, and do not draft the artifact, before that confirmation.
     validators:
       - asks_confirmation_before_destructive_action
-    specialization:
-      predicate: explicit_confirmation
-      satisfied:
+    branches:
+      - id: already_authorized
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: Explicit confirmation for this exact action is already present in the request, so perform exactly the confirmed action now and do not ask for confirmation again. Stay within the confirmed target and scope; if any required detail is missing, contradictory, or would widen the scope, stop and ask before acting.
         obligations: []
         prohibitions: []

@@ -1,3 +1,6 @@
+import type { Condition } from "../ir/conditions.js";
+import type { RequestState } from "../ir/requestState.js";
+
 export type PolicyKind = "universal" | "content_gated" | "structural";
 
 export type PolicySeverity = "style" | "format" | "tool" | "privacy" | "safety";
@@ -101,19 +104,25 @@ export type Prohibition = {
   detail?: string;
 };
 
-export type SpecializationPredicate = "explicit_confirmation" | "explicit_limit";
-
+/**
+ * A conditional branch of a policy node. When `when` evaluates true over the
+ * request state, this text and these obligations replace the node's defaults.
+ * Branches are tried in order; the first true one wins; unknown falls through
+ * to the node's conservative default.
+ */
 export type PolicyBranch = {
+  id: string;
+  when: Condition;
   runtimeInstruction: string;
   obligations: Obligation[];
   prohibitions: Prohibition[];
 };
 
-export type PolicySpecialization = {
-  predicate: SpecializationPredicate;
-  satisfied: PolicyBranch;
-};
-
+/**
+ * `mandated`: this node's tool obligation comes from the source policy and is
+ * not subject to a user-stated limit (current facts must come from live
+ * research, never memory). Declared on the node, not inferred in code.
+ */
 export type Policy = {
   id: string;
   title: string;
@@ -128,7 +137,8 @@ export type Policy = {
   prohibitions: Prohibition[];
   runtimeInstruction: string;
   validators: string[];
-  specialization?: PolicySpecialization;
+  branches?: PolicyBranch[];
+  mandated?: boolean;
   pack?: string;
 };
 
@@ -153,23 +163,27 @@ export type PolicySelectionReason = {
   dependencyOf?: string[];
 };
 
-export type SpecializationRecord = {
+/** One evaluated branch, recorded in the artifact so a reader can see why a node emitted what it did. */
+export type EvaluationRecord = {
   policyId: string;
-  predicate: SpecializationPredicate;
-  satisfied: boolean;
+  branchId: string;
+  truth: "true" | "false" | "unknown";
   evidence: string[];
 };
-
-export type LimitVerdict = "limited" | "ambiguous";
 
 export type PolicySelection = {
   policies: Policy[];
   reasons: PolicySelectionReason[];
   detectedIntents: IntentTrigger[];
   dependencyEdges: Array<{ from: string; requires: string }>;
-  specializations?: SpecializationRecord[];
+  /** Request state the compiled candidate was evaluated against; absent before evaluation. */
+  requestState?: RequestState;
+  /** Every branch evaluation, in node order. */
+  evaluations?: EvaluationRecord[];
   /** Present when the request bounds this turn; the emitter prints the instruction as a rule. */
-  limit?: { verdict: LimitVerdict; instruction: string };
+  limit?: { verdict: "limited" | "ambiguous"; instruction: string };
+  /** Contradictions between resolved nodes, found at compile time. */
+  conflicts?: string[];
 };
 
 export type PolicyPackFile = {

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { emitRuntimePrompt } from "./compiler/emitter.js";
-import { compileSelection } from "./compiler/specialize.js";
+import { compileSelection } from "./compiler/evaluate.js";
 import { countTokens, tokenReduction } from "./compiler/tokenCounter.js";
 import { runEval } from "./eval/runner.js";
 import { compareModels } from "./model/compare.js";

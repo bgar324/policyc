@@ -37,9 +37,10 @@ Compiler 0.9 (unfrozen, development) loads 43 manually structured policy nodes f
 2. Graph validation rejects duplicate IDs/edges, missing references, self-dependencies, cycles, unreachable structural nodes, unknown validators, and invalid always-active configurations.
 3. Regex intent detection and structured artifact context select seed policies.
 4. Queue-based traversal adds the transitive `requires` closure.
-5. Specialization evaluates each selected node's authored predicate against the request and context. Compiler 0.8 has one predicate, `explicit_confirmation`. It holds when one sentence of the request contains the user's own first-person confirmation of the operation the context declares, with no negation, reported speech, or conditional, and that sentence names every field the full policy requires for the artifact and operation. Then the node's `satisfied` branch replaces its ask-for-confirmation instruction. Anything less leaves the node as authored. Selection never changes, and the artifact records a `specializations` trace with the evidence.
-6. Policies are ordered deterministically and emitted as a runtime prompt.
-7. The compiler serializes five experimental candidates:
+5. A frontend reads the request once into a typed request state (`src/ir/requestState.ts`): operation, authorization (`present`, `reported`, `conditional`, `absent`), user-stated limit, deliverable, purpose, which required fields are stated, whether the operation is named or negated, and the available tools. The deterministic frontend (`src/ir/deterministicFrontend.ts`) populates it from the compiler 0.9 readers; a persisted extractor output plugs into the same seam and its identity goes into the compiler hash.
+6. Partial evaluation (`src/compiler/evaluate.ts`) resolves each selected node against that state. A node's authored text and obligations are its conservative branch; it may declare `branches`, each with a `when` condition over the state (`src/ir/conditions.ts`). The first branch that evaluates `true` replaces the node's text and obligations; `false` and `unknown` both fall through to the conservative default. Two declared precedences remain: a `mandated` node keeps its tool obligation under a user limit, and a branch that proved authorization with every required field keeps its tool under an ambiguous limit. Selection never changes. The artifact records the state, every branch evaluation with evidence, and any compile-time conflicts between resolved nodes.
+7. Policies are ordered deterministically and emitted as a runtime prompt.
+8. The compiler serializes five experimental candidates:
    - `full_policy`
    - `compiler_slice`
    - `kernel_only`

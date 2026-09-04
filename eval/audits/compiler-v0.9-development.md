@@ -47,9 +47,20 @@ Consequence for the roadmap: compiler 0.9's selector, checklist, limit-precedenc
 
 ## Offline verification
 
-- `pnpm test:all` green: 33 TypeScript tests (including the four 0.9 regression tests over both slices, the blind paraphrase measurement, the reader-boundary test, and the persisted-reads planner test), graph valid, ruff, mypy, 94 pytest.
-- Fake-provider contract run over the 20 visible cases: 40/40 completed, all artifacts `0.9.0 / 1.1.0`.
+- `pnpm test:all` green: 35 TypeScript tests (the four 0.9 regression tests over both slices, the blind paraphrase measurement, the reader-boundary test, the persisted-reads planner test, the corpus-wide IR contract, and the conflict check), graph valid, ruff, mypy, 99 pytest.
+- Fake-provider contract run over the 20 visible cases: 40/40 completed, all artifacts `0.9.0 / 1.2.0`, every artifact carrying request state and an empty conflict list.
 - Sweep over all 60 held-out-v4 cases: `explicit_confirmation` satisfied on exactly the four act-side cases (`hv4-041`, `044`, `048`, `052`) and on no ask-side case; `explicit_limit` fires on eight cases, none of which requires a tool; no forbidden tool is emitted as a required action anywhere; every ask-side case asks. Three earlier over-limits (`hv4-001`, `027`, `055`) were found by this sweep and fixed before the version bump. Held-out v4 is spent, so this sweep is development evidence about safety, not a preservation estimate.
+
+## Intermediate representation (commit after `7ba8328`)
+
+Compiler 0.9's predicates and precedence rules were refactored into an intermediate representation with no change to emitted prompts.
+
+- **Request state** (`src/ir/requestState.ts`): one Zod-validated object per request (operation, authorization, limit, deliverable, purpose, stated fields, operation named/negated, tools, frontend id, evidence). A frontend builds it once; every condition reads it. The deterministic frontend (`src/ir/deterministicFrontend.ts`) is the 0.9 authorization reader, limit reader, field recognizers, and intent triggers, unchanged in behavior. Persisted reads plug in as an alternative frontend through the existing reader boundary (`frontendWithReader`).
+- **Policy conditions** (`src/ir/conditions.ts`): a node may declare `branches`, each with a `when` condition over the state and its own text and obligations. The seven confirmation nodes' `specialization` blocks became `branches: [{ id: already_authorized, when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete } }]`. The mandate the old code inferred from structure (`call_tool` plus `answer_current_info_from_memory`) is now declared as `mandated: true` on the two nodes that carried it (`current_info_requires_web`, `no_current_facts_from_memory`).
+- **Partial evaluation** (`src/compiler/evaluate.ts`) replaces `specialize.ts`: branches are evaluated over the state, first `true` wins, `false` and `unknown` fall through to the conservative default, then the two declared precedences (mandate under a limit; proved authorization under an ambiguous limit) and inspection precedence are applied over the resolved set. The artifact protocol moves to 1.2.0 and records `requestState`, `evaluations`, and `conflicts`; 1.1.0 artifacts (held-out v4) still load in both languages.
+- **Compile-time conflicts** (`findConflicts`): a tool required by one resolved node and forbidden by another, a tool required while the turn is limited to text, or a node resolved to execute while another still asks. Recorded in the artifact and asserted empty over every corpus case in `test/compiler.test.ts`.
+
+Equivalence check: the `compiler_slice` prompt for all 87 corpus cases (60 held-out v4, 20 visible, 7 held-back) was hashed before and after the refactor. The first pass differed on three cases, all traceable to the refactor drifting from 0.9 rather than to the IR: two (`hv4-008`, `hv4-057`) because the second mandated node had not been declared, one (`hv4-021`) because the frontend's purpose read had widened the identification pattern beyond the selector's trigger. Both were corrected in data and by sourcing purpose from the shared intent triggers; the final pass is 87/87 byte-identical. No regex was tuned, so the held-back slice and the paraphrase benchmark (11/23) are unchanged as evidence.
 
 ## Evidence boundary and next gate
 

@@ -59,9 +59,50 @@ def test_current_artifact_requires_and_keeps_specializations(tmp_path: Path) -> 
         CompiledArtifact.model_validate(_artifact("1.1.0", specializations=None))
 
 
-def test_protocol_schema_conditionally_requires_specializations() -> None:
+def test_protocol_schema_conditionally_requires_traces_by_version() -> None:
     schema = json.loads(PROTOCOL_SCHEMA.read_text())
-    assert schema["properties"]["schemaVersion"] == {"enum": ["1.0.0", "1.1.0"]}
-    assert schema["if"] == {"properties": {"schemaVersion": {"const": "1.1.0"}}}
-    assert schema["then"] == {"required": ["specializations"]}
-    assert "specializations" not in schema["required"]
+    assert schema["properties"]["schemaVersion"] == {"enum": ["1.0.0", "1.1.0", "1.2.0"]}
+    assert schema["if"] == {"properties": {"schemaVersion": {"const": "1.2.0"}}}
+    assert schema["then"] == {"required": ["requestState", "evaluations", "conflicts"]}
+    assert schema["else"]["then"] == {"required": ["specializations"]}
+    for key in ("specializations", "requestState", "evaluations", "conflicts"):
+        assert key not in schema["required"]
+
+
+STATE = {
+    "operation": "send",
+    "artifactType": "email",
+    "authorization": "present",
+    "limit": "none",
+    "deliverable": "action",
+    "purpose": "none",
+    "fields": {"recipient": True, "body": True, "attachment scope": True},
+    "operationNamed": True,
+    "operationNegated": False,
+    "toolsAvailable": ["gmail"],
+    "frontend": "deterministic",
+    "evidence": ["all send fields stated"],
+}
+EVAL = {
+    "policyId": "p0",
+    "branchId": "already_authorized",
+    "truth": "true",
+    "evidence": ["authorization is present: true"],
+}
+
+
+def test_current_artifact_requires_request_state_and_evaluations(tmp_path: Path) -> None:
+    core = _artifact("1.2.0", specializations=None)
+    core.pop("candidateId")
+    core.pop("createdAt")
+    core["requestState"] = STATE
+    core["evaluations"] = [EVAL]
+    core["conflicts"] = []
+    artifact = {**core, "candidateId": f"cand_{sha256(canonical_json(core))[:16]}", "createdAt": "2026-01-01T00:00:00Z"}
+    path = tmp_path / "current.json"
+    path.write_text(canonical_json(artifact))
+    loaded = load_artifact(path)
+    assert loaded.requestState is not None and loaded.requestState.authorization == "present"
+    assert loaded.evaluations[0].branchId == "already_authorized"
+    with pytest.raises(ValidationError, match="requestState, evaluations, and conflicts"):
+        CompiledArtifact.model_validate(_artifact("1.2.0", specializations=None))

@@ -31,14 +31,38 @@ class SelectionReason(StrictModel):
 
 
 class SpecializationRecord(StrictModel):
+    """Protocol 1.1.0 trace, kept so held-out-v4 artifacts still load."""
+
     policyId: str
     predicate: Literal["explicit_confirmation", "explicit_limit"]
     satisfied: bool
     evidence: list[str]
 
 
+class RequestState(StrictModel):
+    operation: str | None = None
+    artifactType: str | None = None
+    authorization: Literal["present", "reported", "conditional", "absent"]
+    limit: Literal["limited", "ambiguous", "none"]
+    deliverable: Literal["text", "action", "unknown"]
+    purpose: Literal["sensitive_attribute_read", "identification", "none"]
+    fields: dict[str, bool]
+    operationNamed: bool
+    operationNegated: bool
+    toolsAvailable: list[str]
+    frontend: str = Field(min_length=1)
+    evidence: list[str]
+
+
+class EvaluationRecord(StrictModel):
+    policyId: str
+    branchId: str
+    truth: Literal["true", "false", "unknown"]
+    evidence: list[str]
+
+
 class CompiledArtifact(StrictModel):
-    schemaVersion: Literal["1.0.0", "1.1.0"]
+    schemaVersion: Literal["1.0.0", "1.1.0", "1.2.0"]
     compilerVersion: str
     candidateId: str
     policyPackHash: str
@@ -53,6 +77,9 @@ class CompiledArtifact(StrictModel):
     dependencyEdges: list[DependencyEdge]
     selectionReasons: list[SelectionReason]
     specializations: list[SpecializationRecord] = Field(default_factory=list)
+    requestState: RequestState | None = None
+    evaluations: list[EvaluationRecord] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
     orderedRuntimeInstructions: list[str]
     compiledPrompt: str
     compiledPromptHash: str
@@ -62,9 +89,14 @@ class CompiledArtifact(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _require_specializations_from_1_1(cls, data: Any) -> Any:
-        if isinstance(data, dict) and data.get("schemaVersion") == "1.1.0" and "specializations" not in data:
+    def _require_trace_for_version(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        version = data.get("schemaVersion")
+        if version == "1.1.0" and "specializations" not in data:
             raise ValueError("schemaVersion 1.1.0 artifacts must record specializations")
+        if version == "1.2.0" and any(key not in data for key in ("requestState", "evaluations", "conflicts")):
+            raise ValueError("schemaVersion 1.2.0 artifacts must record requestState, evaluations, and conflicts")
         return data
 
 

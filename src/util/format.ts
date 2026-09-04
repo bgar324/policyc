@@ -33,13 +33,26 @@ export function formatSelection(selection: PolicySelection): string {
   const edges = selection.dependencyEdges.map((edge) => `${edge.from} -> ${edge.requires}`);
   lines.push("");
   lines.push(`Dependencies pulled in: ${edges.length ? edges.join(", ") : "none"}`);
-  if (selection.specializations?.length) {
+  if (selection.requestState) {
+    const state = selection.requestState;
     lines.push("");
-    lines.push("Specializations:");
-    for (const record of selection.specializations) {
-      lines.push(`- ${record.policyId}: ${record.predicate} ${record.satisfied ? "satisfied" : "unsatisfied"}`);
+    lines.push(`Request state (${state.frontend}): operation=${state.operation ?? "-"} authorization=${state.authorization} limit=${state.limit} deliverable=${state.deliverable} purpose=${state.purpose} named=${state.operationNamed} negated=${state.operationNegated}`);
+    const fields = Object.entries(state.fields);
+    if (fields.length) lines.push(`  fields: ${fields.map(([name, present]) => `${name}=${present ? "stated" : "missing"}`).join(", ")}`);
+    for (const item of state.evidence) lines.push(`  ${item}`);
+  }
+  if (selection.evaluations?.length) {
+    lines.push("");
+    lines.push("Branch evaluations:");
+    for (const record of selection.evaluations) {
+      lines.push(`- ${record.policyId} / ${record.branchId}: ${record.truth}`);
       for (const item of record.evidence) lines.push(`  ${item}`);
     }
+  }
+  if (selection.conflicts?.length) {
+    lines.push("");
+    lines.push("Conflicts:");
+    for (const item of selection.conflicts) lines.push(`- ${item}`);
   }
   return lines.join("\n");
 }
