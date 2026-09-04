@@ -389,6 +389,49 @@ test("compiler 0.9 held-back regressions meet the generic contract", () => {
   }
 });
 
+test("compiler 0.10 visible regressions meet the generic contract", () => {
+  const policies = loadPolicies();
+  const cases = loadRegressions("eval/behavioral/compiler-v0.10-regressions.jsonl");
+  assert.equal(cases.length, 11);
+  for (const item of cases) assertRegressionContract(policies, item);
+});
+
+test("compiler 0.10 visible regressions cover execution, ask, text-only, and unavailable-source boundaries", () => {
+  const policies = loadPolicies();
+  const cases = loadRegressions("eval/behavioral/compiler-v0.10-regressions.jsonl");
+  const byId = new Map(cases.map((item) => [item.caseId, item]));
+
+  for (const caseId of ["cv010-005v5", "cv010-025v5", "cv010-026v5", "cv010-028v5", "cv010-040v5"]) {
+    assertRegressionContract(policies, byId.get(caseId)!);
+  }
+
+  for (const caseId of ["cv010-034v5", "cv010-052v5"]) {
+    const { prompt } = compileCase(policies, byId.get(caseId)!);
+    assert.match(prompt, /ask_confirmation/, `${caseId}: must ask before acting`);
+    assert.doesNotMatch(prompt, /- call_tool:(spreadsheet_edit|gmail)/, `${caseId}: ask-side case must not act`);
+  }
+
+  for (const caseId of ["cv010-010v5", "cv010-020v5", "cv010-035v5"]) {
+    const { prompt } = compileCase(policies, byId.get(caseId)!);
+    assert.doesNotMatch(prompt, /ask_confirmation/, `${caseId}: text-only answer must not ask for action confirmation`);
+  }
+
+  const missingPdf = compileCase(policies, byId.get("cv010-021v5")!);
+  assert.match(missingPdf.prompt, /required pdf_read tool is unavailable/i);
+  assert.doesNotMatch(missingPdf.prompt, /- call_tool:pdf_read/);
+});
+
+test("compiler 0.10 held-back regressions meet the generic contract in aggregate", () => {
+  const policies = loadPolicies();
+  const cases = loadRegressions("eval/behavioral/compiler-v0.10-regressions-heldback.jsonl");
+  assert.equal(cases.length, 5);
+  const violationCount = cases.reduce((count, item) => {
+    const { selection, prompt } = compileCase(policies, item);
+    return count + regressionContractViolations(item, selection, prompt).length;
+  }, 0);
+  assert.equal(violationCount, 0, `compiler 0.10 held-back contract violations: ${violationCount}`);
+});
+
 test("compiler 0.9 IR: every corpus case resolves each node to its first true branch or its authored default, and compiles without conflicts", () => {
   const policies = loadPolicies();
   const corpus = ["eval/behavioral/held-out-v4.jsonl", "eval/behavioral/compiler-v0.9-regressions.jsonl", "eval/behavioral/compiler-v0.9-regressions-heldback.jsonl"]
