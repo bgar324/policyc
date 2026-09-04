@@ -46,9 +46,11 @@ Large language-model system prompts increasingly behave like policy programs: th
 
 We present \policyc, a research prototype built around a validated graph of 43 structured policy nodes across six domains. A deterministic TypeScript compiler performs request and artifact-context matching, conservative retention, dependency closure, predicate-driven specialization, and compact prompt emission. A separate Python \texttt{asyncio} runtime executes paired full-policy and compiler-slice trials with bounded concurrency, hard call/token/cost ceilings, atomic raw-response persistence, resumability, hash-linked provenance, a rebuildable SQLite catalog, deterministic diagnostics, and strategy-blind semantic review.
 
-We report four frozen held-out studies using a pinned GPT-5 mini snapshot: 220 cases, 1,320 model executions, and \$3.722 in recorded cost. Compiled prompts reduced mean actual input by 89.69--98.23\% and uncached-equivalent cost by 55.36--67.80\%. However, conditional critical-obligation preservation ranged from 75.76\% to 86.49\%, below the preregistered 95\% target in every study. Compiler 0.7 lost 15 of 33 regressions to one defect: a conditional confirmation rule emitted as an unconditional instruction. Compiler 0.8 added a specialization stage that resolves that rule from confirmation state already present in the request. It repaired all six spent development cases and matched none of the four fresh confirmation cases in the next held-out set, whose authors expressed authorization as ``no need to check back'' and ``go ahead'' rather than ``I confirm.'' Its preservation was 75.76\% (Wilson 95\% interval: 67.79--82.27\%) on a set whose brief deliberately probed tool limits and confirmation state; the two studies use different cases and are not a controlled comparison. Its largest regression class was calling a tool the user had asked not to use.
+We report five frozen held-out studies using a pinned GPT-5 mini snapshot: 280 cases, 1,680 model executions, and \$4.901 in recorded cost. Compiled prompts reduced mean actual input by 89.69--98.23\% and uncached-equivalent cost by 55.36--67.80\%. However, conditional critical-obligation preservation ranged from 75.76\% to 86.49\%, below the preregistered 95\% target in every study. Compiler 0.7 lost 15 of 33 regressions to one defect: a conditional confirmation rule emitted as an unconditional instruction. Compiler 0.8 added a specialization stage that resolves that rule from confirmation state already present in the request. It repaired all six spent development cases and matched none of the four fresh confirmation cases in the next held-out set, whose authors expressed authorization as ``no need to check back'' and ``go ahead'' rather than ``I confirm.'' Its preservation was 75.76\% (Wilson 95\% interval: 67.79--82.27\%) on a set whose brief deliberately probed tool limits and confirmation state; the two studies use different cases and are not a controlled comparison. Its largest regression class was calling a tool the user had asked not to use.
 
-The experiments therefore support a mixed conclusion. Request-specific policy compilation reliably yields large efficiency gains in this synthetic system, but neither text selection nor pattern-matched specialization preserves critical behavior well enough to replace the full prompt. The negative results localize the central research problem: recognizing user intent, authorization, and explicit limits as semantic acts rather than surface strings, and preserving predicates, negation, and instruction precedence through emission.
+Compiler 0.9 rebuilt the pipeline as a compiler: a typed request state read once by a frontend, declared conditional branches on policy nodes, a declared precedence table, and a printer; its extractor frontend, one model call per request at compile time, read 6 of 6 fresh authorization phrasings where the regexes read 0. It preserved 75.91\% on a fifth held-out set, within a point of 0.8. Every regression classified into a compiler bin: authorization was read correctly on all of them, and the losses were a selector with no marker for current information stated in plain speech, a branch derived from one spent case that fired on every fully specified artifact edit lacking a field contract, over-read limits, and one class needing a fact the state does not carry.
+
+The experiments therefore support a mixed conclusion. Request-specific policy compilation reliably yields large efficiency gains in this synthetic system, but neither text selection, pattern-matched specialization, nor a compiler with a model-assisted reader preserves critical behavior well enough to replace the full prompt. The negative results localize the central research problem: reading the request is now the smaller part; representing what the policy requires of each situation, and proving that the request satisfies it, is the larger.
 \end{abstract}
 
 \section{Introduction}
@@ -77,10 +79,10 @@ This paper makes six contributions:
 \begin{enumerate}
   \item a typed representation of policy nodes, triggers, dependencies, obligations, and prohibitions;
   \item a deterministic request-conditioned selector and dependency-closed prompt emitter;
-  \item a specialization stage that swaps a node's emitted branch when an authored predicate is satisfied by the request, with a fail-closed default and a recorded evidence trace;
+  \item a specialization stage that swaps a node's emitted branch when an authored predicate is satisfied by the request, with a fail-closed default and a recorded evidence trace, and its successor: a typed request state, declared branches, a declared precedence table, and a swappable frontend whose model-assisted extractor is persisted and hashed into the run's identity;
   \item a safety-bounded paired-experiment runtime with complete paid-call accounting and resumability;
-  \item four frozen held-out studies that separate efficiency from behavioral preservation; and
-  \item a failure taxonomy showing that conditional semantics, explicit user limits, and instruction precedence, rather than graph closure alone, dominate the remaining errors, and that a surface-form predicate for one of them did not generalize.
+  \item five frozen held-out studies that separate efficiency from behavioral preservation; and
+  \item a failure taxonomy showing that conditional semantics, explicit user limits, and instruction precedence, rather than graph closure alone, dominate the remaining errors; that a surface-form predicate for one of them did not generalize; and that once the request is read correctly, the losses move to selection and to conditions the policy representation does not yet declare.
 \end{enumerate}
 
 \section{Related Work}
@@ -133,6 +135,13 @@ Compiler 0.8 inserts a specialization stage between dependency closure and emiss
 
 The single predicate in compiler 0.8, \texttt{explicit\_confirmation}, holds when one sentence of the request contains the user's own first-person present-tense confirmation of the operation the context declares, is neither negated, conditional, future, quoted, nor reported, and names every field the source policy requires for that artifact and operation (for example recipient, body, and attachment scope for an email send). Seven confirmation-bearing nodes carry a satisfied branch that instructs the model to perform exactly the confirmed action without asking again. The predicate was implemented as bounded regular expressions over the confirmation sentence, tuned against six spent v0.7 cases and fifteen negative controls covering third-party, quoted, conditional, negated, and under-specified confirmations.
 
+\subsection{Intermediate representation and frontends}
+\label{sec:frontend}
+
+Compiler 0.9 replaces the specialization stage with a compiler in the ordinary sense. A \emph{frontend} reads the request once into a typed request state: authorization (present, reported, conditional, absent), a user-stated limit on the turn, the deliverable the user allows, a purpose the policy refuses to serve and whether a permitted task stands beside it, a stated output format, which fields the policy requires for the declared operation and whether each is stated, and whether the operation is named or negated. The state is recorded in every artifact. Policy nodes declare \emph{branches}, each a condition over that state with its own text and obligations; the first branch decided true replaces the node's default, and an undecided condition falls through to the conservative default. Precedence between what the request allows and what a node obliges is a declared table over obligation types (a tool call yields to the user's limit; inspection also yields to asking first and to a refused purpose; a node the source policy mandates keeps its obligation under a user limit), applied by one masking loop and recorded per withheld obligation. When the resolved program asks for confirmation, the first emitted rule names the acting tools that must wait. The emitter prints the resolved program and decides nothing. Under the deterministic frontend the refactor changed no byte of any prompt on 273 spent cases; the two failure classes that had no representation, stated output format and asynchronous work, then received branches and a node.
+
+Two frontends produce the state. The deterministic frontend is compiler 0.9's regex readers; on 23 blind paraphrase fixtures it recognized 1 of 6 fresh authorization phrasings and 1 of 5 fresh limits. The extractor frontend is one strict structured-output call per request at compile time (\texttt{gpt-5-mini-2025-08-07}, instructions written from the state's documented semantics, a schema derived from the same code that validates persisted reads), whose output is persisted, hashed, and named in the run manifest so that a run's identity fixes its reads; it recognized 6 of 6 and 5 of 5 on the same fixtures after two prompt revisions diagnosed against them. A read of \emph{present} beside a disqualifier the request states in plain words (a negated review, a conditional clause) is capped to the disqualifier's state, so the extractor can only move a decision toward asking. A required field the read does not name counts as missing. Field contracts existed for email and calendar operations only.
+
 \subsection{Cross-language boundary}
 
 TypeScript is the single authority for policy loading, validation, matching, graph closure, candidate construction, prompt emission, hashing, and artifact serialization. Python owns provider calls, concurrency, rate limiting, timeouts, retry classification, atomic persistence, evaluation, reports, and run-catalog storage. Versioned JSON Schemas define the boundary, and Python verifies candidate and compiled-prompt hashes before execution.
@@ -180,7 +189,7 @@ Primary behavioral results use strategy-blind semantic packets. Packets contain 
 
 \subsection{Frozen studies}
 
-Table~\ref{tab:studies} summarizes the four held-out executions. Each compiler was frozen before its corresponding case set was opened to candidate compilation. Once results were inspected, that dataset became development evidence for later versions and was never reused as fresh held-out evidence.
+Table~\ref{tab:studies} summarizes the five held-out executions. Each compiler was frozen before its corresponding case set was opened to candidate compilation. Once results were inspected, that dataset became development evidence for later versions and was never reused as fresh held-out evidence.
 
 \begin{table}[t]
 \centering
@@ -195,13 +204,14 @@ Compiler & Cases & Model calls & Complete pairs & Web searches & Cost & Output c
 0.6 & 50 & 300 & 139/150 & 41 & \$1.0357 & 2,048 \\
 0.7 & 60 & 360 & 180/180 & 20 & \$0.9333 & 3,072 \\
 0.8 & 60 & 360 & 163/180 & 16 & \$1.0653 & 2,048 \\
+0.9 & 60 & 360 & 177/180 & 26 & \$1.1790 & 3,072 \\
 \midrule
-Total & 220 & 1,320 & --- & 77 & \$3.7224 & --- \\
+Total & 280 & 1,680 & --- & 103 & \$4.9014 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-All studies use \texttt{gpt-5-mini-2025-08-07}, two strategies, three samples per case, and no retries; concurrency was six for v1--v3 and four for v4. Compiler 0.5 had no provider tools. Compilers 0.6 through 0.8 used web and synthetic function-tool cases, making their input and cost accounting harder but more representative of an agent policy surface. The v4 output cap was preregistered at 2,048 tokens because every completed v3 response had fit within it; 21 v4 executions (11 compiled, 10 full) nonetheless reached the cap, and the 17 pairs they affected were excluded from paired estimates and counted against the coverage gate, never as passes.
+All studies use \texttt{gpt-5-mini-2025-08-07}, two strategies, three samples per case, and no retries; concurrency was six for v1--v3 and four for v4 and v5. Compiler 0.5 had no provider tools. Compilers 0.6 through 0.9 used web and synthetic function-tool cases, making their input and cost accounting harder but more representative of an agent policy surface. The v4 output cap was preregistered at 2,048 tokens because every completed v3 response had fit within it; 21 v4 executions (11 compiled, 10 full) nonetheless reached the cap, and the 17 pairs they affected were excluded from paired estimates and counted against the coverage gate, never as passes. Compiler 0.9 was compiled under the extractor frontend (Section~\ref{sec:frontend}): its 60 requests were read once by one model call each (\$0.2678, reported beside the run, never netted) after the dataset froze and before the preregistration, and the reads file's hash is part of the run's identity. Three v5 trials were incomplete: two compiled responses to one case reached the 3,072 cap and one full-policy sample was starved by the call ceiling before any call.
 
 \section{Results}
 
@@ -220,13 +230,14 @@ Compiler & Input reduction & Billed-cost reduction & Uncached-cost reduction & L
 0.6 & 89.69\% & 24.50\% & 55.36\% & $+0.39\%$ \\
 0.7 & 93.75\% & 12.14\% & 59.46\% & $+14.63\%$ \\
 0.8 & 94.76\% & 18.03\% & 66.00\% & $-7.07\%$ \\
+0.9 & 92.99\% & 17.21\% & 58.69\% & $+13.36\%$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:efficiency} shows the most stable result in the project. Every compiler reduced mean actual input by at least 89.69\% and uncached-equivalent cost by at least 55.36\%, and compiler 0.8 reproduced the pattern on a fourth independently authored set. Actual billed savings were smaller because the repeated full prompt benefited from prompt caching, while the compiled condition varied by request. Tool fees also matter: compiler 0.7 made 11 paid web searches versus nine under the full condition, and compiler 0.8 made six versus three over the complete pairs. Excluding search fees, 0.7's generation-only cost fell 19.75\% and 0.8's 26.07\%, but the preregistered total billed-cost reductions were 12.14\% and 18.03\%.
+Table~\ref{tab:efficiency} shows the most stable result in the project. Every compiler reduced mean actual input by at least 89.69\% and uncached-equivalent cost by at least 55.36\%, and compiler 0.9 reproduced the pattern on a fifth independently authored set. Actual billed savings were smaller because the repeated full prompt benefited from prompt caching, while the compiled condition varied by request. Tool fees also matter: compiler 0.7 made 11 paid web searches versus nine under the full condition, and compiler 0.8 made six versus three over the complete pairs. Excluding search fees, 0.7's generation-only cost fell 19.75\% and 0.8's 26.07\%, but the preregistered total billed-cost reductions were 12.14\% and 18.03\%. Compiler 0.9 made 7 searches against the full condition's 15 over the complete pairs; its generation-only cost fell only 5.34\% because the compiled condition produced 35\% more output tokens, and the total billed reduction of 17.21\% is carried by the search fees.
 
-Latency did not improve consistently. Compiler 0.5 was 19.95\% faster, compiler 0.6 was essentially unchanged, compiler 0.7 was 14.63\% slower, and compiler 0.8 was 7.07\% faster. Output length, tool activity, cache state, and model reasoning all affect latency; input reduction alone does not guarantee wall-clock improvement.
+Latency did not improve consistently. Compiler 0.5 was 19.95\% faster, compiler 0.6 was essentially unchanged, compiler 0.7 was 14.63\% slower, compiler 0.8 was 7.07\% faster, and compiler 0.9 was 13.36\% slower. Output length, tool activity, cache state, and model reasoning all affect latency; input reduction alone does not guarantee wall-clock improvement.
 
 \subsection{Critical-obligation behavior}
 
@@ -243,6 +254,7 @@ Compiler & Full pass & Compiled pass & Both & Full only & Compiler only & Both f
 0.6 & 74/138 & 73/136 & 64 & 10 & 9 & 53 \\
 0.7 & 163/180 & 141/180 & 130 & 33 & 11 & 6 \\
 0.8 & 132/163 & 111/163 & 100 & 32 & 11 & 20 \\
+0.9 & 137/177 & 125/177 & 104 & 33 & 21 & 19 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -260,6 +272,7 @@ Compiler & Preservation & Wilson 95\% & Distinct full-only cases & McNemar $p$ \
 0.6 & 64/74 = 86.49\% & 76.88--92.49\% & 6 & 1.0000 \\
 0.7 & 130/163 = 79.75\% & 72.93--85.21\% & 16 & 0.0013 \\
 0.8 & 100/132 = 75.76\% & 67.79--82.27\% & 17 & 0.0019 \\
+0.9 & 104/137 = 75.91\% & 68.11--82.30\% & 16 & 0.1337 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -270,30 +283,32 @@ Compiler 0.7 is a stronger negative result. The full prompt passed 90.56\% of an
 
 Compiler 0.8 on held-out v4 is the lowest preservation observed, 75.76\%. The v3 and v4 sets differ, so this is not a controlled comparison with compiler 0.7 and no cross-version significance is claimed. The full prompt itself passed only 80.98\% of v4 answers against 90.56\% on v3, so v4 was harder for both conditions; its brief asked for explicit tool limits and both sides of confirmation state, which v3's did not. A case-clustered bootstrap over the 60 cases gives a 64.49--86.01\% interval; 37 of 54 eligible cases were regression-free; the case-level sign test over 23 non-tied cases was $p=0.0347$; leave-one-case-out preservation ranged from 75.19\% to 77.52\%. Preservation was flat across the three author domains (75.6--76.0\%) and concentrated by tool: calendar and spreadsheet cases sat at 56.2\%, gmail and no-tool cases at 82--83\%.
 
-\subsection{Preregistered compiler 0.7 and 0.8 decisions}
+Compiler 0.9 on held-out v5, the first version compiled through the intermediate representation and read by the extractor frontend, preserved 75.91\%, within a point of compiler 0.8 on a different set. The full prompt passed 77.40\% of v5 answers and the compiled prompt 70.62\%; 21 pairs passed only under the compiler, the most of any study, so the discordant pairs are nearly balanced and the McNemar result is not significant ($p=0.1337$). The case-clustered bootstrap gives 64.1--86.3\%, leave-one-case-out ranges 75.37--77.61\%, and the case sign test over 25 non-tied cases favors the full prompt 15 to 10 ($p=0.4244$). Preservation was 87.5\% on cases without a tool and 42.9\% on cases that required one: the compiled condition's failures are concentrated where the compiler must decide that a tool may be called.
 
-Both compilers had explicit success gates fixed before execution. Table~\ref{tab:gates} records the decisions without post hoc relaxation.
+\subsection{Preregistered compiler 0.7, 0.8, and 0.9 decisions}
+
+All three compilers had explicit success gates fixed before execution. Table~\ref{tab:gates} records the decisions without post hoc relaxation.
 
 \begin{table}[t]
 \centering
-\caption{Preregistered held-out gates for compiler 0.7 (v3) and compiler 0.8 (v4).}
+\caption{Preregistered held-out gates for compilers 0.7 (v3), 0.8 (v4), and 0.9 (v5).}
 \label{tab:gates}
 \small
-\begin{tabular}{lrrlrl}
+\begin{tabular}{lrrlrlrl}
 \toprule
-Gate & Threshold & 0.7 observed & & 0.8 observed & \\
+Gate & Threshold & 0.7 & & 0.8 & & 0.9 & \\
 \midrule
-Conditional preservation & $\geq 95\%$ & 79.75\% & Fail & 75.76\% & Fail \\
-Wilson lower bound & $\geq 90\%$ & 72.93\% & Fail & 67.79\% & Fail \\
-Distinct full-only cases & $\leq 3$ & 16 & Fail & 17 & Fail \\
-Mean input reduction & $\geq 90\%$ & 93.75\% & Pass & 94.76\% & Pass \\
-Total billed-cost reduction & $\geq 15\%$ & 12.14\% & Fail & 18.03\% & Pass \\
-Complete paired coverage & $\geq 90\%$ & 100\% & Pass & 90.56\% & Pass \\
+Conditional preservation & $\geq 95\%$ & 79.75\% & Fail & 75.76\% & Fail & 75.91\% & Fail \\
+Wilson lower bound & $\geq 90\%$ & 72.93\% & Fail & 67.79\% & Fail & 68.11\% & Fail \\
+Distinct full-only cases & $\leq 3$ & 16 & Fail & 17 & Fail & 16 & Fail \\
+Mean input reduction & $\geq 90\%$ & 93.75\% & Pass & 94.76\% & Pass & 92.99\% & Pass \\
+Total billed-cost reduction & $\geq 15\%$ & 12.14\% & Fail & 18.03\% & Pass & 17.21\% & Pass \\
+Complete paired coverage & $\geq 90\%$ & 100\% & Pass & 90.56\% & Pass & 98.33\% & Pass \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Compiler 0.7 passed two of six gates and compiler 0.8 three of six. Both studies were operationally complete and behaviorally negative. The v4 preregistration also required a class count for confirmation-state regressions as the diagnostic reading of the 0.8 change: seven pairs across four cases, every one carrying an unsatisfied specialization trace.
+Compiler 0.7 passed two of six gates, compiler 0.8 three of six, and compiler 0.9 three of six. All three studies were operationally complete and behaviorally negative. The v4 preregistration also required a class count for confirmation-state regressions as the diagnostic reading of the 0.8 change: seven pairs across four cases, every one carrying an unsatisfied specialization trace.
 
 \section{Failure Analysis}
 
@@ -367,6 +382,31 @@ The larger class was new in size, not in kind. Fourteen pairs across seven cases
 
 Eleven pairs across eight cases passed only under the compiled prompt, chiefly where the full prompt over-refused or over-asked; they are reported and not netted against regressions.
 
+\subsection{Compiler 0.9: the request read correctly and the compiler still lost}
+
+All 33 v0.9 full-only pairs were classified after the blind grade lock into the bins the preregistration fixed, each naming a place in the compiler; Table~\ref{tab:v09failures} gives the attribution with the extractor's recorded state.
+
+\begin{table}[t]
+\centering
+\caption{Primary attribution for compiler 0.9 full-only regressions on held-out v5. The extractor state is the compiled artifact's recorded request state.}
+\label{tab:v09failures}
+\small
+\begin{tabularx}{\textwidth}{lrrX}
+\toprule
+Bin & Pairs & Cases & Dominant examples \\
+\midrule
+Selector gap & 15 & 6 & ``the ecb deposit facility rate as it stands today'', ``the federal contractor minimum wage that applies right now'', ``the mileage rate thats in effect right now'': current information the trigger vocabulary does not mark, so the mandated web node was never selected and the correctly read ``don't go online'' stood; ``deploy'' selecting confirmation on a log diagnosis; ``clean up whatever looks wrong'' selecting no confirmation \\
+Undeclared condition & 9 & 4 & fully specified spreadsheet and slide edits (``rows 210 to 480'', ``slides 12 and 13 come out'', ``move slides 8 through 11'') with no field contract for the artifact, so the proof of the action was undecidable and the blanket-approval branch asked; counsel's thread forwarded to an outside contractor on a correct read of ``i cleared it with legal already'', the one unsafe class \\
+Frontend misread & 7 & 4 & limits read where none was stated (``i mainly care about revenue and churn'', ``you dont have to open the whole deck'') and one stated format not read \\
+Stochastic & 2 & 2 & one sample each on prompts that carried the obligation \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The result answers the question the paper asked at the end of compiler 0.8. Authorization was read correctly on every regressed case: no full-only pair is an authorization misread, and the 0.8 failure mode (a surface-form predicate matching nothing fresh) did not recur. What lost the study was not reading the request but selecting and specializing the policy. Eight pairs are one phrasing family for current information that the selector's keyword list has no entry for; the extractor read the accompanying limit correctly, and without the mandated node the limit was law. Six pairs are a branch added during development from a single spent case (a blanket approval with no named scope must ask), which on fresh cases fired on every fully specified edit of an artifact that has no field contract, because the compiler could not prove what it could not read. The extractor's own errors were confined to over-reading limits, the direction the blind fixtures had left open, and cost 7 pairs. The one unsafe class, two forwards of privileged material on a correct read, needs a fact the state does not carry (the consequence of external disclosure), not a better reading of one it does.
+
+Two regularities hold across 0.7, 0.8, and 0.9. Each version fixed the classes its development set named and lost to classes the next fresh set named; and each fix fitted to a spent case (the ``I confirm'' predicate in 0.8, the blanket-approval branch in 0.9) generalized worst. The compiler's structure did what it was built for: every regression has an address, and the 0.9 bins sum to the full-only count with no residue.
+
 \section{Operational Incidents and Integrity}
 
 Real provider execution exposed issues that offline tests did not.
@@ -396,9 +436,9 @@ For v0.7, three isolated reviewer agents graded 360 anonymous answers in three b
 
 \subsection{What the evidence supports}
 
-The efficiency claim is robust within this synthetic setup. Four frozen studies, different case sets, and increasingly tool-rich prompts all produced roughly one to two orders of magnitude less input and more than 55\% lower uncached-equivalent cost. This shows that most policy text is inactive for most requests and that deterministic slicing can exploit that sparsity.
+The efficiency claim is robust within this synthetic setup. Five frozen studies, different case sets, and increasingly tool-rich prompts all produced roughly one to two orders of magnitude less input and more than 55\% lower uncached-equivalent cost. This shows that most policy text is inactive for most requests and that deterministic slicing can exploit that sparsity.
 
-The preservation claim is resolved negatively for the current architecture. Conditional preservation remained between 75.76\% and 86.49\%; no Wilson interval reached the 95\% target. Compiler 0.7 regressed despite passing its targeted development suite, and compiler 0.8 repaired that suite completely and gained nothing on fresh cases. This is exactly why spent held-out failures cannot substitute for a new evaluation set, and why a predicate's negative controls, however many, do not measure its recall on phrasings its author did not think of.
+The preservation claim is resolved negatively for the current architecture. Conditional preservation remained between 75.76\% and 86.49\%; no Wilson interval reached the 95\% target. Compiler 0.7 regressed despite passing its targeted development suite, compiler 0.8 repaired that suite completely and gained nothing on fresh cases, and compiler 0.9 read the request correctly on every regressed case and lost the study in selection and in conditions its policy representation did not declare. This is exactly why spent held-out failures cannot substitute for a new evaluation set, and why a predicate's negative controls, however many, do not measure its recall on phrasings its author did not think of.
 
 The baseline also bounds the target. The full 16,000-token prompt passed 90.56\% of v3 answers and 80.98\% of v4 answers. Conditional preservation is measured only where the full prompt succeeds, so the compiler cannot be credited beyond the baseline; but a fifth of v4 is territory where the full prompt itself fails, which is a prompt-quality finding independent of compilation.
 
@@ -447,19 +487,19 @@ Provider-adapter and accounting fixes occurred during v0.6 and v0.7 execution, a
 \paragraph{Predicate development.}
 Compiler 0.8's predicate was tuned on six spent cases and fifteen author-written negative controls, all of which shared the ``I confirm'' surface form. No held-back development cases tested recall on other phrasings before the paid study. The v4 result shows that this development protocol cannot detect a predicate that is safe but narrow; future predicates need a held-back slice of the development set, unseen by the predicate's author, as an offline gate.
 
-\section{Toward Compiler 0.9}
+\section{Toward Compiler 0.10}
 
-Compiler 0.8 settled the design of the specialization stage: branch replacement after closure, an evidence trace, a fail-closed default, and no change to selection. What it left open is how predicates read the request. Held-out v4 orders the remaining work by pairs lost.
+Compiler 0.9 settled the architecture: a typed request state, declared branches, a declared precedence table, a printer, and a frontend that reads fresh phrasing. Held-out v5 orders the remaining work by pairs lost, and the order is not the one the previous section predicted.
 
-\paragraph{Explicit limits (14 pairs: 11 emitter, 3 selector).} A second predicate should recognize a user-stated limit on action (``only describe'', ``do not modify'', ``just tell me'', arithmetic on supplied numbers) and, when satisfied, replace a node's \texttt{call\_tool} obligation with a prose prohibition against calling the tool. Its fail-safe direction is the opposite of the confirmation predicate's: an ambiguous limit must withhold the mutation, not leave the tool invited, because the asymmetric harm is an unwanted action rather than an unwanted question. Concretely, when the predicate cannot decide, the emitter should drop the \texttt{call\_tool} obligation and instruct the model to ask before acting. The surface forms here are narrower than authorization's, but the same held-back-slice gate applies.
+\paragraph{Current information in plain speech (8 pairs).} The selector marks current information by keyword. Users mark it by tense and by naming the moment (``as it stands today'', ``in effect right now'', ``applies right now''). The fact belongs in the request state, read by the frontend beside the limit, so that a request which both bounds the turn and asks for a current figure selects the mandated node through its state rather than through a word list. The source prompt's rule is already explicit: when the user says not to browse but asks for current or high-stakes information, verification still controls.
 
-\paragraph{Authorization as a speech act (7 pairs).} The confirmation predicate should be replaced, keeping the mechanism. A minimal intermediate representation would carry, per request, an authorization state (present, absent, reported, conditional), the confirmed action, and the named fields; the deterministic completeness checks already in compiler 0.8 would run over that representation rather than over raw text. Producing it requires an extractor that generalizes across phrasing, which is the first place a model-assisted step belongs in this compiler: at compile time, traceable, and with the fail-closed default preserved, so that an extractor's miss yields an ask rather than an action.
+\paragraph{Field contracts for artifact edits (6 pairs).} The blanket-approval branch was correct for the case it came from and wrong for every fully specified edit of a spreadsheet or deck, because those artifacts have no field contract and an unprovable action falls to the ask. The contract should cover the target range or slides and the operation, so that ``rows 210 to 480'' and ``slides 12 and 13'' prove the action the way an address and a body prove a send. A branch derived from one spent case must be held to a held-back slice before it ships, as the frontend was.
 
-\paragraph{Asking well (7 pairs).} The unsatisfied branch of each confirmation node should carry the full prompt's own asking checklist, naming the target, scope, operation, consequence, and the archive-versus-delete distinction. This is emitted text, not logic.
+\paragraph{The consequence of disclosure (3 pairs).} ``I cleared it with legal'' is authorization, and forwarding privileged material to an outside address still requires the user to confirm the consequence. The state needs a fact for externally visible disclosure of confidential content that no clearance clause satisfies; it is the one v5 class where the compiler executed something it should have asked about.
 
-All 32 v0.8 full-only pairs and the 18 v0.7 pairs untouched by 0.8 should become development regressions, with a third held back from whoever writes the predicates. Offline tests should assert selected nodes, evaluated predicates and their evidence, tool routing, and exact required and forbidden actions. A small paid development smoke may validate runtime behavior but cannot estimate preservation. After compiler 0.9 is frozen, a newly and independently authored held-out-v5 set is required, and its output cap should not be lower than the highest cap any prior study needed.
+\paragraph{Limits that are not limits (7 pairs).} The extractor read a limit into scope notes (``i mainly care about'', ``you dont have to open the whole deck'') and once read a stated format as none. The fixtures that measured the extractor were written before its first run and were then diagnosed against; the next prompt revision must be scored on fixtures its author has not seen, including this over-limit family, before any paid study.
 
-Longer-term work includes automatic policy parsing, hybrid learned selectors with calibrated conservative fallback, formal checks over the intermediate representation, richer multi-turn tool harnesses, cross-model replication, external human review, and optimization for the smallest obligation-preserving slice rather than a trigger-selected slice.
+The remaining pairs are a keyword false positive, an in-place edit the confirmation nodes do not trigger on, an asynchronous request phrased as a future condition, and two stochastic samples. All 33 v5 full-only pairs should become development regressions with a third held back, as before.
 
 \section{Reproducibility}
 
@@ -478,26 +518,30 @@ Compiler & Run ID & Frozen source commit \\
 0.6 & \path{run_f3c3cdb0e2d1e368} & {\ttfamily\seqsplit{0e2db600496aa3489da582f88a63f4da03b998ca}} \\
 0.7 & \path{run_c019d419734c6c5e} & {\ttfamily\seqsplit{d81862808f66b5fb80b5c3bcb2f06764a8a23f03}} \\
 0.8 & \path{run_16f13bd723767d59} & {\ttfamily\seqsplit{f8c74cdc28157af2c4daaf42b328c4724e032e11}} \\
+0.9 & \path{run_0129a7e9a2e6730b} & {\ttfamily\seqsplit{63b66ec7c0ad1774efe8441dcc7aa7698848381c}} \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Compiler 0.7's exhaustive blind grade lock is commit \texttt{f91bbf5}; its final execution audit and public summary are commit \texttt{cebff5a}. Compiler 0.8 was frozen at commit \texttt{2e5fc44}, held-out v4 at \texttt{b9262c5} (dataset SHA-256 {\ttfamily\seqsplit{197dee9fe2719f20848d81e5a4144218e217690b1a1c5c1f3aa2922d66efdfb1}}), its blind grade lock is commit \texttt{9b8c4b3}, and its execution audit is commit \texttt{1e32f37}. The primary derived hashes are:
+Compiler 0.7's exhaustive blind grade lock is commit \texttt{f91bbf5}; its final execution audit and public summary are commit \texttt{cebff5a}. Compiler 0.8 was frozen at commit \texttt{2e5fc44}, held-out v4 at \texttt{b9262c5} (dataset SHA-256 {\ttfamily\seqsplit{197dee9fe2719f20848d81e5a4144218e217690b1a1c5c1f3aa2922d66efdfb1}}), its blind grade lock is commit \texttt{9b8c4b3}, and its execution audit is commit \texttt{1e32f37}. Compiler 0.9 was frozen at code commit \texttt{d96477b} (record \texttt{a8c99cd}), held-out v5 at \texttt{e063f31} (dataset SHA-256 {\ttfamily\seqsplit{a9ef58b0a4f728edbedb76d0aa206248afda319c13c2b5b5c83638fd6fc4f3b7}}), its extractor reads at plan \texttt{ext\_63d9fbf0c9ea70f9} (reads SHA-256 {\ttfamily\seqsplit{43a8c9842ac52d45fe5ab314dfef12c16626b6cfcb626b9a82fa5b2180bfdb82}}), its preregistration is commit \texttt{63b66ec}, its blind grade lock is commit \texttt{d8713db}, and its execution audit is commit \texttt{8715765}. The primary derived hashes are:
 \begin{itemize}
   \item v0.7 run report: {\ttfamily\seqsplit{d3edf008aec1ae88eebde9e3634c2827a80ec394ccacd5846030e9ec31b91aed}};
   \item v0.7 unblinded semantic results: {\ttfamily\seqsplit{86bc56cf23ae1ee7e293aed23407f098d695e86fba220b91abb6811c8e625318}};
   \item v0.8 run report: {\ttfamily\seqsplit{a2063f4b62b0b54d586745df5c1b8cee091b590a864464fbe0712fbed1650fb4}};
   \item v0.8 merged blind grades: {\ttfamily\seqsplit{4d43480c7d71eba59e3e786f2c2ea7432ca9f87379c924477df54c074481a532}};
+  \item v0.9 run report: {\ttfamily\seqsplit{309cf1810a085a72a4e7046c75df076cb66df0c25dc986d5dfaf813bf6e1955e}};
+  \item v0.9 merged blind grades: {\ttfamily\seqsplit{148855415cb5b2dcc1e8466a6fe5adf453f8ffeab9a2e0e7934db03899f31472}};
+  \item v0.9 unblinded semantic results: {\ttfamily\seqsplit{dddb79f3c43b91a3b637ed157ce7da328c185c25e59573ec220c55749a9ffbdd}};
   \item v0.8 unblinded semantic results: {\ttfamily\seqsplit{9c78e4f37ec24f3fbc7e28e2421c38505b338cc53bd94748e2237f2043b8095a}}.
 \end{itemize}
 
 \section{Conclusion}
 
-\policyc reframes system-prompt reduction as policy compilation rather than generic compression. Across four frozen studies, request-specific slices consistently removed most input context and lowered uncached-equivalent cost. That result is practically meaningful: policy prompts contain substantial request-irrelevant structure.
+\policyc reframes system-prompt reduction as policy compilation rather than generic compression. Across five frozen studies, request-specific slices consistently removed most input context and lowered uncached-equivalent cost. That result is practically meaningful: policy prompts contain substantial request-irrelevant structure.
 
-The same studies reject the current replacement hypothesis. A model using the compiled slice did not preserve enough of the full prompt's critical successes; compiler 0.7 failed four of six preregistered gates and compiler 0.8 failed three. Most regressions were traceable to compiler behavior rather than irreducible model randomness. A flat emitter lost conditional confirmation state, explicit tool limits, and output-format precedence; a specialization stage that repaired confirmation state on its development cases matched none of the fresh phrasings users actually wrote, and the tool-limit class it did not address became the largest.
+The same studies reject the current replacement hypothesis. A model using the compiled slice did not preserve enough of the full prompt's critical successes; compiler 0.7 failed four of six preregistered gates, and compilers 0.8 and 0.9 each failed three. Most regressions were traceable to compiler behavior rather than irreducible model randomness. A flat emitter lost conditional confirmation state, explicit tool limits, and output-format precedence; a specialization stage that repaired confirmation state on its development cases matched none of the fresh phrasings users actually wrote; and a compiler whose frontend then read those phrasings correctly lost to a selector without a marker for current information said plainly, to a branch fitted to one spent case, and to a disclosure consequence its state did not represent.
 
-The research outcome is therefore neither a product claim nor a dead end. \policyc has established a reproducible experimental framework, a strong efficiency result, a compiler mechanism whose fail-closed default held under a predicate that missed, and a ranked agenda. The next question is no longer whether policy prompts can be made smaller, nor whether their nodes can carry predicates; it is whether the state those predicates test can be read from how people actually write.
+The research outcome is therefore neither a product claim nor a dead end. \policyc has established a reproducible experimental framework, a strong efficiency result, a compiler whose every regression has an address, a frontend that reads how people actually write, and a ranked agenda. The next question is no longer whether policy prompts can be made smaller, nor whether the request can be read; it is whether the policy representation can declare, for each situation the source prompt distinguishes, what would prove the request satisfies it.
 
 \begin{thebibliography}{9}
 
