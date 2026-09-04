@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { canonicalJson, COMPILER_VERSION, createArtifact, sha256, type CompilationStrategy, type CompiledPolicyArtifact } from "../compiler/artifact.js";
 import { generateCandidateSelections } from "../compiler/candidates.js";
+import { guardedReader, parsePersistedAuthorizationReads, persistedReader, type AuthorizationReader } from "../compiler/authorization.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { loadPolicies } from "../policy/loader.js";
 import { loadBehavioralCases, type BehavioralCase } from "./cases.js";
@@ -69,7 +70,17 @@ type Options = {
   maxOutputTokensTotal?: number; maxCostUsd: number; retries: number; output: string; dryRun: boolean;
   yes: boolean; retryAmbiguous: boolean;
   runLabel?: string;
+  /** Path to a persisted, schema-validated authorization-read file; absent means the deterministic baseline. */
+  authorizationReads?: string;
 };
+
+type ReaderSource = { readerId: string; readerFor: (caseId: string) => AuthorizationReader | undefined };
+
+function loadReaderSource(path: string | undefined): ReaderSource {
+  if (!path) return { readerId: "baseline", readerFor: () => undefined };
+  const persisted = parsePersistedAuthorizationReads(JSON.parse(readFileSync(path, "utf8")));
+  return { readerId: persisted.readerId, readerFor: (caseId) => guardedReader(persistedReader(persisted, caseId), persisted.readerId) };
+}
 
 export function runExperimentCommand(argv: string[]): void {
   const options = parseOptions(argv);
@@ -84,12 +95,13 @@ export function runExperimentCommand(argv: string[]): void {
   mkdirSync(artifactDir, { recursive: true });
   const createdAt = existingManifest?.createdAt ?? new Date().toISOString();
   const pendingArtifacts: Array<{ path: string; artifact: CompiledPolicyArtifact; callInputTokens: number }> = [];
+  const readerSource = loadReaderSource(options.authorizationReads);
   const casePlans = caseSet.cases.map((testCase) => {
     const executionContext = {
       ...(testCase.artifactContext ?? {}),
       toolsAvailable: testCase.tools.map((tool) => tool.name),
     };
-    const available = generateCandidateSelections(policies, testCase.request, executionContext);
+    const available = generateCandidateSelections(policies, testCase.request, executionContext, readerSource.readerFor(testCase.caseId));
     const selected = options.strategies.map((strategy) => {
       const candidate = available.find((item) => item.strategy === strategy);
       if (!candidate) throw new Error(`unsupported strategy ${strategy}`);
@@ -107,12 +119,12 @@ export function runExperimentCommand(argv: string[]): void {
   const derivedInputLimit = deriveInputLimit(estimatedInputTokens, maxAttempts, options.maxInputTokens);
   const derivedOutputLimit = options.maxOutputTokensTotal ?? logicalTrials * options.maxOutputTokens * maxAttempts;
   if (options.provider === "openai" && options.maxCalls < logicalTrials) throw new Error(`--max-calls ${options.maxCalls} is below ${logicalTrials} logical trials`);
-  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
+  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, authorizationReader: readerSource.readerId, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
   const identityCore = {
     schemaVersion: "2.0.0", experimentName: "paired-policy-preservation", dataset: { path: resolve(options.cases), hash: caseSet.datasetHash, version: caseSet.datasetVersion, split: caseSet.split },
     ...(options.runLabel ? { runLabel: options.runLabel } : {}),
     sourceControl,
-    compilerHash, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
+    compilerHash, authorizationReader: readerSource.readerId, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
     modelParameters: { max_output_tokens: options.maxOutputTokens, max_tool_calls: 1, store: false }, sampleCount: options.samples,
     inputTokenOverheadPerCall: INPUT_TOKEN_OVERHEAD_PER_CALL,
     maxConcurrency: options.concurrency, timeoutSeconds: 60,
@@ -182,6 +194,7 @@ function parseOptions(argv: string[]): Options {
     samples: integer("--samples", 1), concurrency: integer("--concurrency", 1), maxOutputTokens: integer("--max-output-tokens"),
     maxCalls: integer("--max-calls"), maxInputTokens: values.has("--max-input-tokens") ? integer("--max-input-tokens") : undefined,
     maxOutputTokensTotal: values.has("--max-output-tokens-total") ? integer("--max-output-tokens-total") : undefined,
-    maxCostUsd, retries: integer("--retries", 0, true), output: required("--output"), dryRun: flags.has("--dry-run"), yes: flags.has("--yes"), retryAmbiguous: flags.has("--retry-ambiguous"), runLabel
+    maxCostUsd, retries: integer("--retries", 0, true), output: required("--output"), dryRun: flags.has("--dry-run"), yes: flags.has("--yes"), retryAmbiguous: flags.has("--retry-ambiguous"), runLabel,
+    authorizationReads: values.get("--authorization-reads")
   };
 }

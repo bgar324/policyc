@@ -83,6 +83,38 @@ function insideQuotation(text: string, index: number): boolean {
 }
 
 /**
+ * Persisted reads: a JSON map from a request key (the case ID the planner
+ * passes, or the request text) to a read produced earlier by some extractor.
+ * This is the boundary for anything that arrives as JSON, including a future
+ * model-assisted extractor's output: every entry is parsed by the schema here,
+ * before specialization, and a malformed entry rejects the whole file.
+ */
+export const persistedAuthorizationReadsSchema = z.object({
+  readerId: z.string().min(1),
+  reads: z.record(z.string(), authorizationReadSchema),
+}).strict();
+
+export type PersistedAuthorizationReads = z.infer<typeof persistedAuthorizationReadsSchema>;
+
+export function parsePersistedAuthorizationReads(raw: unknown): PersistedAuthorizationReads {
+  return persistedAuthorizationReadsSchema.parse(raw);
+}
+
+/**
+ * A reader backed by persisted reads. Keys are looked up by exact request text
+ * first and then by the caller-supplied key; a request with no entry reads as
+ * `absent` (fail closed) and says so, rather than falling back to the baseline
+ * silently, so an artifact trace always shows which reader produced its read.
+ */
+export function persistedReader(persisted: PersistedAuthorizationReads, key?: string): AuthorizationReader {
+  return (input) => {
+    const hit = persisted.reads[input] ?? (key ? persisted.reads[key] : undefined);
+    if (!hit) return { state: "absent", evidence: [`no persisted read from ${persisted.readerId} for this request`] };
+    return { ...hit, evidence: [`read by ${persisted.readerId}`, ...hit.evidence] };
+  };
+}
+
+/**
  * Deterministic baseline reader. It recognizes the three parts of an
  * authorization act by phrase pattern. This is an offline baseline, not the
  * planned extractor: it was tuned on spent held-out cases and its recall on

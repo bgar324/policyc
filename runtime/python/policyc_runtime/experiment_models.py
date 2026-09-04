@@ -163,6 +163,9 @@ class PairedRunManifest(StrictModel):
     experimentName: str
     dataset: DatasetRef
     compilerHash: str
+    # Identity of the authorization reader that produced this run's compiled artifacts;
+    # manifests written before compiler 0.9 omit it and mean the deterministic baseline.
+    authorizationReader: str = "baseline"
     casePlans: list[CasePlan] = Field(min_length=1)
     strategies: list[str] = Field(min_length=2)
     provider: Literal["fake", "openai"]
