@@ -58,6 +58,8 @@ class ExtractionPlan(StrictModel):
     frontendId: str = Field(min_length=1)
     promptPath: str
     promptSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    # Hash of the prompt plus every field description the inputs carry: the read contract behind frontendId.
+    readContractSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     source: ExtractionSource
     provider: Literal["fake", "openai"]
     model: str = Field(min_length=1)

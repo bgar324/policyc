@@ -84,6 +84,7 @@ def _plan(tmp_path: Path, *, max_cost: float, items: int = 2, max_output: int = 
         "frontendId": "extractor:test",
         "promptPath": "prompts/request-state-extractor.md",
         "promptSha256": "a" * 64,
+        "readContractSha256": "c" * 64,
         "source": {"kind": "cases", "path": "x.jsonl", "hash": "b" * 64, "count": items},
         "provider": "openai",
         "model": "gpt-5-mini-2025-08-07",
