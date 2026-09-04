@@ -11,6 +11,7 @@ import {
   type Frontend,
 } from "./requestState.js";
 import { requiredFieldNames } from "./deterministicFrontend.js";
+import { authorizationDisqualifier } from "../compiler/authorization.js";
 
 /**
  * What an extractor reads from one request: the semantic facts a policy
@@ -89,7 +90,10 @@ export function parsePersistedReads(raw: unknown): PersistedReads {
  * conservative state (authorization absent, limit ambiguous) and says so,
  * rather than falling back to the deterministic frontend silently, so an
  * artifact trace always shows which frontend produced its state. A required
- * field the read did not name counts as missing.
+ * field the read did not name counts as missing. A read of `present` beside a
+ * disqualifier the request states in plain words (a conditional clause, or a
+ * negated review or approval) is capped: the disqualifier outranks every other
+ * act, and the cap only moves a read toward asking.
  */
 export function persistedFrontend(persisted: PersistedReads, key?: string): Frontend {
   return guardedFrontend((input, context) => {
@@ -100,11 +104,17 @@ export function persistedFrontend(persisted: PersistedReads, key?: string): Fron
     const unread = names.filter((name) => !(name in hit.fields));
     const evidence = [`read by ${persisted.frontendId}`, ...hit.evidence];
     if (unread.length) evidence.push(`fields not read, treated as missing: ${unread.join(", ")}`);
-    const proved = provesAction({ authorization: hit.authorization, operationNamed: hit.operationNamed, operationNegated: hit.operationNegated, fields });
+    let authorization = hit.authorization;
+    const disqualifier = authorization === "present" ? authorizationDisqualifier(input) : undefined;
+    if (disqualifier) {
+      authorization = disqualifier.state;
+      evidence.push(`present read capped to ${disqualifier.state}: ${disqualifier.evidence}`);
+    }
+    const proved = provesAction({ authorization, operationNamed: hit.operationNamed, operationNegated: hit.operationNegated, fields });
     return {
       operation: context?.operation,
       artifactType: context?.artifactType,
-      authorization: hit.authorization,
+      authorization,
       limit: hit.limit,
       deliverable: resolveDeliverable(hit.limit, proved),
       purpose: hit.purpose,

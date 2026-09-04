@@ -544,6 +544,23 @@ test("persisted frontend boundary validates reads and fails closed", () => {
   assert.match(conservative.requestState!.evidence[0], /no persisted read from fixture/);
 });
 
+test("a present read beside a stated disqualifier is capped; a waiver is not a disqualifier", () => {
+  const policies = loadPolicies();
+  const context = { artifactType: "email" as const, operation: "send" as const, toolsAvailable: ["gmail"] };
+  const reads = parsePersistedReads({ frontendId: "fixture", reads: { "not-reviewed": READ, "waiver": READ, "conditional": READ } });
+  const capped = compileSelection(policies, "send it to pat@example.com now, body should say we accept. I have not reviewed a final preview, so just take care of it without asking me anything else.", context, persistedFrontend(reads, "not-reviewed"));
+  assert.equal(capped.requestState?.authorization, "absent");
+  assert.ok(capped.requestState?.evidence.some((line) => /present read capped to absent: authorization is negated: "not reviewed"/.test(line)));
+  assert.ok(capped.policies.some((policy) => policy.obligations.some((o) => o.type === "ask_confirmation")), "a capped read asks");
+  const waived = compileSelection(policies, "I've reviewed it, send it to pat@example.com, body should say we accept, and don't check back with me", context, persistedFrontend(reads, "waiver"));
+  assert.equal(waived.requestState?.authorization, "present", "a negated check whose object is the user is a waiver");
+  const conditional = compileSelection(policies, "send it to pat@example.com once legal confirms, body should say we accept", context, persistedFrontend(reads, "conditional"));
+  assert.equal(conditional.requestState?.authorization, "conditional");
+  // The deterministic reader draws the same line.
+  assert.equal(baselineAuthorizationReader("I've reviewed the list twice, delete the 12 messages tagged 'spam-2021' and don't check back").state, "present");
+  assert.equal(baselineAuthorizationReader("nobody has confirmed the retro time yet so don't book it").state, "absent");
+});
+
 test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {
   const policies = loadPolicies();
   const input = "Keep researching in the background and send me the result later today.";

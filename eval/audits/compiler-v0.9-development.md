@@ -73,7 +73,7 @@ What the IR changes for a richer frontend: a request that states a forbidden pur
 - **Measurement tooling.** `policyc reads score` scores a reads file against the 23 blind paraphrase fixtures beside the deterministic frontend and fails on any unsafe read; `policyc reads check` compiles a case set under the reads and reports regression-contract violations (the contract moved to `src/eval/regressionContract.ts`, shared with the tests). Under the fake extractor, which reads nothing, the fixtures score 9/23 and 4 of the 7 held-back cases fail: the gate has teeth before any real read exists.
 - **Discipline for the real extraction.** The extractor prompt was written from the state's documented semantics with original examples; no fixture, held-back, or v4 phrasing appears in it. Fixtures and held-back cases are scored once per prompt revision; iteration on the prompt is development and is allowed only against the visible slice and spent cases, and every revision changes the frontend id. Held-out v5 remains the only preservation evidence.
 
-Suite at this point: 42 TypeScript tests, 105 pytest, graph valid, ruff, mypy. No paid call has been made against compiler 0.9.
+Suite at this point: 42 TypeScript tests, 105 pytest, graph valid, ruff, mypy. No paid experiment has been run against compiler 0.9; the extractor's paid reads are recorded in `compiler-v0.9-extractor.md`.
 
 ## Evidence boundary and next gate
 

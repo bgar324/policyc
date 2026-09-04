@@ -72,21 +72,34 @@ function insideQuotation(text: string, index: number): boolean {
  */
 export const baselineAuthorizationReader: AuthorizationReader = (input) => readAuthorization(input);
 
+/**
+ * The disqualifiers, exported for any frontend: a conditional clause or a
+ * stated negation of review or approval. Either outranks every other act in
+ * the request, so a frontend that reads `present` beside one is capped. The
+ * cap only ever moves a read toward asking.
+ */
+export function authorizationDisqualifier(input: string): { state: "conditional" | "absent"; evidence: string } | undefined {
+  const conditional = CONDITIONAL.exec(input);
+  if (conditional) return { state: "conditional", evidence: `authorization is conditional: "${conditional[0]}"` };
+  for (const negated of input.matchAll(NEGATED_SETTLED_ALL)) {
+    // A negated check whose object is the user ("don't check back", "no need
+    // to confirm with me") is a waiver, the opposite of a disqualifier.
+    if (WAIVER_TAIL.test(input.slice(negated.index + negated[0].length))) continue;
+    return { state: "absent", evidence: `authorization is negated: "${negated[0]}"` };
+  }
+  return undefined;
+}
+
+const NEGATED_SETTLED_ALL = new RegExp(NEGATED_SETTLED.source, "gi");
+const WAIVER_TAIL = /^\s*(?:back|in|with me|me|again|first)\b/i;
+
 export function readAuthorization(input: string): AuthorizationRead {
   const evidence: string[] = [];
   if (QUESTION.test(input.trim()) && !GO.test(input)) {
     return { state: "absent", evidence: ["request is a question"] };
   }
-  const conditional = CONDITIONAL.exec(input);
-  if (conditional) {
-    evidence.push(`authorization is conditional: "${conditional[0]}"`);
-    return { state: "conditional", evidence };
-  }
-  const negated = NEGATED_SETTLED.exec(input);
-  if (negated) {
-    evidence.push(`authorization is negated: "${negated[0]}"`);
-    return { state: "absent", evidence };
-  }
+  const disqualifier = authorizationDisqualifier(input);
+  if (disqualifier) return { state: disqualifier.state, evidence: [disqualifier.evidence] };
 
   const first = SETTLED_FIRST_PERSON.exec(input);
   const firstOk = first && !insideQuotation(input, first.index) && !REPORTED_FRAME.test(input.slice(Math.max(0, first.index - 40), first.index));
