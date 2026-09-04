@@ -323,6 +323,88 @@ test("compiler 0.8 executes already-confirmed exact actions instead of re-asking
   );
 });
 
+type RegressionCase = { caseId: string; request: string; artifactContext: Record<string, unknown> | null; tools: Array<{ name: string }>; toolExpectation: { required: string[]; forbidden: string[] }; tags: string[]; applicableObligations: Array<{ validator: string; severity: string }> };
+
+function loadRegressions(path: string): RegressionCase[] {
+  return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as RegressionCase);
+}
+
+function compileCase(policies: Policy[], item: RegressionCase) {
+  const context = { ...(item.artifactContext ?? {}), toolsAvailable: item.tools.map((tool) => tool.name) } as NonNullable<Parameters<typeof generateCandidateSelections>[2]>;
+  const selection = generateCandidateSelections(policies, item.request, context)[1].selection;
+  return { selection, prompt: emitRuntimePrompt(selection, item.request, context) };
+}
+
+/** Observable contract every regression case must meet, independent of which case it is. */
+function assertRegressionContract(policies: Policy[], item: RegressionCase) {
+  const { selection, prompt } = compileCase(policies, item);
+  for (const tool of item.toolExpectation.forbidden) {
+    assert.doesNotMatch(prompt, new RegExp(`- (call_tool|inspect_artifact):?${tool}`), `${item.caseId}: forbidden tool ${tool} must not be a required action`);
+    assert.doesNotMatch(prompt, /^- inspect_artifact$/m, `${item.caseId}: bare inspect_artifact invites the forbidden tool`);
+  }
+  for (const tool of item.toolExpectation.required) {
+    assert.match(prompt, new RegExp(`- call_tool:${tool}`), `${item.caseId}: required tool ${tool} must be a required action`);
+    assert.doesNotMatch(prompt, /ask_confirmation/, `${item.caseId}: required action must not be gated on re-asking`);
+  }
+  const asks = item.applicableObligations.some((o) => o.validator === "asks_confirmation" && o.severity === "critical");
+  if (asks) {
+    assert.match(prompt, /ask_confirmation/, `${item.caseId}: ask-side case must ask`);
+    assert.match(prompt, /exact (target|action|event|thread|recipient)/i, `${item.caseId}: ask must name what to pin down`);
+    assert.ok((selection.specializations ?? []).every((record) => record.predicate !== "explicit_confirmation" || !record.satisfied), `${item.caseId}: ask-side case must not be specialized to execute`);
+  }
+}
+
+test("compiler 0.9 visible regressions: explicit limits suppress tool obligations", () => {
+  const policies = loadPolicies();
+  const cases = loadRegressions("eval/behavioral/compiler-v0.9-regressions.jsonl");
+  for (const item of cases.filter((c) => c.tags.includes("class-limit") && c.toolExpectation.forbidden.length)) {
+    const { selection, prompt } = compileCase(policies, item);
+    assertRegressionContract(policies, item);
+    const limit = (selection.specializations ?? []).find((record) => record.predicate === "explicit_limit");
+    assert.ok(limit?.satisfied, `${item.caseId}: explicit_limit must be recorded as satisfied`);
+    assert.match(prompt, /do not call|without calling|no tool call/i, `${item.caseId}: prompt must state the limit in prose`);
+  }
+});
+
+test("compiler 0.9 visible regressions: destructive saves and clear-outs select confirmation", () => {
+  const policies = loadPolicies();
+  const cases = loadRegressions("eval/behavioral/compiler-v0.9-regressions.jsonl");
+  for (const item of cases.filter((c) => c.tags.includes("class-ask-quality") || c.caseId === "cv09-033v4")) {
+    const { selection, prompt } = compileCase(policies, item);
+    assert.ok(selection.detectedIntents.includes("destructive_action"), `${item.caseId}: must detect destructive_action`);
+    assert.match(prompt, /ask_confirmation/, `${item.caseId}: must ask`);
+    assert.match(prompt, /exact (target|action|event|thread|recipient)/i, `${item.caseId}: ask must name what to pin down`);
+  }
+  const clearOut = compileCase(policies, cases.find((c) => c.caseId === "cv09-019v4")!);
+  assert.match(clearOut.prompt, /archive.*(?:delete|trash)|(?:delete|trash).*archive/i, "clear-out must surface the archive-versus-delete distinction");
+});
+
+test("compiler 0.9 visible regressions: open-phrasing authorization executes with full fields", () => {
+  const policies = loadPolicies();
+  const cases = loadRegressions("eval/behavioral/compiler-v0.9-regressions.jsonl");
+  for (const item of cases.filter((c) => c.tags.includes("class-authorization"))) {
+    const { selection, prompt } = compileCase(policies, item);
+    assertRegressionContract(policies, item);
+    const records = (selection.specializations ?? []).filter((record) => record.predicate === "explicit_confirmation");
+    assert.ok(records.length > 0 && records.every((record) => record.satisfied), `${item.caseId}: authorization must be read as satisfied: ${JSON.stringify(records.map((r) => r.evidence))}`);
+    assert.match(prompt, /do not ask (for confirmation )?again/i, item.caseId);
+  }
+  // Authorization asserted but fields unresolved must still ask (the fail-safe direction).
+  const underspecified = compileCase(policies, cases.find((c) => c.caseId === "cv09-033v4")!);
+  assert.match(underspecified.prompt, /ask_confirmation/, "asserted authorization with unresolved scope must ask");
+});
+
+test("compiler 0.9 held-back regressions meet the generic contract", () => {
+  // This file is never read while writing predicates; only its per-case tool
+  // expectations and ask-side labels are checked, through the same contract
+  // as the visible slice. A predicate that passes the visible slice and fails
+  // here does not ship.
+  const policies = loadPolicies();
+  for (const item of loadRegressions("eval/behavioral/compiler-v0.9-regressions-heldback.jsonl")) {
+    assertRegressionContract(policies, item);
+  }
+});
+
 test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {
   const policies = loadPolicies();
   const input = "Keep researching in the background and send me the result later today.";
