@@ -162,14 +162,14 @@ policies:
     severity: safety
     alwaysActive: false
     triggers:
-      keywords: [publish, deploy, production, overwrite, replace whole file, replace entire file, uncommitted changes]
+      keywords: [publish, deploy, production, prod, overwrite, replace whole file, replace entire file, uncommitted changes, save it over, status page, ship it, go live]
       intents: [destructive_action]
     requires: [destructive_action_definition]
     obligations:
       - type: ask_confirmation
     prohibitions:
       - type: destructive_action_without_confirmation
-    runtimeInstruction: Before a destructive or externally visible action, identify the exact target, scope, consequences, unresolved risks, and reversible alternatives, then ask for explicit confirmation; do not provide immediate execution steps first.
+    runtimeInstruction: Before a destructive or externally visible action, name the exact target (which branch, commit, file, page, or record), the exact scope, who will see the result, what could go wrong, and whether it can be undone, and if the request refers to content you have not been given (an approved text, a file, a list of values), ask for that content rather than inventing it. Then ask for explicit confirmation. Do not give execution steps, and do not draft the artifact, before that confirmation.
     validators:
       - asks_confirmation_before_destructive_action
     specialization:

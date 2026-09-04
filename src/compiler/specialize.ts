@@ -1,5 +1,6 @@
-import type { ArtifactContext, ArtifactType, OperationTrigger, Policy, PolicySelection, SpecializationRecord } from "../policy/types.js";
+import type { ArtifactContext, ArtifactType, Obligation, OperationTrigger, Policy, PolicySelection, SpecializationRecord } from "../policy/types.js";
 import { selectPolicies } from "../policy/selector.js";
+import { evaluateExplicitLimit, limitInstruction } from "./limits.js";
 
 /** Selection plus specialization: the one path every emitted compiled prompt goes through. */
 export function compileSelection(policies: Policy[], input: string, context?: ArtifactContext | null): PolicySelection {
@@ -8,23 +9,45 @@ export function compileSelection(policies: Policy[], input: string, context?: Ar
 
 /**
  * Specialization runs after selection and dependency closure and before emission.
- * It never adds or removes policies. For each selected policy that declares a
- * `specialization`, it evaluates the predicate against the request and context,
- * swaps in the authored `satisfied` branch when the predicate holds, and records
- * the evidence. An unsatisfied predicate leaves the policy exactly as authored,
- * so the conservative branch (ask) is the default.
+ * It never adds or removes policies. Two predicates run here:
+ *
+ *  - `explicit_confirmation`, per node: a policy that declares a specialization
+ *    swaps in its authored `satisfied` branch when the user has already supplied
+ *    the confirmation state the policy asks for. Unsatisfied leaves the node as
+ *    authored, so the conservative branch (ask) is the default.
+ *  - `explicit_limit`, per request: when the user has bounded the turn to a text
+ *    answer, every selected node's tool obligations (`call_tool`,
+ *    `inspect_artifact`) are withheld and a prose limit is emitted instead. An
+ *    ambiguous limit also withholds them and asks the model to check before
+ *    acting, because the harm avoided here is an unwanted action.
+ *
+ * Every evaluation is recorded in the selection's `specializations` trace.
  */
 export function specializeSelection(selection: PolicySelection, input: string, context?: ArtifactContext | null): PolicySelection {
   const confirmation = evaluateExplicitConfirmation(input, context);
+  const limit = evaluateExplicitLimit(input, context);
   const specializations: SpecializationRecord[] = [];
+  const toolBound = (obligation: Obligation) => obligation.type === "call_tool" || obligation.type === "inspect_artifact";
   const policies = selection.policies.map((policy) => {
-    if (!policy.specialization) return policy;
-    specializations.push({ policyId: policy.id, predicate: policy.specialization.predicate, satisfied: confirmation.satisfied, evidence: confirmation.evidence });
-    if (!confirmation.satisfied) return policy;
-    const branch = policy.specialization.satisfied;
-    return { ...policy, runtimeInstruction: branch.runtimeInstruction, obligations: branch.obligations, prohibitions: branch.prohibitions };
+    let next = policy;
+    if (policy.specialization) {
+      specializations.push({ policyId: policy.id, predicate: policy.specialization.predicate, satisfied: confirmation.satisfied, evidence: confirmation.evidence });
+      if (confirmation.satisfied) {
+        const branch = policy.specialization.satisfied;
+        next = { ...policy, runtimeInstruction: branch.runtimeInstruction, obligations: branch.obligations, prohibitions: branch.prohibitions };
+      }
+    }
+    if (limit.verdict !== "none" && next.obligations.some(toolBound)) {
+      specializations.push({ policyId: policy.id, predicate: "explicit_limit", satisfied: true, evidence: [`verdict ${limit.verdict}`, ...limit.evidence] });
+      next = { ...next, obligations: next.obligations.filter((obligation) => !toolBound(obligation)) };
+    }
+    return next;
   });
-  return { ...selection, policies, specializations };
+  if (limit.verdict !== "none" && !specializations.some((record) => record.predicate === "explicit_limit")) {
+    // Recorded even when no node carried a tool obligation, so the trace shows the read.
+    specializations.push({ policyId: "*", predicate: "explicit_limit", satisfied: true, evidence: [`verdict ${limit.verdict}`, ...limit.evidence] });
+  }
+  return { ...selection, policies, specializations, limit: limit.verdict === "none" ? undefined : { verdict: limit.verdict, instruction: limitInstruction(limit.verdict, (context?.toolsAvailable ?? []).map((tool) => tool.toLowerCase()))! } };
 }
 
 type PredicateResult = { satisfied: boolean; evidence: string[] };

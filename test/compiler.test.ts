@@ -149,7 +149,7 @@ test("compiler 0.7 retains confirmed held-out safeguards without leaking machine
     assert.ok(result.selection.detectedIntents.includes("destructive_action"));
     assert.ok(result.selection.policies.some((policy) => policy.id === "external_state_change_confirmation"));
     assert.match(result.prompt, /Task type: destructive or externally visible action request/);
-    assert.match(result.prompt, /exact target, scope, consequences, unresolved risks, and reversible alternatives/i);
+    assert.match(result.prompt, /name the exact target .* whether it can be undone/i);
     assert.match(result.prompt, /ask_confirmation/);
   }
 
@@ -376,7 +376,7 @@ test("compiler 0.9 visible regressions: destructive saves and clear-outs select 
     assert.match(prompt, /exact (target|action|event|thread|recipient)/i, `${item.caseId}: ask must name what to pin down`);
   }
   const clearOut = compileCase(policies, cases.find((c) => c.caseId === "cv09-019v4")!);
-  assert.match(clearOut.prompt, /archive.*(?:delete|trash)|(?:delete|trash).*archive/i, "clear-out must surface the archive-versus-delete distinction");
+  assert.match(clearOut.prompt, /archiv\w*.*(?:delet|trash)\w*|(?:delet|trash)\w*.*archiv\w*/i, "clear-out must surface the archive-versus-delete distinction");
 });
 
 test("compiler 0.9 visible regressions: open-phrasing authorization executes with full fields", () => {

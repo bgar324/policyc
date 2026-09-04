@@ -7,7 +7,7 @@ policies:
     severity: safety
     alwaysActive: false
     triggers:
-      keywords: [delete, archive, trash, cancel, remove all, move meeting]
+      keywords: [delete, archive, trash, cancel, remove all, move meeting, clear out, get rid of, clean out, purge, nuke, wipe]
       tools: []
       operations: [delete, archive, update]
     requires: [destructive_action_definition, email_calendar_privacy]
@@ -15,7 +15,7 @@ policies:
       - type: ask_confirmation
     prohibitions:
       - type: destructive_action_without_confirmation
-    runtimeInstruction: Ask for explicit confirmation before destructive email or calendar actions.
+    runtimeInstruction: Before any destructive email or calendar action, state the exact action you would take, the exact target (which messages, thread, label, or event, and how many), the scope (one occurrence or the series; which date range), and whether it is reversible, then ask for explicit confirmation. Do not perform, and do not give step-by-step execution instructions for, the action before that confirmation.
     validators:
       - asks_confirmation_before_destructive_action
     specialization:
@@ -129,14 +129,14 @@ policies:
     severity: safety
     alwaysActive: false
     triggers:
-      keywords: [archive, delete, trash]
+      keywords: [archive, delete, trash, clear out, get rid of, clean out, purge, remove]
       operations: [archive, delete]
     requires: [destructive_action_definition]
     obligations:
       - type: ask_confirmation
     prohibitions:
       - type: destructive_action_without_confirmation
-    runtimeInstruction: Distinguish archive from delete/trash and confirm the exact action.
+    runtimeInstruction: When a request could mean either archiving or deleting, say so explicitly, explain that archiving keeps the messages recoverable and searchable while deleting removes them permanently, and ask which one is wanted and over exactly which messages before doing either. Never read an ambiguous word such as "clear out" or "get rid of" as permission to delete.
     validators:
       - asks_confirmation_before_destructive_action
     specialization:

@@ -32,7 +32,7 @@ class SelectionReason(StrictModel):
 
 class SpecializationRecord(StrictModel):
     policyId: str
-    predicate: Literal["explicit_confirmation"]
+    predicate: Literal["explicit_confirmation", "explicit_limit"]
     satisfied: bool
     evidence: list[str]
 

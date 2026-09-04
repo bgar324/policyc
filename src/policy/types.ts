@@ -101,7 +101,7 @@ export type Prohibition = {
   detail?: string;
 };
 
-export type SpecializationPredicate = "explicit_confirmation";
+export type SpecializationPredicate = "explicit_confirmation" | "explicit_limit";
 
 export type PolicyBranch = {
   runtimeInstruction: string;
@@ -160,12 +160,16 @@ export type SpecializationRecord = {
   evidence: string[];
 };
 
+export type LimitVerdict = "limited" | "ambiguous";
+
 export type PolicySelection = {
   policies: Policy[];
   reasons: PolicySelectionReason[];
   detectedIntents: IntentTrigger[];
   dependencyEdges: Array<{ from: string; requires: string }>;
   specializations?: SpecializationRecord[];
+  /** Present when the request bounds this turn; the emitter prints the instruction as a rule. */
+  limit?: { verdict: LimitVerdict; instruction: string };
 };
 
 export type PolicyPackFile = {

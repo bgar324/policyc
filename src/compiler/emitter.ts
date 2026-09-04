@@ -23,9 +23,18 @@ export function emitRuntimePrompt(selection: PolicySelection, input: string, con
         : `- ${policy.runtimeInstruction}`;
     });
 
+  // Emission precedence. Inspection is a tool call on synthetic connectors, so it
+  // must not be listed as required when the same selection asks for confirmation
+  // first (ask outranks act) or when a privacy prohibition covers the request's
+  // stated purpose (declining outranks inspecting for that purpose).
+  const asksFirst = selection.policies.some((policy) => policy.obligations.some((obligation) => obligation.type === "ask_confirmation"));
+  const purposeForbidden = selection.detectedIntents.includes("sensitive_attribute") || selection.detectedIntents.includes("identification");
   const obligations = unique(
     selection.policies.flatMap((policy) => (policy.kind === "universal" ? [] : policy.obligations.flatMap((obligation) => {
       if (obligation.type === "call_tool" && obligation.value && unavailableRequiredTools.has(obligation.value.toLowerCase())) {
+        return [];
+      }
+      if (obligation.type === "inspect_artifact" && (asksFirst || purposeForbidden)) {
         return [];
       }
       return [`- ${obligationToString(obligation)}`];
@@ -61,6 +70,7 @@ export function emitRuntimePrompt(selection: PolicySelection, input: string, con
 
   lines.push("");
   lines.push("Active rules:");
+  if (selection.limit) lines.push(`- ${selection.limit.instruction}`);
   lines.push(...activeRules);
 
   if (obligations.length) {
