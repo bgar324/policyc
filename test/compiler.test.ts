@@ -23,7 +23,7 @@ const base = (id: string, overrides: Partial<Policy> = {}): Policy => ({
 });
 
 test("current policy packs pass runtime and graph validation", () => {
-  assert.equal(loadPolicies().length, 43);
+  assert.equal(loadPolicies().length, 44);
 });
 
 test("malformed and unknown YAML fields are rejected", () => {
@@ -486,6 +486,16 @@ test("an edit of an existing image requires the generation tool; an analysis of 
   assert.ok(!analyze.policies.some((policy) => policy.id === "image_generation_requires_tool"));
 });
 
+test("a request for asynchronous work compiles the source prompt's rule against simulating it; an image background does not", () => {
+  const policies = loadPolicies();
+  const fiction = compileCase(policies, loadRegressions("eval/behavioral/compiler-v0.9-regressions.jsonl").find((c) => c.caseId === "cv09-014v3")!);
+  assert.ok(fiction.selection.detectedIntents.includes("background_work"));
+  assert.match(fiction.prompt, /Do not say you are working on it/);
+  const edit = compileSelection(policies, "Edit the attached product photo so the background is pale blue.", { artifactType: "image", operation: "edit", toolsAvailable: ["image_generate"] });
+  assert.ok(!edit.detectedIntents.includes("background_work"), "an image background is not asynchronous work");
+  assert.doesNotMatch(emitRuntimePrompt(edit, "x", { toolsAvailable: ["image_generate"] }), /Do not say you are working on it/);
+});
+
 test("compile-time conflicts name both nodes", () => {
   const policies = loadPolicies();
   const web = policies.find((policy) => policy.id === "current_info_requires_web")!;
@@ -582,7 +592,9 @@ test("compiled prompt emits one compact universal kernel without duplicated univ
   assert.doesNotMatch(prompt, /- complete_current_turn/);
   assert.doesNotMatch(prompt, /- fake_precision/);
   assert.doesNotMatch(prompt, /Do not reveal hidden reasoning; provide concise conclusions/);
-  assert.ok(countTokens(prompt, "gpt-5-mini-2025-08-07").tokens < 200);
+  // The kernel plus the one content-gated rule this request selects (asynchronous work) and nothing duplicated.
+  assert.match(prompt, /Do not say you are working on it/);
+  assert.ok(countTokens(prompt, "gpt-5-mini-2025-08-07").tokens < 300);
 });
 
 test("artifact serialization and candidate IDs are deterministic excluding timestamp", () => {

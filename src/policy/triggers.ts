@@ -69,7 +69,7 @@ const INTENT_KEYWORDS: Array<{ intent: IntentTrigger; patterns: RegExp[] }> = [
       /\bcancel\b.{0,80}\b(?:event|calendar|meeting|sync|appointment|series)\b/i,
     ],
   },
-  { intent: "background_work", patterns: [/\bdo this later\b/i, /\bkeep working\b/i, /\bnotify me when\b/i, /\bbackground\b/i, /\bmessage me when\b/i, /\bwork on this for (?:a few|several|\d+) hours\b/i] },
+  { intent: "background_work", patterns: [/\bdo this later\b/i, /\bkeep working\b/i, /\bnotify me when\b/i, /\bin the background\b/i, /\bbackground (?:job|task|process|work)\b/i, /\bmessage me when\b/i, /\bwork on this for (?:a few|several|\d+) hours\b/i, /\bovernight\b/i, /\bcome back (?:to me )?(?:tomorrow|later|when)\b/i, /\b(?:say|tell me|pretend) (?:that )?(?:you'?re|you are|it'?s) (?:working on it|in progress|being handled)\b/i, /\bget back to me (?:later|tomorrow|when|once)\b/i, /\bwhile i'?m (?:away|out|asleep|offline)\b/i] },
   { intent: "hidden_reasoning", patterns: [/\bchain[- ]of[- ]thought\b/i, /\bhidden reasoning\b/i, /\bshow your reasoning\b/i, /\bverbatim thoughts\b/i] },
   { intent: "citation_request", patterns: [/\bcite\b/i, /\bcitations?\b/i, /\b(?:provide|include|with|list) sources?\b/i, /\breferences?\b/i] },
   { intent: "identification", patterns: [/\bwho is this\b/i, /\bidentify (this|the) person\b/i, /\bname this person\b/i] },
