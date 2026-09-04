@@ -83,7 +83,7 @@ Preservation is flat across author batches and concentrated by tool: calendar an
 
 **Item 6, case-clustered sensitivity.** 54 cases had at least one full-policy critical pass; 37 of them had no full-only regression (68.52% regression-free). A case-level bootstrap (5,000 resamples of the 60 cases, seed 20260903) gives a 95% interval for conditional preservation of 64.49%–86.01%, wider than the trial-level Wilson interval because three samples from one case are not independent. Neither interval reaches the 90% lower-bound gate.
 
-**Item 7, held-out-v3 taxonomy over the 32 full-only pairs.** Emitter loss 27, selector error 3, stochastic 2, context-interface asymmetry 0. Explicit assignments:
+**Item 7, the 32 held-out-v4 full-only pairs under the taxonomy introduced for held-out-v3 (emitter loss, selector error, context-interface asymmetry, stochastic).** Emitter loss 27, selector error 3, stochastic 2, context-interface asymmetry 0. Explicit assignments:
 
 | Taxonomy class | Pairs | Cases | Assignment |
 | --- | ---: | ---: | --- |
