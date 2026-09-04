@@ -5,17 +5,17 @@ You are given the request text; the context the system declares for it (artifact
 Report these facts.
 
 authorization: whether the user has authorized the declared operation in their own voice on this turn.
-- present: the user, speaking for themselves, has confirmed or authorized that exact operation. This includes a plain unconditional instruction to do it now, a statement that they have already reviewed or cleared it, or a statement that no further check with them is needed. A report that someone else approved counts as present only when the user adopts it as their own go-ahead in the same breath ("finance signed off, so send it").
-- reported: the request relays someone else's approval without the user's own go-ahead ("the client wrote back that the numbers look fine").
+- present: the user, in their own voice, asserts that the operation is settled now. That takes at least one of two acts beyond the request itself: a settled-state clause (they confirm it, or say they have already reviewed, checked, or cleared it, or adopt someone else's approval as their own decision: "finance signed off, so this is approved"), or a no-re-ask clause (they say no further check with them is needed). A go clause ("go ahead", "send it now", "just do it") reinforces those acts but on its own is only the request. A plain instruction to do the operation ("send the reminder", "book it for Friday", "tell me who is left") is the request every message contains, never an authorization.
+- reported: the request relays someone else's approval without the user's own act ("the client wrote back that the numbers look fine", "my manager says she's fine with it"). A relayed approval stays reported when the user adds that they have not reviewed or confirmed it themselves.
 - conditional: authorization depends on something not yet true ("assuming the venue confirms", "after I hear from Mia").
-- absent: no authorization act in the request; or the user is asking a question; or the confirmation is negated or withdrawn ("hold off on sending", "I haven't looked at it yet").
-Conservative value: absent.
+- absent: no authorization act in the request; or the user is asking a question; or the act is negated or withdrawn ("hold off on sending", "I haven't looked at it yet", "nobody has confirmed").
+Conservative value: absent. When a go clause is the only act you can point to, report absent and quote it.
 
 limit: whether the user has bounded this turn to a text answer.
 - limited: the user rules out acting or using a tool on this turn, or asks only for words: an explanation, a recommendation, a draft to review, numbers from content already pasted, a description instead of a change. Naming a tool and telling the assistant not to use it is limited.
 - ambiguous: the request both bounds what may be done and asks for an action, and the words do not settle which the user wants.
 - none: nothing bounds the turn.
-A request that names an action and asks for it done is not limited by phrases like "keep it short" or "nothing fancy". A statement about the shape of the answer ("only the rewrite") is a format fact, not a limit, unless it also rules out a tool or an action.
+A request that names an action and asks for it done is not limited by phrases like "keep it short" or "nothing fancy". A constraint on the length or shape of the answer ("in a sentence", "under 100 words", "only the rewrite") is a format fact, never a limit; a request that needs a tool to produce that answer is not limited by asking for it briefly.
 Conservative value: ambiguous when the request contains a bounding phrase you cannot resolve; none when nothing bounds the turn.
 
 purpose: a purpose the assistant's policy refuses to serve regardless of tool.

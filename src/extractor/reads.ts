@@ -75,10 +75,15 @@ export function scoreFixtures(path: string, frontendFor: (id: string) => Fronten
   const score: Score = { total: fixtures.length, matched: 0, groups: {}, misses: [], unsafe: [], unread: [] };
   for (const item of fixtures) {
     const state = frontendFor(item.id)(item.text, { toolsAvailable: item.tools ?? [] });
-    if (state.evidence[0]?.startsWith("no persisted read")) score.unread.push(item.id);
     const group = `${item.kind}, expect ${item.expect}`;
     score.groups[group] ??= { total: 0, matched: 0 };
     score.groups[group].total += 1;
+    if (state.evidence[0]?.startsWith("no persisted read")) {
+      // The conservative fallback is not a read; it never counts as a match.
+      score.unread.push(item.id);
+      score.misses.push(`${item.id}: unread (expected ${item.expect})`);
+      continue;
+    }
     let matched: boolean;
     if (item.kind === "authorization") {
       matched = state.authorization === item.expect;
