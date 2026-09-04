@@ -88,6 +88,7 @@ export type TriggerSet = {
   artifactFeatures?: string[];
   tools?: string[];
   operations?: OperationTrigger[];
+  artifactOperations?: Array<{ artifactType: ArtifactType; operation: OperationTrigger }>;
   domains?: string[];
   risks?: string[];
 };

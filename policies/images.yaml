@@ -11,6 +11,9 @@ policies:
       intents: [image_generation]
       artifactTypes: [generated_image]
       operations: [create, edit]
+      # An edit of an existing image produces a new one through the same tool.
+      artifactOperations:
+        - { artifactType: image, operation: edit }
     requires: []
     obligations:
       - type: call_tool

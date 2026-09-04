@@ -477,6 +477,15 @@ test("a user-stated output format replaces the writing template; a plain rewrite
   assert.ok(plain.policies.some((policy) => policy.obligations.some((o) => o.type === "use_output_format")));
 });
 
+test("an edit of an existing image requires the generation tool; an analysis of one does not", () => {
+  const policies = loadPolicies();
+  const edit = compileSelection(policies, "Turn the attached product photo into a square catalog shot with a warm gray background.", { artifactType: "image", operation: "edit", toolsAvailable: ["image_generate"] });
+  assert.ok(edit.policies.some((policy) => policy.id === "image_generation_requires_tool"));
+  assert.ok(edit.reasons.some((reason) => reason.policyId === "image_generation_requires_tool" && reason.reasons.includes("artifact operation: image edit")));
+  const analyze = compileSelection(policies, "What does this picture of the booth show?", { artifactType: "image", operation: "analyze", toolsAvailable: ["image_inspect"] });
+  assert.ok(!analyze.policies.some((policy) => policy.id === "image_generation_requires_tool"));
+});
+
 test("compile-time conflicts name both nodes", () => {
   const policies = loadPolicies();
   const web = policies.find((policy) => policy.id === "current_info_requires_web")!;

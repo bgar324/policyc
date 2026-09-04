@@ -112,6 +112,12 @@ export function matchPolicy(policy: Policy, selectionInput: SelectionInput, dete
   const triggers = policy.triggers ?? {};
   const artifactTypes = triggers.artifactTypes ?? [];
 
+  // A declared artifact-type-plus-operation pair selects on its own: it names
+  // one situation exactly (an edit of an existing image is image generation),
+  // so it is neither gated by artifactTypes nor widened by keywords.
+  const pair = triggers.artifactOperations?.find((item) => item.artifactType === context?.artifactType && item.operation === context?.operation);
+  if (pair) return [`artifact operation: ${pair.artifactType} ${pair.operation}`];
+
   if (context?.artifactType && artifactTypes.length && !artifactTypes.includes(context.artifactType)) {
     return [];
   }

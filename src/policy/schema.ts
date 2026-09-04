@@ -21,6 +21,8 @@ const triggerSchema = z.object({
   artifactFeatures: z.array(z.string().min(1)).optional(),
   tools: z.array(z.string().min(1)).optional(),
   operations: z.array(operation).optional(),
+  /** Conjunctive: the context declares this artifact type and this operation. Independent of the artifactTypes gate. */
+  artifactOperations: z.array(z.object({ artifactType, operation }).strict()).optional(),
   domains: z.array(z.string().min(1)).optional(),
   risks: z.array(z.string().min(1)).optional()
 }).strict();
