@@ -31,7 +31,7 @@ The protocol boundary is defined by JSON Schemas under [`protocol/`](protocol/).
 
 ## Compiler pipeline
 
-Compiler 0.9 (unfrozen, development) loads 44 manually structured policy nodes from six YAML packs (43 through compiler 0.8; the asynchronous-work rule became its own node in 0.9). Its authorization read sits behind an injectable, schema-validated reader boundary; the shipped reader is a deterministic baseline whose blind-paraphrase recall is recorded in `eval/audits/compiler-v0.9-development.md`. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
+Compiler 0.9 (frozen at `d96477b`, tested on held-out v5) loads 44 manually structured policy nodes from six YAML packs (43 through compiler 0.8; the asynchronous-work rule became its own node in 0.9). Its authorization read sits behind an injectable, schema-validated reader boundary; the shipped reader is a deterministic baseline whose blind-paraphrase recall is recorded in `eval/audits/compiler-v0.9-development.md`. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
 
 1. Zod validates required fields, enums, priorities, triggers, and unknown fields.
 2. Graph validation rejects duplicate IDs/edges, missing references, self-dependencies, cycles, unreachable structural nodes, unknown validators, and invalid always-active configurations.
@@ -94,9 +94,9 @@ The built-in evaluator is intentionally small and deterministic. Model graders c
 
 ### Latest frozen result
 
-Compiler 0.8 did not pass its preregistered held-out-v4 test. In 360 GPT-5 mini executions over 60 independently authored cases (339 completed, 163 complete pairs), exhaustive strategy-blind semantic review measured 100 both-pass, 32 full-only, 11 compiler-only, and 20 both-fail pairs. Conditional critical-obligation preservation was 100/132 = **75.76%** (Wilson 95%: 67.79%--82.27%), versus the 95% target, across 17 regressed cases. The compiler reduced mean actual input tokens by **94.76%**, uncached-equivalent cost by **66.00%**, and billed cost by **18.03%**. The run cost **$1.0653**. Compiler 0.8's confirmation specialization matched none of the four act-side confirmation cases the authors wrote, so on fresh data its behavior was identical to compiler 0.7; the largest failure class was calling a tool the user had asked not to use (14 of 32 regressions). See [`eval/audits/held-out-v4-execution.md`](eval/audits/held-out-v4-execution.md).
+Compiler 0.9 did not pass its preregistered held-out-v5 test. In 360 GPT-5 mini executions over 60 independently authored cases (357 completed, 177 complete pairs), compiled under the extractor frontend, exhaustive strategy-blind semantic review measured 104 both-pass, 33 full-only, 21 compiler-only, and 19 both-fail pairs. Conditional critical-obligation preservation was 104/137 = **75.91%** (Wilson 95%: 68.11%–82.30%) against the 95% target, across 16 regressed cases. The compiler reduced mean actual input tokens by **92.99%**, uncached-equivalent cost by **58.69%**, and billed cost by **17.21%**. Every regression classifies into a compiler bin: selector gaps 15 pairs (eight of them current-information phrasings such as "as it stands today" that the selector has no marker for), undeclared conditions 9 (six from a confirmation branch firing on fully specified spreadsheet and slide edits that have no field contract; three from an external forward whose consequence the request state does not represent), extractor over-read limits 7, stochastic 2. See `eval/audits/held-out-v5-execution.md`.
 
-The prior result, compiler 0.7 on held-out-v3, was 130/163 = 79.75% preservation with 93.75% input reduction (`eval/audits/held-out-v3-execution.md`). The two sets differ, so the versions are not a controlled comparison.
+The prior result, compiler 0.8 on held-out-v4, was 100/132 = 75.76% preservation with 94.76% input reduction (`eval/audits/held-out-v4-execution.md`); compiler 0.7 on held-out-v3 was 130/163 = 79.75% (`eval/audits/held-out-v3-execution.md`). The sets differ, so the versions are not a controlled comparison.
 
 ## Setup
 
