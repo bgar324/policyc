@@ -74,6 +74,11 @@ def test_baseline_manifest_validates_against_protocol_schema(tmp_path: Path) -> 
 
 
 READ = {
+    "currentInformation": None,
+    "deferredWork": None,
+    "slideTask": None,
+    "externalDisclosure": "unknown",
+    "requestedSlideReorder": None,
     "authorization": "absent",
     "limit": "none",
     "purpose": "none",
@@ -87,12 +92,35 @@ READ = {
 
 
 def test_persisted_frontend_manifest_records_file_hash_and_validates(tmp_path: Path) -> None:
+    contract = json.loads(
+        subprocess.run(
+            [
+                "node",
+                "--input-type=module",
+                "--eval",
+                (
+                    "import { extractorContract, extractorFrontendId } from "
+                    "'./dist/extractor/contract.js'; "
+                    "const contract = extractorContract(); "
+                    "console.log(JSON.stringify({ "
+                    "readContractSha256: contract.readContractSha256, "
+                    "frontendId: extractorFrontendId('fixture', contract.readContractSha256) "
+                    "}));"
+                ),
+            ],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
     reads = tmp_path / "reads.json"
-    reads.write_text(json.dumps({"frontendId": "fixture-absent", "reads": {"cv09-041v4": READ}}))
+    reads.write_text(json.dumps({**contract, "reads": {"cv09-041v4": READ}}))
     manifest = _plan(tmp_path / "fixture", ["--request-state-reads", str(reads)])
     jsonschema.validate(manifest, SCHEMA)
     record = manifest["frontend"]
-    assert record["frontendId"] == "fixture-absent"
+    assert record["frontendId"] == contract["frontendId"]
+    assert record["readContractSha256"] == contract["readContractSha256"]
     assert record["readsSha256"] == hashlib.sha256(reads.read_bytes()).hexdigest()
     assert Path(record["readsPath"]) == reads.resolve()
     baseline = _plan(tmp_path / "baseline2", [])

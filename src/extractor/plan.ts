@@ -6,8 +6,8 @@ import { canonicalJson, sha256 } from "../compiler/artifact.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { loadBehavioralCases } from "../experiment/cases.js";
 import { gitProvenance } from "../experiment/plan.js";
-import { fieldContract, requiredFieldRules, type RequiredField } from "../ir/deterministicFrontend.js";
-import { extractorResponseJsonSchema } from "../ir/persistedFrontend.js";
+import { requiredFieldRules } from "../ir/deterministicFrontend.js";
+import { EXTRACTOR_PROMPT_PATH, extractorContract, extractorFrontendId, inputBlock } from "./contract.js";
 
 /**
  * The extractor frontend, planning half. One model call per request, at
@@ -20,7 +20,6 @@ import { extractorResponseJsonSchema } from "../ir/persistedFrontend.js";
  * frontend boundary.
  */
 
-export const EXTRACTOR_PROMPT_PATH = "prompts/request-state-extractor.md";
 
 type Options = {
   cases?: string;
@@ -41,20 +40,17 @@ export type ExtractionItem = { key: string; input: string; requiredFields: strin
 export function runExtractCommand(argv: string[]): void {
   const options = parseOptions(argv);
   const sourceControl = gitProvenance();
-  const instructions = readFileSync(EXTRACTOR_PROMPT_PATH, "utf8");
-  const promptSha256 = sha256(instructions);
-  const responseSchema = extractorResponseJsonSchema();
+  const contract = extractorContract();
+  const { instructions, promptSha256, responseSchema, readContractSha256 } = contract;
   const source = options.cases ? loadCaseItems(options.cases) : loadFixtureItems(options.fixtures!);
   const items: ExtractionItem[] = source.items.map((item) => {
     const fields = requiredFieldRules(item.context);
     const input = inputBlock(item.request, item.context, fields);
     return { key: item.key, input, requiredFields: fields.map((field) => field.name), estimatedInputTokens: countTokens(`${instructions}\n${input}`, options.model).tokens + INPUT_TOKEN_OVERHEAD };
   });
-  // The frontend's identity is everything that shapes a read: the model, the
-  // instructions, and the field contract (every field description an input
-  // block can carry), independent of which cases this plan happens to hold.
-  const readContractSha256 = sha256(canonicalJson({ promptSha256, fields: fieldContract() }));
-  const frontendId = `extractor:${options.model}:${readContractSha256.slice(0, 12)}`;
+  // The frontend id names the exact semantic contract, independent of which
+  // cases this extraction plan happens to hold.
+  const frontendId = extractorFrontendId(options.model, readContractSha256);
   const output = resolve(options.output);
   const planPath = resolve(output, "extraction-plan.json");
   const existing = readExistingPlan(planPath);
@@ -119,21 +115,6 @@ function loadFixtureItems(path: string): Source {
   };
 }
 
-export function inputBlock(request: string, context: ArtifactContext | null, requiredFields: Pick<RequiredField, "name" | "description">[]): string {
-  const lines = [
-    "Request:",
-    request,
-    "",
-    "Declared context:",
-    `- artifact type: ${context?.artifactType ?? "none declared"}`,
-    `- operation: ${context?.operation ?? "none declared"}`,
-    `- features: ${context?.features?.length ? context.features.join(", ") : "none"}`,
-    `- tools available on this turn: ${context?.toolsAvailable?.length ? context.toolsAvailable.join(", ") : "none"}`,
-    `- required fields for this operation: ${requiredFields.length ? "" : "none"}`,
-    ...requiredFields.map((field) => `  - ${field.name}: ${field.description}`),
-  ];
-  return lines.join("\n");
-}
 
 
 function readExistingPlan(path: string): { planId: string; createdAt: string } | undefined {

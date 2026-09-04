@@ -62,6 +62,7 @@ policies:
     alwaysActive: false
     triggers:
       intents: [background_work]
+      state: { deferredWork: true }
     requires: [no_background_work_claims]
     obligations: []
     prohibitions: []
@@ -180,6 +181,17 @@ policies:
     triggers:
       keywords: [publish, deploy, production, prod, overwrite, replace whole file, replace entire file, uncommitted changes, save it over, status page, ship it, go live]
       intents: [destructive_action]
+      artifactOperations:
+        - { artifactType: spreadsheet, operation: edit }
+        - { artifactType: spreadsheet, operation: update }
+        - { artifactType: spreadsheet, operation: delete }
+        - { artifactType: document, operation: edit }
+        - { artifactType: document, operation: rewrite }
+        - { artifactType: document, operation: update }
+        - { artifactType: document, operation: delete }
+        - { artifactType: pdf, operation: edit }
+        - { artifactType: pdf, operation: update }
+        - { artifactType: pdf, operation: delete }
     requires: [destructive_action_definition]
     obligations:
       - type: ask_confirmation
@@ -189,13 +201,31 @@ policies:
     validators:
       - asks_confirmation_before_destructive_action
     branches:
+      - id: text_only_without_named_action
+        when: { operationNamed: false, deliverable: text }
+        runtimeInstruction: The request asks for analysis or supplied-text writing, not execution of the state-changing action it mentions. Answer the text request directly without asking for action confirmation or performing any external change.
+        obligations: []
+        prohibitions: []
+      - id: unresolved_possible_slide_mutation
+        when: { slideTask: unknown }
+        runtimeInstruction: This document mutation may target an existing slide deck, but that is unresolved. Do not modify anything yet; ask one focused question that identifies whether this is a deck, the exact slides or section, and the intended change.
+        obligations:
+          - type: ask_confirmation
+        prohibitions:
+          - type: destructive_action_without_confirmation
       - id: already_authorized
         when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: Explicit confirmation for this exact action is already present in the request, so perform exactly the confirmed action now and do not ask for confirmation again. Stay within the confirmed target and scope; if any required detail is missing, contradictory, or would widen the scope, stop and ask before acting.
         obligations: []
         prohibitions: []
+      - id: requested_slide_reorder
+        when: { requestedSlideReorder: true }
+        runtimeInstruction: The user explicitly named existing slides and their destination, so perform only that requested reorder now. Do not delete, replace, publish, or otherwise change slide content.
+        obligations:
+          - { type: call_tool, value: slides_edit }
+        prohibitions: []
       - id: approved_without_scope
-        when: { authorization: present }
+        when: { authorization: present, fields: incomplete }
         runtimeInstruction: The request approves the action in advance but does not specify the exact target, scope, or operation, and a confirmation must specify all of them; an approval cannot cover a change it does not name, and an irreversible action requires stronger confirmation, not less. Do not perform the action on this turn. State exactly what you would change, in which file, page, or record, what could go wrong, and whether it can be undone, then ask a focused question for confirmation of that exact scope.
         obligations:
           - type: ask_confirmation

@@ -11,6 +11,7 @@ policies:
       intents: [current_info, weather]
       operations: [lookup]
       domains: []
+      state: { currentInformation: true }
     requires: [current_info_definition, citations_required, authoritative_sources_preferred, no_current_facts_from_memory]
     obligations:
       - type: call_tool
@@ -73,6 +74,7 @@ policies:
     triggers:
       intents: [current_info, weather]
       keywords: [latest, current, recent, today, now, news, forecast, guidance]
+      state: { currentInformation: true }
     requires: [current_info_definition]
     obligations:
       - type: call_tool

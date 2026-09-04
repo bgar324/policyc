@@ -47,21 +47,103 @@ export type AuthorizationRead = z.infer<typeof authorizationReadSchema>;
  */
 export type AuthorizationReader = (input: string) => AuthorizationRead;
 
-const SETTLED_FIRST_PERSON = /\b(?:I|we|ive|i've|we've|i’ve|we’ve)\s+(?:(?:explicitly|hereby|now|also|formally|fully|again|do|already|myself)\s+)*(?:confirm|authorize|approve|sign(?:ed)? off|have (?:already )?(?:reviewed|checked|been through|cleared|approved|signed off)|(?:'ve|’ve) (?:already )?(?:reviewed|checked|been through|cleared|approved|signed off)|been through|reviewed|checked|cleared)\b/i;
-const SETTLED_THIRD_PARTY = /\b(?!I\b|we\b)(?:[A-Z][a-z]+|[a-z]+|everyone|everybody|the team|legal|finance|my manager|she|he|they)(?:'s|’s)?\s+(?:already\s+|has\s+|have\s+|all\s+)*(?:signed off|confirmed|approved|cleared|okayed|ok'd|said (?:it's|its) fine|is fine with)\b/i;
-const NO_REASK = /\b(?:no need to (?:loop back|check back|check with me|come back to me|ask(?: me)?|confirm(?: with me)?|re-?confirm|double[- ]check)|(?:i )?(?:don'?t|do not) need (?:another|a) (?:readback|confirmation|check|sign-?off)|(?:don'?t|do not) ask me anything|no readback|skip the (?:confirmation|readback|check)|without (?:asking|checking) (?:me )?(?:again|first))\b/i;
-const GO = /\b(?:go ahead(?: and)?|proceed|just do it|do it now|send it now|create it now|send it,? (?:don'?t|do not) draft|(?:send|create|archive|move|reschedule|forward) (?:it|them|this|that) now)\b/i;
+const SETTLED_FIRST_PERSON = /\b(?:(?:I|we|ive|i've|we've|i’ve|we’ve)\s+(?:(?:explicitly|hereby|now|also|formally|fully|again|do|already|myself)\s+)*(?:confirm|authorize|approve|consent|sign(?:ed|ing)? off|give (?:my|our) (?:approval|authorization|consent|sign[- ]?off)|have (?:already )?(?:reviewed|checked|looked (?:it|this|them) over|been through|cleared|approved|signed off)|(?:'ve|’ve) (?:already )?(?:reviewed|checked|looked (?:it|this|them) over|been through|cleared|approved|signed off)|been through|reviewed|checked|cleared)|(?:I|we)(?:'m|’m| am| are|'re|’re)\s+(?:fine|good|okay|ok)\s+with|you have my (?:approval|authorization|sign[- ]?off|green light)|this has my (?:approval|authorization|sign[- ]?off|green light)|consider (?:this|it) (?:(?:my|our) (?:approval|authorization|sign[- ]?off|green light)|(?:approved|authorized|confirmed|signed off)))\b/i;
+const SETTLED_FIRST_PERSON_PAST = /\b(?:I|we)\s+(?:(?:explicitly|hereby|now|also|formally|fully|again|already|personally)\s+)*(?:confirmed|authorized|approved|consented|accepted|acknowledged|reviewed|checked|verified|validated|cleared)\b/i;
+const SETTLED_IMPERSONAL = /\b(?:(?:this|that|it|the (?:change|edit|update|deletion|removal))\s+(?:is|was|has been)\s+(?:already\s+)?(?:approved|authorized|confirmed|cleared|signed off)|(?:approval|authorization|clearance|sign[- ]?off)\s+(?:is|was|has been)\s+(?:final|complete|given|granted)|(?:already\s+)?(?:approved|authorized|confirmed|cleared)\s+(?:and\s+)?(?:ready|final|complete))\b/i;
+const THIRD_PARTY_SUBJECT = String.raw`(?!(?:I|we|you)\b)(?:(?:the|our|my)\s+)?(?:[A-Za-z][\w'’-]*\s+){0,4}(?:[A-Za-z][\w'’-]*|everyone|everybody)`;
+const SETTLED_THIRD_PARTY = new RegExp(
+  String.raw`\b${THIRD_PARTY_SUBJECT}\s+` +
+    String.raw`(?:(?:(?:has|have|had|already|also|all|formally|finally)\s+){0,4}(?:signed\s+(?:(?:this|it|that|the\s+\w+)\s+)?off|approved|authorized|confirmed|cleared|okayed|ok'd|greenlit|reviewed|accepted|agreed|consented)|(?:gave|provided|issued|granted)\s+(?:(?:their|its|the|formal|final)\s+)?(?:approval|authorization|consent|clearance|sign[- ]?off|go-ahead|green light)|(?:is|are|was|were)\s+(?:fine|okay|ok|on board)(?:\s+with\s+(?:this|it|that|the\s+\w+))?)\b`,
+  "i",
+);
+const NO_REASK = /\b(?:no need (?:for (?:another|further) (?:confirmation|check|review|pass|approval|sign[- ]?off)|to (?:loop back|check back|check in|check with me|come back to me|ask(?: me)?(?: again)?|confirm(?: with me)?(?: again)?|re-?confirm|double[- ]check|review(?: with me)?(?: again)?|run (?:it|this|that|them)?\s*(?:past|by) me))|(?:i |you )?(?:don'?t|do not) need (?:to )?(?:ask(?: me)?(?: again)?|check(?: back| in| with me)?(?: again)?|confirm(?: with me)?(?: again)?|another|a) (?:readback|confirmation|check|review|pass|approval|sign[- ]?off)?|(?:you )?(?:don'?t|do not) have to (?:ask|check|confirm|review|run|clear)(?: (?:it|this|that|them|the change))?(?: (?:past|by|with) me)?(?: again)?|(?:don'?t|do not) (?:bother )?(?:ask(?: me)?|check(?: with me)?|confirm(?: with me)?|review(?: with me)?)(?: again)?|(?:don'?t|do not) ask me anything|no (?:readback|second pass|further review)|skip (?:the )?(?:confirmation|readback|check|review|asking|sign[- ]?off)|without (?:asking|checking|confirming|reviewing) (?:me )?(?:again|first)|without (?:another|further) (?:confirmation|check|review|pass|approval|sign[- ]?off))\b/i;
+const GO = /\b(?:go ahead(?: and)?|go for it|proceed|continue(?: with (?:it|this|that|the change))?|move forward|carry on|carry it out|make (?:the change|it happen)|just do it|do (?:it|this|that|so) now|take care of (?:it|this|that)|put (?:it|this|that) through|(?:apply|execute|implement|complete|finish|perform|effect|action|process) (?:it|this|that|the (?:change|edit|update|deletion|removal))|send it now|create it now|send it,? (?:don'?t|do not) draft|(?:send|create|archive|move|reschedule|forward|update|edit|delete|remove) (?:it|them|this|that) now)\b|(?:^|[.!?;]\s+)(?:please\s+)?(?:delete|remove|drop|take|pull|cut|strip|omit|discard|purge|erase)\b/i;
 // Conditional on authorization itself ("if legal approves", "once Pat confirms"),
 // not on content ("if you mention her, say ..."): the verb list is authorization
 // verbs only, and the subject of the conditional must not be the assistant.
 const CONDITIONAL = /\b(?:if|once|unless|when|assuming|provided that|as long as)\s+(?!you\b|the assistant\b)[^.;]{0,50}\b(?:confirms?|approves?|signs? off|agrees?|okays?|clears?|gets? back|gives? the (?:go|ok|okay|green light))\b|\b(?:will|would|could|might|going to)\s+(?:confirm|approve|sign off|authorize)\b|\bafter (?:i|we) (?:confirm|approve|check)\b/i;
-const REPORTED_FRAME = /\b(?:said|says|wrote|told|replied|texted|emailed|messaged|heard|according to|quote|quoting|claims|mentioned)\b/i;
+const REPORTED_VERB = /\b(?:said|says|wrote|writes|told|replied|texted|emailed|messaged|heard|quoted|claims?|claimed|mentions?|mentioned|asks?|asked|requests?|requested|recommends?|recommended|suggests?|suggested|proposes?|proposed|instructs?|instructed|directs?|directed|wants?|wanted)\b/gi;
+const ALWAYS_REPORTED_FRAME = /\b(?:according to|quote|quoting|i\s+(?:was|am|have been)\s+(?:told|asked|instructed|directed)|we\s+(?:were|are|have been)\s+(?:told|asked|instructed|directed))\b/i;
 const NEGATED_SETTLED = /\b(?:not|never|haven'?t|hasn'?t|didn'?t|don'?t|do not|no one|nobody)\s+(?:\w+\s+){0,2}(?:confirm|approv|sign|clear|review|check|okay|ok'd)\w*/i;
 const QUESTION = /\?\s*$/;
 
-/** True when an odd number of double quotes precede `index`, i.e. inside someone else's words. */
-function insideQuotation(text: string, index: number): boolean {
-  return ((text.slice(0, index).match(/["“”]/g)?.length ?? 0) % 2) === 1;
+function isWordCharacter(value: string | undefined): boolean {
+  return value !== undefined && /[\p{L}\p{N}_]/u.test(value);
+}
+
+/** True when `index` is inside straight or typographic single/double quotes. */
+export function insideQuotation(text: string, index: number): boolean {
+  let straightDouble = false;
+  let straightSingle = false;
+  let smartDouble = false;
+  let smartSingle = false;
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    const character = text[cursor];
+    if (character === '"') straightDouble = !straightDouble;
+    else if (character === "“") smartDouble = true;
+    else if (character === "”") smartDouble = false;
+    else if (character === "‘") smartSingle = true;
+    else if (character === "’") {
+      if (!isWordCharacter(text[cursor - 1]) || !isWordCharacter(text[cursor + 1])) smartSingle = false;
+    } else if (character === "'") {
+      if (isWordCharacter(text[cursor - 1]) && isWordCharacter(text[cursor + 1])) continue;
+      if (straightSingle || (!isWordCharacter(text[cursor - 1]) && !/\s/.test(text[cursor + 1] ?? ""))) {
+        straightSingle = !straightSingle;
+      }
+    }
+  }
+  return straightDouble || straightSingle || smartDouble || smartSingle;
+}
+
+function hasReportedFrame(prefix: string): boolean {
+  if (ALWAYS_REPORTED_FRAME.test(prefix)) return true;
+  for (const verb of prefix.matchAll(REPORTED_VERB)) {
+    const beforeVerb = prefix.slice(Math.max(0, verb.index - 48), verb.index);
+    const afterVerb = prefix.slice(verb.index + verb[0].length);
+    const firstPersonWant = /^wants?$/i.test(verb[0])
+      && /\b(?:i|we)\b(?:\s+\w+){0,3}\s*$/i.test(beforeVerb)
+      && /^[\s,;:—–-]*$/.test(afterVerb);
+    if (firstPersonWant) continue;
+    return true;
+  }
+  return false;
+}
+
+function hasExplicitDashAdoption(text: string, match: RegExpExecArray, clauseStart: number): boolean {
+  const prefix = text.slice(clauseStart, match.index);
+  const dash = /\s[-—–]\s+(?:please\s+)?$/i.exec(prefix);
+  if (!dash) return false;
+  const beforeDash = prefix.slice(0, dash.index);
+  return /\b(?:i|we)\s+(?:already\s+)?(?:told|notified|warned|informed)\b[\s\S]{0,120}\bno surprises?\b/i.test(beforeDash);
+}
+
+/** Whether a matched clause is asserted by the user rather than quoted or attributed. */
+export function inUserVoice(text: string, match: RegExpExecArray): boolean {
+  const before = text.slice(0, match.index);
+  const clauseStart = Math.max(
+    before.lastIndexOf("."),
+    before.lastIndexOf(";"),
+    before.lastIndexOf("?"),
+    before.lastIndexOf("!"),
+    before.lastIndexOf("\n"),
+  ) + 1;
+  const prefix = text.slice(clauseStart, match.index);
+  if (insideQuotation(text, match.index)) return false;
+  return !hasReportedFrame(prefix) || hasExplicitDashAdoption(text, match, clauseStart);
+}
+
+const EMBEDDED_NO_REASK = /\b(?:explain|describe|discuss|analy[sz]e|tell me|show me|wonder|whether|why|what if|suppose|assuming|imagine|hypothetically|if)\b/i;
+
+function noReaskAuthorizes(text: string, match: RegExpExecArray): boolean {
+  const before = text.slice(0, match.index);
+  const clauseStart = Math.max(
+    before.lastIndexOf("."),
+    before.lastIndexOf(";"),
+    before.lastIndexOf("?"),
+    before.lastIndexOf("!"),
+    before.lastIndexOf("\n"),
+  ) + 1;
+  return !EMBEDDED_NO_REASK.test(text.slice(clauseStart, match.index));
 }
 
 /**
@@ -101,31 +183,40 @@ export function readAuthorization(input: string): AuthorizationRead {
   const disqualifier = authorizationDisqualifier(input);
   if (disqualifier) return { state: disqualifier.state, evidence: [disqualifier.evidence] };
 
-  const first = SETTLED_FIRST_PERSON.exec(input);
-  const firstOk = first && !insideQuotation(input, first.index) && !REPORTED_FRAME.test(input.slice(Math.max(0, first.index - 40), first.index));
+  const first = SETTLED_FIRST_PERSON.exec(input) ?? SETTLED_FIRST_PERSON_PAST.exec(input);
+  const firstOk = first && inUserVoice(input, first);
+  const impersonal = SETTLED_IMPERSONAL.exec(input);
+  const impersonalOk = impersonal && inUserVoice(input, impersonal);
   const third = SETTLED_THIRD_PARTY.exec(input);
   const thirdOk = third && !insideQuotation(input, third.index);
   const noReask = NO_REASK.exec(input);
+  const noReaskInUserVoice = noReask && inUserVoice(input, noReask);
+  const noReaskOk = noReaskInUserVoice && noReaskAuthorizes(input, noReask);
   const go = GO.exec(input);
+  const goOk = go && inUserVoice(input, go);
 
   if (first && !firstOk) evidence.push(`first-person settled clause is quoted or reported: "${first[0]}"`);
   if (firstOk) evidence.push(`user asserts settled state: "${first[0]}"`);
   if (thirdOk) evidence.push(`settled state attributed to others: "${third[0]}"`);
-  if (noReask) evidence.push(`user asks not to be re-asked: "${noReask[0]}"`);
-  if (go) evidence.push(`unconditional go: "${go[0]}"`);
+  if (noReaskOk) evidence.push(`user asks not to be re-asked: "${noReask[0]}"`);
+  else if (noReaskInUserVoice) evidence.push(`no-reask wording is embedded rather than asserted: "${noReask[0]}"`);
+  if (impersonal && !impersonalOk) evidence.push(`settled clause is quoted or reported: "${impersonal[0]}"`);
+  if (impersonalOk) evidence.push(`user asserts settled state: "${impersonal[0]}"`);
+  if (goOk) evidence.push(`unconditional go: "${go[0]}"`);
 
-  // The user's own settled clause, or a third-party clause the user adopts by
-  // telling us not to re-ask or to go ahead, is authorization in the user's voice.
-  if (firstOk || ((thirdOk || Boolean(go)) && noReask) || (firstOk === null && go && noReask)) {
-    return { state: "present", evidence, statement: (first ?? third ?? go ?? noReask)?.[0] };
+  // The user's own settled clause, a no-re-ask clause, or a third-party settled
+  // clause the user adopts with an unconditional go is authorization in the
+  // user's voice. The action request itself is not authorization.
+  if (firstOk || impersonalOk || noReaskOk || (thirdOk && Boolean(goOk))) {
+    const statement = firstOk ? first : impersonalOk ? impersonal : thirdOk && goOk ? third : noReaskOk ? noReask : go;
+    return { state: "present", evidence, statement: statement?.[0] };
   }
-  if (go && !thirdOk && !first) {
-    // "go ahead" alone, with nothing settled, is a request to act, not a record
-    // that the prerequisites are met.
+  if (goOk && !thirdOk && !first && !impersonal) {
+    // An action request alone is not a record that its prerequisites are met.
     evidence.push("go clause without a settled clause or no-re-ask clause");
     return { state: "absent", evidence };
   }
-  if (thirdOk || (first && !firstOk)) {
+  if (thirdOk || (first && !firstOk) || (impersonal && !impersonalOk) || (noReask && !noReaskInUserVoice)) {
     return { state: "reported", evidence };
   }
   return { state: "absent", evidence: evidence.length ? evidence : ["no authorization act in request"] };

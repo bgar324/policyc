@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://policyc.dev/schema/compiled-policy-artifact-1.2.0.json",
+  "$id": "https://policyc.dev/schema/compiled-policy-artifact-1.3.0.json",
   "title": "PolicyC compiled policy artifact",
   "type": "object",
   "additionalProperties": false,
@@ -31,7 +31,8 @@
       "enum": [
         "1.0.0",
         "1.1.0",
-        "1.2.0"
+        "1.2.0",
+        "1.3.0"
       ]
     },
     "compilerVersion": {
@@ -173,6 +174,37 @@
             "artifactType": {
               "type": "string"
             },
+            "currentInformation": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "deferredWork": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "slideTask": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "externalDisclosure": {
+              "enum": [
+                "safe",
+                "confidential_external",
+                "unknown"
+              ]
+            },
+            "requestedSlideReorder": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
             "authorization": {
               "enum": [
                 "present",
@@ -282,7 +314,7 @@
       "items": {
         "type": "object"
       },
-      "description": "Protocol 1.1.0 trace; superseded by requestState and evaluations in 1.2.0."
+      "description": "Protocol 1.1.0 trace; superseded by requestState and evaluations in 1.2.0 and later."
     },
     "conflicts": {
       "type": "array",
@@ -291,20 +323,78 @@
       }
     }
   },
-  "if": {
-    "properties": {
-      "schemaVersion": {
-        "const": "1.2.0"
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "enum": [
+              "1.2.0",
+              "1.3.0"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "requestState",
+          "evaluations",
+          "conflicts"
+        ]
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "schemaVersion": {
+              "const": "1.1.0"
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "specializations"
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "schemaVersion": {
+            "const": "1.3.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "requestState": {
+            "type": "object",
+            "required": [
+              "currentInformation",
+              "deferredWork",
+              "slideTask",
+              "externalDisclosure",
+              "requestedSlideReorder"
+            ],
+            "properties": {
+              "artifactType": {
+                "enum": [
+                  "pdf",
+                  "spreadsheet",
+                  "image",
+                  "document",
+                  "email",
+                  "calendar_event",
+                  "generated_image",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        }
       }
     }
-  },
-  "then": {
-    "required": [
-      "requestState",
-      "evaluations",
-      "conflicts"
-    ]
-  },
+  ],
   "$defs": {
     "hash": {
       "type": "string",
@@ -316,20 +406,6 @@
         "type": "string"
       },
       "uniqueItems": true
-    }
-  },
-  "else": {
-    "if": {
-      "properties": {
-        "schemaVersion": {
-          "const": "1.1.0"
-        }
-      }
-    },
-    "then": {
-      "required": [
-        "specializations"
-      ]
     }
   }
 }

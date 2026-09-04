@@ -91,6 +91,16 @@ export type TriggerSet = {
   artifactOperations?: Array<{ artifactType: ArtifactType; operation: OperationTrigger }>;
   domains?: string[];
   risks?: string[];
+  /** Positive request-state selectors. Unknown retains the node after scopes pass. */
+  state?: {
+    currentInformation?: true;
+    deferredWork?: true;
+    slideTask?: true;
+  };
+  /** Pure artifact gate; never selects a policy by itself. */
+  artifactScope?: ArtifactType[];
+  /** Pure operation gate; never selects a policy by itself. */
+  operationScope?: OperationTrigger[];
 };
 
 export type Obligation = {
@@ -156,6 +166,7 @@ export type ArtifactContext = {
 export type SelectionInput = {
   input: string;
   context?: ArtifactContext | null;
+  state: RequestState;
 };
 
 export type PolicySelectionReason = {

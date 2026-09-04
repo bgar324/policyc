@@ -66,8 +66,8 @@ export function emitRuntimePrompt(selection: PolicySelection, input: string, con
 }
 
 function inferTaskType(selection: PolicySelection, context?: ArtifactContext | null): string {
-  if (selection.detectedIntents.includes("current_info")) return "current information request";
   if (selection.detectedIntents.includes("weather")) return "weather/current information request";
+  if (selection.requestState && selection.requestState.currentInformation !== false) return "current information request";
   if (selection.detectedIntents.includes("destructive_action")) return "destructive or externally visible action request";
   if (selection.detectedIntents.includes("calendar_mutation")) return "calendar mutation request";
   if (selection.detectedIntents.includes("send_email")) return "email send or forward request";

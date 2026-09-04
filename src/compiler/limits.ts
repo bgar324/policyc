@@ -21,16 +21,18 @@ import type { ArtifactContext } from "../policy/types.js";
 export type LimitVerdict = "limited" | "ambiguous" | "none";
 export type LimitResult = { verdict: LimitVerdict; evidence: string[] };
 
-const NEGATED_ACTION = /\b(?:do not|don't|dont|never|without)\s+(?:\w+\s+){0,2}(?:use|call|run|touch|modify|change|edit|generate|render|create|save|overwrite|write|send|delete|move|update|apply|execute|open|inspect|look ?up|search|browse)\b/i;
+const NEGATED_ACTION = /\b(?:(?:do not|don't|dont)(?!\s+have to\b)|never|without)\s+(?:\w+\s+){0,2}(?:use|call|run|touch|modify|change|edit|generate|render|create|save|overwrite|write|send|delete|move|update|apply|execute|open|inspect|look ?up|search|browse)\b/i;
 const NOT_NOW = /\b(?:not (?:right )?now|not yet|later|for later|at this point)\b/i;
-const ONLY_TEXT = /\b(?:only|just)\s+(?:want|need|give me|tell me|show me|explain|describe|list|say|answer)\b|\b(?:i (?:only|just) (?:want|need))\b|\bthats all i need\b|\bthat's all i need\b|\bnothing else\b|\bin words\b|\bin plain (?:language|english|words)\b/i;
+const ONLY_TEXT = /\b(?:only|just)\s+(?:give me|tell me|show me|explain|describe|list|say|answer)\b|\b(?:i\s+)?(?:only|just)\s+(?:want|need)\s+(?:an?\s+|the\s+)?(?:explanation|answer|description|draft|text|copy|summary|list|advice)\b|\bthats all i need\b|\bthat's all i need\b|\bnothing else\b|\bin words\b|\bin plain (?:language|english|words)\b/i;
 // Only a clause that opens a sentence or follows a boundary is a question; "...,
 // which is 10am for me" is a relative clause.
 const ADVICE_QUESTION = /(?:^|[.?!;:]\s+|\band\s+|\bbut\s+|\bso\s+|\bthen\s+)(?:what should i (?:watch|look|know|do|check|worry)|what (?:would|could) (?:you|i) (?:change|watch)|what (?:are|is) the (?:risks?|pitfalls?|gotchas?|differences?)|how (?:does|do|would|should)|which (?:one|should)|is it (?:safe|ok|okay|fine) to)\b/i;
-const TEXT_DELIVERABLE = /\b(?:write|draft|give|produce)\s+(?:me\s+)?(?:a |an |the )?(?:\w+\s+){0,3}(?:prompt|prompt text|explanation|summary|paragraph|blurb|copy|words|sentence|note|description|advice|checklist)\b/i;
+const TEXT_DELIVERABLE = /\b(?:write|draft|give|produce)\s+(?:me\s+)?(?:a |an |the )?(?:\w+\s+){0,3}(?:prompt|prompt text|explanation|summary|paragraph|blurb|copy|words|sentence|note|description|advice|checklist|one[- ]liner)\b/i;
 const VALUES_SUPPLIED = /\b(?:values?|numbers?|figures?|table|data) (?:are|is) (?:already )?(?:here|below|above|in (?:the|this) (?:message|request|text))\b|\b(?:i(?:'ve| have)? )?(?:already )?(?:pulled|copied|pasted|extracted)\b.{0,40}\b(?:myself|for you|here|below)\b|\bthis is the complete\b/i;
 const BEFORE_ACTION = /\bbefore you (?:touch|edit|change|modify|run|do|send|save|call)\b/i;
 const ACTION_REQUEST = /\b(?:go ahead and|please)?\s*(?:edit|modify|change|update|save|overwrite|generate|render|create|send|forward|archive|delete|move|reschedule|reorder|dedupe|clean up|fix|apply|run|draft|put (?:it|this|that) in (?:my )?drafts?|write .{0,40}(?:and )?(?:save|put) it)\b/i;
+const EXPLICIT_ARTIFACT_REFERENCE = /\b(?:attached|i attached|the attachment|this file|this pdf|this deck|this sheet)\b/i;
+const INLINE_REWRITE_SOURCE = /\b(?:rewrite|rephrase|shorten|tighten|polish|make this (?:sound|read)|make (?:this|the) .{0,30}(?:more|less))\b[\s\S]{0,200}(?::|["'“‘])/i;
 
 const CATALOG_VERBS: Record<string, RegExp> = {
   image_generate: /\bgenerat\w*|\brender\w*|\bcreat\w*|\bdraw\w*|\bmake (?:an? )?(?:image|picture|illustration|poster)/i,
@@ -42,10 +44,23 @@ const CATALOG_VERBS: Record<string, RegExp> = {
   gmail: /\bsend|\bforward|\barchive|\bdelete|\btrash|\bemail/i,
   calendar: /\bcreate|\bschedule|\breschedule|\bmove|\bcancel|\bdelete/i,
 };
+function hasAttachedArtifact(input: string, context?: ArtifactContext | null): boolean {
+  const tools = (context?.toolsAvailable ?? []).map((tool) => tool.toLowerCase());
+  return EXPLICIT_ARTIFACT_REFERENCE.test(input)
+    || ["pdf", "spreadsheet", "image", "generated_image"].includes(context?.artifactType ?? "")
+    || (context?.artifactType === "document" && tools.some((tool) => ["slides_edit", "file_inspect", "file_write"].includes(tool)));
+}
+
+/** True when a declared rewrite transforms text supplied in the request rather than an existing artifact. */
+export function isInlineTextRewrite(input: string, context?: ArtifactContext | null): boolean {
+  return context?.operation === "rewrite" && !hasAttachedArtifact(input, context) && INLINE_REWRITE_SOURCE.test(input);
+}
+
 
 export function evaluateExplicitLimit(input: string, context?: ArtifactContext | null): LimitResult {
   const evidence: string[] = [];
   const tools = (context?.toolsAvailable ?? []).map((tool) => tool.toLowerCase());
+  const artifactAttached = hasAttachedArtifact(input, context);
   const negated = NEGATED_ACTION.exec(input);
   if (negated) evidence.push(`request negates an action: "${negated[0]}"`);
   const notNow = negated && NOT_NOW.test(input.slice(negated.index, negated.index + 80));
@@ -57,25 +72,24 @@ export function evaluateExplicitLimit(input: string, context?: ArtifactContext |
   const onlyTextRaw = ONLY_TEXT.exec(input);
   const onlyText = onlyTextRaw && !(toolActionRequested && /^(?:just|only)\s+(?:say|tell|mention)/i.test(onlyTextRaw[0])) ? onlyTextRaw : null;
   if (onlyText) evidence.push(`request limits the deliverable to text: "${onlyText[0]}"`);
-  else if (onlyTextRaw) evidence.push(`"${onlyTextRaw[0]}" constrains wording inside an action request`);
+  else if (onlyTextRaw) evidence.push(`"${onlyTextRaw[0]}" constrains scope or wording rather than forbidding the required action`);
   const advice = ADVICE_QUESTION.exec(input);
   if (advice) evidence.push(`request is an advice question: "${advice[0]}"`);
   const deliverableRaw = TEXT_DELIVERABLE.exec(input);
   // A summary or explanation *of an attached artifact* is produced by reading it;
   // the text deliverable does not limit the reader tool.
-  const artifactAttached = Boolean(context?.artifactType && context.artifactType !== "unknown") || /\b(?:attached|i attached|the attachment|this file|this pdf|this deck|this sheet)\b/i.test(input);
   const deliverable = deliverableRaw && !artifactAttached ? deliverableRaw : null;
+  const inlineRewrite = isInlineTextRewrite(input, context);
   if (deliverable) evidence.push(`requested deliverable is text: "${deliverable[0]}"`);
   else if (deliverableRaw) evidence.push(`"${deliverableRaw[0]}" is produced from an attached artifact`);
+  if (inlineRewrite && !deliverable) evidence.push("declared rewrite produces text and names no existing artifact or writing connector");
   const supplied = VALUES_SUPPLIED.exec(input);
   if (supplied) evidence.push(`inputs are supplied in the request: "${supplied[0]}"`);
   const before = BEFORE_ACTION.exec(input);
   if (before) evidence.push(`action is conditioned on a prior step: "${before[0]}"`);
 
-  // A negated verb that follows a positive request for a different action on the
-  // same tool ("archive it, do not delete it") constrains scope; it is not a limit
-  // on the turn. Otherwise a negated verb naming an available tool's action is the
-  // clearest limit.
+  // A negated verb that follows a positive request for a different action on
+  // the same tool constrains scope rather than limiting the turn.
   const scopedNegation = Boolean(negated) && ACTION_REQUEST.test(input.slice(0, negated!.index));
   if (scopedNegation) evidence.push("negation constrains scope of a requested action rather than limiting the turn");
   if (negated && !scopedNegation) {
@@ -86,13 +100,13 @@ export function evaluateExplicitLimit(input: string, context?: ArtifactContext |
       }
     }
   }
-  const limiting = (negated && !scopedNegation) || onlyText || advice || deliverable || supplied;
+  const limiting = (negated && !scopedNegation) || onlyText || advice || deliverable || inlineRewrite || supplied;
   if (limiting) {
     // Any positive action request alongside a limit is ambiguous unless the limit
     // clearly scopes the whole turn (only/just text, supplied inputs, negation).
     const action = ACTION_REQUEST.exec(input);
     const strong = Boolean(negated && !scopedNegation) || Boolean(onlyText) || Boolean(supplied);
-    if (action && !strong && !deliverable) {
+    if (action && !strong && !deliverable && !inlineRewrite) {
       return { verdict: "ambiguous", evidence: [...evidence, `but the request also asks to act: "${action[0]}"`] };
     }
     return { verdict: "limited", evidence };

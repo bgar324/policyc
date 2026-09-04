@@ -3,7 +3,7 @@ import { selectPolicies } from "../policy/selector.js";
 import { evaluateCondition } from "../ir/conditions.js";
 import { deterministicFrontend } from "../ir/deterministicFrontend.js";
 import { guardedFrontend, type Frontend, type RequestState } from "../ir/requestState.js";
-import { MASK_ORIGIN, maskFor, stateMasks, toolEffect, type Mask } from "../ir/obligations.js";
+import { callEffect, MASK_ORIGIN, maskFor, stateMasks, type Mask } from "../ir/obligations.js";
 import { limitInstruction } from "./limits.js";
 
 /** The frontend used when none is injected: the deterministic baseline, guarded. */
@@ -11,7 +11,8 @@ export const defaultFrontend: Frontend = guardedFrontend(deterministicFrontend()
 
 /** One read, then selection and partial evaluation: the path a single compiled prompt goes through. */
 export function compileSelection(policies: Policy[], input: string, context?: ArtifactContext | null, frontend: Frontend = defaultFrontend): PolicySelection {
-  return evaluateSelection(selectPolicies(policies, { input, context }), frontend(input, context));
+  const state = frontend(input, context);
+  return evaluateSelection(selectPolicies(policies, { input, context, state }), state);
 }
 
 /**
@@ -60,7 +61,7 @@ export function evaluateSelection(selection: PolicySelection, state: RequestStat
   const masked = resolved.map((policy) => {
     const withheld = new Map<Mask, string[]>();
     const obligations = policy.obligations.filter((obligation) => {
-      const mask = maskFor(obligation, active, policy.mandated === true);
+      const mask = maskFor(obligation, active, policy.mandated === true, state);
       if (!mask) return true;
       withheld.set(mask, [...(withheld.get(mask) ?? []), obligation.value ? `${obligation.type} ${obligation.value}` : obligation.type]);
       return false;
@@ -91,14 +92,15 @@ export function evaluateSelection(selection: PolicySelection, state: RequestStat
     limit = { verdict: state.limit, instruction: limitInstruction(state.limit, state.toolsAvailable ?? []) };
   } else if (active.has("ask")) {
     // Ask outranks act, said in words the model can apply to its tools: the
-    // available acting tools that no surviving obligation requires must wait
-    // for the user's answer. Reads never wait; a required tool is exempt.
-    const required = new Set(policies.flatMap((policy) => policy.obligations.filter((o) => o.type === "call_tool" && o.value).map((o) => o.value!.toLowerCase())));
-    const waiting = (state.toolsAvailable ?? []).filter((tool) => toolEffect(tool) === "act" && !required.has(tool));
+    // available acting tools wait for the user's answer. Required reads survive;
+    // every acting call should already have been masked.
+    const waiting = (state.toolsAvailable ?? []).filter((tool) =>
+      callEffect({ type: "call_tool", value: tool }, state) === "act"
+    );
     if (waiting.length) limit = { verdict: "ask", instruction: askInstruction(waiting) };
   }
 
-  return { ...selection, policies, requestState: state, evaluations, limit, conflicts: findConflicts(policies, limit !== undefined) };
+  return { ...selection, policies, requestState: state, evaluations, limit, conflicts: findConflicts(policies, limit, state) };
 }
 
 export function askInstruction(tools: string[]): string {
@@ -117,10 +119,11 @@ export function unavailableToolInstruction(tool: string): string {
  * call tools. Each conflict names the nodes involved. The emitter still prints
  * the program; the record makes the contradiction visible offline.
  */
-export function findConflicts(policies: Policy[], limitEmitted: boolean): string[] {
+export function findConflicts(policies: Policy[], limit: PolicySelection["limit"], state: Pick<RequestState, "operation">): string[] {
   const conflicts: string[] = [];
   const requires = new Map<string, string[]>();
   const forbids = new Map<string, string[]>();
+  const asks = policies.some((policy) => policy.obligations.some((obligation) => obligation.type === "ask_confirmation"));
   for (const policy of policies) {
     for (const obligation of policy.obligations) {
       if (obligation.type === "call_tool" && obligation.value) push(requires, obligation.value.toLowerCase(), policy.id);
@@ -132,7 +135,10 @@ export function findConflicts(policies: Policy[], limitEmitted: boolean): string
   for (const [tool, requirers] of requires) {
     const forbidders = forbids.get(tool);
     if (forbidders) conflicts.push(`tool ${tool} required by ${requirers.join(", ")} and forbidden by ${forbidders.join(", ")}`);
-    if (limitEmitted) conflicts.push(`tool ${tool} required by ${requirers.join(", ")} while the limit instruction withholds tools`);
+    if (limit && limit.verdict !== "ask") conflicts.push(`tool ${tool} required by ${requirers.join(", ")} while the limit instruction withholds tools`);
+    if (asks && callEffect({ type: "call_tool", value: tool }, state) === "act") {
+      conflicts.push(`acting tool ${tool} required by ${requirers.join(", ")} while the program asks for confirmation`);
+    }
   }
   return conflicts;
 }

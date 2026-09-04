@@ -11,11 +11,32 @@ policies:
       intents: [pdf_summary]
       artifactTypes: [pdf]
       operations: [summarize, extract, analyze]
+      operationScope: [summarize, extract, analyze]
     requires: [artifact_inspection_definition]
     obligations:
-      - type: inspect_artifact
+      - { type: call_tool, value: pdf_read }
     prohibitions: []
     runtimeInstruction: Inspect relevant PDF pages before summarizing or extracting document-specific information.
+    validators:
+      - inspects_artifact
+
+  - id: pdf_mutation
+    title: PDF mutation
+    description: Editing an existing PDF requires the PDF editor and an exact authorized target.
+    kind: content_gated
+    priority: 85
+    severity: tool
+    alwaysActive: false
+    triggers:
+      artifactOperations:
+        - { artifactType: pdf, operation: edit }
+        - { artifactType: pdf, operation: update }
+        - { artifactType: pdf, operation: delete }
+    requires: [artifact_inspection_definition]
+    obligations:
+      - { type: call_tool, value: pdf_edit }
+    prohibitions: []
+    runtimeInstruction: Use the PDF editor to inspect the exact target and perform only the authorized PDF change.
     validators:
       - inspects_artifact
 
@@ -50,15 +71,42 @@ policies:
       keywords: [spreadsheet, sheet, excel, csv, formulas]
       intents: [spreadsheet_edit]
       artifactTypes: [spreadsheet]
-      operations: [edit, extract, summarize]
+      operations: [summarize, extract, analyze, edit, update, delete]
+      operationScope: [summarize, extract, analyze, edit, update, delete]
     requires: [artifact_inspection_definition]
     obligations:
-      - type: inspect_artifact
+      - { type: call_tool, value: spreadsheet_edit }
       - type: preserve_data_structure
     prohibitions: []
     runtimeInstruction: Preserve spreadsheet structure and inspect relevant cells before summarizing or editing.
     validators:
       - inspects_artifact
+
+  - id: slide_deck_handling
+    title: Existing slide deck handling
+    description: Existing deck tasks require the slide connector; an unresolved document task must not be treated as a deck mutation.
+    kind: content_gated
+    priority: 85
+    severity: tool
+    alwaysActive: false
+    triggers:
+      state: { slideTask: true }
+      artifactScope: [document]
+      operationScope: [summarize, extract, analyze, describe, edit, rewrite, update, delete]
+    requires: [artifact_inspection_definition]
+    obligations:
+      - type: ask_confirmation
+    prohibitions:
+      - type: destructive_action_without_confirmation
+    runtimeInstruction: This may require an existing slide deck, but the request state is unresolved. Ask one focused question that identifies the deck and exact slide task before using a slide connector or changing anything.
+    validators: []
+    branches:
+      - id: identified_slide_task
+        when: { slideTask: true }
+        runtimeInstruction: Use the slide connector to inspect the named deck content and perform only the requested read or authorized change.
+        obligations:
+          - { type: call_tool, value: slides_edit }
+        prohibitions: []
 
   - id: preserve_spreadsheet_formulas
     title: Preserve spreadsheet formulas

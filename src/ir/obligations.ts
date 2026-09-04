@@ -27,12 +27,9 @@ export const MASK_ORIGIN: Record<Mask, "user" | "policy"> = {
 
 /** Which masks each obligation type yields to. Types absent here yield to nothing. */
 export const YIELDS_TO: Partial<Record<ObligationType, readonly Mask[]>> = {
-  // A tool call is an act; the user's stated limit withholds it.
-  call_tool: ["text_limit", "unresolved_limit"],
-  // Inspection is a tool call on synthetic connectors; it also yields to asking
-  // first (ask outranks act) and to a purpose the policy refuses to serve
-  // (declining outranks inspecting for that purpose).
-  inspect_artifact: ["text_limit", "unresolved_limit", "ask", "forbidden_purpose"],
+  // Inspection is read use. It yields to user-imposed no-tool limits and to a
+  // purpose the policy refuses to serve, but not to an unrelated confirmation.
+  inspect_artifact: ["text_limit", "unresolved_limit", "forbidden_purpose"],
 };
 
 /** Masks that hold for this request state alone. `ask` is decided by the resolved program, not here. */
@@ -45,8 +42,11 @@ export function stateMasks(state: RequestState): Set<Mask> {
 }
 
 /** The mask, if any, that withholds this obligation for a node. */
-export function maskFor(obligation: Obligation, active: ReadonlySet<Mask>, mandated: boolean): Mask | undefined {
-  for (const mask of YIELDS_TO[obligation.type] ?? []) {
+export function maskFor(obligation: Obligation, active: ReadonlySet<Mask>, mandated: boolean, state: RequestState): Mask | undefined {
+  const masks: readonly Mask[] = obligation.type === "call_tool"
+    ? ["text_limit", "unresolved_limit", ...(callEffect(obligation, state) === "act" ? ["ask" as const] : [])]
+    : (YIELDS_TO[obligation.type] ?? []);
+  for (const mask of masks) {
     if (!active.has(mask)) continue;
     if (mandated && MASK_ORIGIN[mask] === "user") continue;
     return mask;
@@ -59,11 +59,16 @@ export function isToolBound(obligation: Obligation): boolean {
 }
 
 /**
- * What calling a tool does, by the synthetic connectors' naming convention:
- * `web` and names ending in `_read`, `_inspect`, or `_search` only read; every
- * other tool alters user data or external state, which is the source prompt's
- * definition of a destructive action. Only acting tools wait behind an ask.
+ * Classifies the effect of a concrete connector call. Unknown connectors fail
+ * toward acting use so a policy-origin confirmation withholds them.
  */
-export function toolEffect(tool: string): "read" | "act" {
-  return tool === "web" || /_(?:read|inspect|search)$/.test(tool) ? "read" : "act";
+export function callEffect(obligation: Obligation, state: Pick<RequestState, "operation">): "read" | "act" {
+  if (obligation.type !== "call_tool" || !obligation.value) return "act";
+  const tool = obligation.value.toLowerCase();
+  if (["web", "pdf_read", "file_inspect", "image_inspect", "gmail_read", "calendar_read", "spreadsheet_inspect", "slides_inspect"].includes(tool)) return "read";
+  if (["gmail", "calendar", "pdf_edit", "file_write", "image_generate"].includes(tool)) return "act";
+  if (["spreadsheet_edit", "slides_edit"].includes(tool)) {
+    return ["summarize", "extract", "analyze", "describe"].includes(state.operation ?? "") ? "read" : "act";
+  }
+  return "act";
 }

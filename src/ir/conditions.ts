@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { fieldsComplete, type RequestState } from "./requestState.js";
+import { artifactTypeSchema, fieldsComplete, type RequestState } from "./requestState.js";
 
 /**
  * Policy conditions: the intermediate representation of a policy node's control
@@ -16,6 +16,7 @@ import { fieldsComplete, type RequestState } from "./requestState.js";
  */
 
 export const conditionSchema = z.object({
+  artifactType: artifactTypeSchema.optional(),
   authorization: z.enum(["present", "reported", "conditional", "absent"]).optional(),
   limit: z.enum(["limited", "ambiguous", "none"]).optional(),
   /** "complete": every required field stated; "incomplete": some missing. */
@@ -26,6 +27,9 @@ export const conditionSchema = z.object({
   permittedTask: z.boolean().optional(),
   format: z.enum(["requested", "none"]).optional(),
   deliverable: z.enum(["text", "open", "unresolved"]).optional(),
+  externalDisclosure: z.enum(["safe", "confidential_external"]).optional(),
+  requestedSlideReorder: z.literal(true).optional(),
+  slideTask: z.union([z.literal(true), z.literal("unknown")]).optional(),
 }).strict();
 
 export type Condition = z.infer<typeof conditionSchema>;
@@ -39,6 +43,7 @@ export function evaluateCondition(condition: Condition, state: RequestState): { 
     if (decided === "false") truth = "false";
     else if (decided === "unknown" && truth !== "false") truth = "unknown";
   };
+  if (condition.artifactType !== undefined) clause(`artifact type is ${condition.artifactType}`, state.artifactType === condition.artifactType ? "true" : "false");
   if (condition.authorization !== undefined) clause(`authorization is ${condition.authorization}`, state.authorization === condition.authorization ? "true" : "false");
   if (condition.limit !== undefined) clause(`limit is ${condition.limit}`, state.limit === condition.limit ? "true" : "false");
   if (condition.fields !== undefined) {
@@ -52,6 +57,30 @@ export function evaluateCondition(condition: Condition, state: RequestState): { 
   if (condition.format !== undefined) clause(`format is ${condition.format}`, state.format === condition.format ? "true" : "false");
   if (condition.deliverable !== undefined) {
     clause(`deliverable is ${condition.deliverable}`, state.deliverable === "unresolved" && condition.deliverable !== "unresolved" ? "unknown" : (state.deliverable === condition.deliverable ? "true" : "false"));
+  }
+  if (condition.externalDisclosure !== undefined) {
+    clause(
+      `external disclosure is ${condition.externalDisclosure}`,
+      state.externalDisclosure === "unknown"
+        ? "unknown"
+        : (state.externalDisclosure === condition.externalDisclosure ? "true" : "false"),
+    );
+  }
+  if (condition.requestedSlideReorder !== undefined) {
+    clause(
+      "requested slide reorder is true",
+      state.requestedSlideReorder === null
+        ? "unknown"
+        : (state.requestedSlideReorder === true ? "true" : "false"),
+    );
+  }
+  if (condition.slideTask !== undefined) {
+    clause(
+      `slide task is ${condition.slideTask}`,
+      condition.slideTask === "unknown"
+        ? (state.slideTask === null ? "true" : "false")
+        : (state.slideTask === null ? "unknown" : (state.slideTask ? "true" : "false")),
+    );
   }
   return { truth, evidence };
 }

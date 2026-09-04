@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
+import { canonicalJson, createArtifact, sha256 } from "../src/compiler/artifact.js";
 import { extractorResponseJsonSchema, parsePersistedReads, persistedFrontend, toExtractedRead, type ExtractedRead } from "../src/ir/persistedFrontend.js";
-import { inputBlock } from "../src/extractor/plan.js";
+import { extractorContract, extractorContractHash, extractorFrontendId, inputBlock, inputEnvelopeContractProbes } from "../src/extractor/contract.js";
 import { requiredFieldRules } from "../src/ir/deterministicFrontend.js";
-import { scoreFixtures } from "../src/extractor/reads.js";
+import { parseFixtures, scoreFixtures } from "../src/extractor/reads.js";
 import { defaultFrontend } from "../src/compiler/evaluate.js";
 import type { Frontend } from "../src/ir/requestState.js";
 import { loadBehavioralCases } from "../src/experiment/cases.js";
@@ -14,6 +14,14 @@ import { generateCandidateSelections } from "../src/compiler/candidates.js";
 import { emitRuntimePrompt } from "../src/compiler/emitter.js";
 import { countTokens } from "../src/compiler/tokenCounter.js";
 import { loadPolicies } from "../src/policy/loader.js";
+
+const TEST_CONTRACT = extractorContract();
+const TEST_FRONTEND = extractorFrontendId("fixture", TEST_CONTRACT.readContractSha256);
+const persistedEnvelope = (reads: Record<string, ExtractedRead>) => ({
+  frontendId: TEST_FRONTEND,
+  readContractSha256: TEST_CONTRACT.readContractSha256,
+  reads,
+});
 
 test("loads and hashes the one-case smoke set", () => {
   const first = loadBehavioralCases("eval/behavioral/smoke-v1.jsonl");
@@ -146,14 +154,29 @@ test("persisted reads drive the planner path and change the run's identity", () 
   const policies = loadPolicies();
   const item = loadBehavioralCases("eval/behavioral/compiler-v0.9-regressions.jsonl").cases.find((c) => c.caseId === "cv09-041v4")!;
   const context = { ...(item.artifactContext ?? {}), toolsAvailable: item.tools.map((tool) => tool.name) };
-  const absent: ExtractedRead = { authorization: "absent", limit: "none", purpose: "none", permittedTask: false, format: "none", operationNamed: true, operationNegated: false, fields: {}, evidence: ["fixture"] };
+  const absent: ExtractedRead = {
+    currentInformation: false,
+    deferredWork: false,
+    slideTask: false,
+    externalDisclosure: "safe",
+    requestedSlideReorder: false,
+    authorization: "absent",
+    limit: "none",
+    purpose: "none",
+    permittedTask: false,
+    format: "none",
+    operationNamed: true,
+    operationNegated: false,
+    fields: {},
+    evidence: ["fixture"],
+  };
 
   // A read that says absent for this request must leave the ask in place on
   // every strategy the planner emits, and the trace must name the frontend.
-  const viaAbsent = generateCandidateSelections(policies, item.request, context, persistedFrontend(parsePersistedReads({ frontendId: "fixture-absent", reads: { [item.caseId]: absent } }), item.caseId));
+  const viaAbsent = generateCandidateSelections(policies, item.request, context, persistedFrontend(parsePersistedReads(persistedEnvelope({ [item.caseId]: absent }), TEST_CONTRACT.readContractSha256), item.caseId));
   const absentSlice = viaAbsent.find((c) => c.strategy === "compiler_slice")!.selection;
   assert.equal(absentSlice.requestState?.authorization, "absent");
-  assert.equal(absentSlice.requestState?.frontend, "fixture-absent");
+  assert.equal(absentSlice.requestState?.frontend, TEST_FRONTEND);
   assert.ok((absentSlice.evaluations ?? []).every((r) => r.branchId !== "already_authorized" || r.truth !== "true"));
   assert.match(emitRuntimePrompt(absentSlice, item.request, context), /ask_confirmation/);
 
@@ -195,27 +218,112 @@ test("the extractor's response schema is strict structured output and folds back
   assert.deepEqual(schema.properties.authorization.enum, ["present", "reported", "conditional", "absent"]);
   assert.deepEqual(schema.properties.limit.enum, ["limited", "ambiguous", "none"]);
   assert.deepEqual(schema.properties.format.enum, ["requested", "none"]);
-  const read = toExtractedRead({ authorization: "present", limit: "none", purpose: "none", permittedTask: false, format: "none", operationNamed: true, operationNegated: false, fields: [{ name: "recipient", stated: true }, { name: "body", stated: false }], evidence: ["e"] });
+  const read = toExtractedRead({
+    currentInformation: false,
+    deferredWork: false,
+    slideTask: false,
+    externalDisclosure: "safe",
+    requestedSlideReorder: false,
+    authorization: "present",
+    limit: "none",
+    purpose: "none",
+    permittedTask: false,
+    format: "none",
+    operationNamed: true,
+    operationNegated: false,
+    fields: [{ name: "recipient", stated: true }, { name: "body", stated: false }],
+    evidence: ["e"],
+  });
   assert.deepEqual(read.fields, { recipient: true, body: false });
-  parsePersistedReads({ frontendId: "x", reads: { k: read } });
+  parsePersistedReads(persistedEnvelope({ k: read }), TEST_CONTRACT.readContractSha256);
+  assert.equal(TEST_FRONTEND, `extractor:fixture:${TEST_CONTRACT.readContractSha256.slice(0, 12)}`);
+  const identity = {
+    promptSha256: TEST_CONTRACT.promptSha256,
+    fieldInventory: TEST_CONTRACT.fieldInventory,
+    fieldAssignments: TEST_CONTRACT.fieldAssignments,
+    responseSchema: TEST_CONTRACT.responseSchema,
+    inputEnvelopeSha256: TEST_CONTRACT.inputEnvelopeSha256,
+  };
+  assert.equal(extractorContractHash(identity), TEST_CONTRACT.readContractSha256);
+  for (const key of Object.keys(identity) as (keyof typeof identity)[]) {
+    assert.notEqual(
+      extractorContractHash({ ...identity, [key]: `changed:${key}` } as never),
+      TEST_CONTRACT.readContractSha256,
+      `${key} participates in the read contract identity`,
+    );
+  }
 });
 
 test("the extraction input block declares context, tools, and the required field names", () => {
-  const block = inputBlock("send it to pat", { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] }, requiredFieldRules({ artifactType: "email", operation: "send" }));
+  const context = {
+    artifactType: "email" as const,
+    operation: "send" as const,
+    features: ["attachments"],
+    domainHints: ["confidential"],
+    riskHints: ["external recipient"],
+    toolsAvailable: ["gmail"],
+    toolsRequested: ["web"],
+  };
+  const block = inputBlock("send it to pat", context, requiredFieldRules(context));
   assert.match(block, /^Request:\nsend it to pat\n/);
-  assert.match(block, /- artifact type: email\n- operation: send\n- features: none\n- tools available on this turn: gmail\n- required fields for this operation: \n  - recipient: an email address/);
+  assert.match(block, /- artifact type: email\n- operation: send\n- features: attachments\n- domain hints: confidential\n- risk hints: external recipient\n- tools available on this turn: gmail\n- tools requested for this turn: web\n- required fields for this operation: \n  - recipient: an email address/);
   assert.match(block, /\n  - attachment scope: what is attached or that nothing is; when the body is fully stated/);
   const bare = inputBlock("what is the latest?", { toolsAvailable: [] }, []);
   assert.match(bare, /- operation: none declared/);
-  assert.match(bare, /- tools available on this turn: none\n- required fields for this operation: none$/);
+  assert.match(bare, /- tools available on this turn: none\n- tools requested for this turn: none\n- required fields for this operation: none$/);
+});
+
+test("extractor identity covers every input-envelope branch", () => {
+  const probes = inputEnvelopeContractProbes();
+  assert.deepEqual(probes.map((probe) => probe.id), [
+    "null-context-zero-fields",
+    "empty-context-one-field",
+    "populated-context-many-fields",
+  ]);
+  assert.match(probes[0].envelope, /artifact type: none declared[\s\S]*features: none[\s\S]*required fields for this operation: none/);
+  assert.match(probes[1].envelope, /features: none[\s\S]*domain hints: none[\s\S]*tools requested for this turn: none[\s\S]*required fields for this operation: \n  - /);
+  assert.match(probes[2].envelope, /features: slides, charts[\s\S]*domain hints: contract-probe-domain-a, contract-probe-domain-b[\s\S]*tools available on this turn: slides_edit, file_inspect/);
+  const identity = {
+    promptSha256: TEST_CONTRACT.promptSha256,
+    fieldInventory: TEST_CONTRACT.fieldInventory,
+    fieldAssignments: TEST_CONTRACT.fieldAssignments,
+    responseSchema: TEST_CONTRACT.responseSchema,
+    inputEnvelopeSha256: TEST_CONTRACT.inputEnvelopeSha256,
+  };
+  for (let index = 0; index < probes.length; index += 1) {
+    const changed = probes.map((probe, probeIndex) =>
+      probeIndex === index ? { ...probe, envelope: `${probe.envelope}\nchanged` } : probe
+    );
+    assert.notEqual(
+      extractorContractHash({ ...identity, inputEnvelopeSha256: sha256(canonicalJson(changed)) }),
+      TEST_CONTRACT.readContractSha256,
+      `${probes[index].id} participates in the read contract identity`,
+    );
+  }
+});
+
+test("extractor fixtures are a strict discriminated union", () => {
+  assert.equal(parseFixtures([
+    JSON.stringify({ id: "a", kind: "authorization", expect: "present", text: "approved" }),
+    JSON.stringify({ id: "l", kind: "limit", expect: "none", text: "use it", tools: ["web"] }),
+  ].join("\n")).length, 2);
+  assert.throws(
+    () => parseFixtures(JSON.stringify({ id: "a", kind: "authorization", expect: "present", text: "approved", tools: [] })),
+    /invalid extractor fixture/,
+  );
+  assert.throws(
+    () => parseFixtures(JSON.stringify({ id: "l", kind: "limit", expect: "ambiguous", text: "maybe", tools: ["web"] })),
+    /invalid extractor fixture/,
+  );
 });
 
 test("reads score measures the deterministic frontend at its known fixture recall", () => {
   const score = scoreFixtures("eval/behavioral/compiler-v0.9-paraphrases.jsonl", () => defaultFrontend);
   assert.equal(score.total, 23);
-  // 11 when the fixtures were written; 12 after the waiver-versus-disqualifier
-  // refinement, which was made after the fixtures were read (recorded in the audit).
-  assert.equal(score.matched, 12);
+  // Improvements after the fixtures were opened come only from source-derived
+  // grammar fixes made for the 0.10 contract; this file remains measurement,
+  // never a tuning target.
+  assert.equal(score.matched, 17);
   assert.deepEqual(score.unsafe, []);
-  assert.equal(score.groups["authorization, expect present"].matched, 1);
+  assert.equal(score.groups["authorization, expect present"].matched, 6);
 });

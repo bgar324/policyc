@@ -35,8 +35,18 @@ export function formatSelection(selection: PolicySelection): string {
   lines.push(`Dependencies pulled in: ${edges.length ? edges.join(", ") : "none"}`);
   if (selection.requestState) {
     const state = selection.requestState;
+    const tri = (value: boolean | null) => value === null ? "unknown" : String(value);
     lines.push("");
-    lines.push(`Request state (${state.frontend}): operation=${state.operation ?? "-"} authorization=${state.authorization} limit=${state.limit} deliverable=${state.deliverable} purpose=${state.purpose}${state.permittedTask ? "+task" : ""} named=${state.operationNamed} negated=${state.operationNegated} tools=${state.toolsAvailable ? state.toolsAvailable.join(",") || "none" : "undeclared"}`);
+    lines.push([
+      `Request state (${state.frontend}): operation=${state.operation ?? "-"}`,
+      `authorization=${state.authorization} limit=${state.limit} deliverable=${state.deliverable}`,
+      `purpose=${state.purpose}${state.permittedTask ? "+task" : ""}`,
+      `current=${tri(state.currentInformation)} deferred=${tri(state.deferredWork)}`,
+      `slides=${tri(state.slideTask)} reorder=${tri(state.requestedSlideReorder)}`,
+      `disclosure=${state.externalDisclosure}`,
+      `named=${state.operationNamed} negated=${state.operationNegated}`,
+      `tools=${state.toolsAvailable ? state.toolsAvailable.join(",") || "none" : "undeclared"}`,
+    ].join(" "));
     const fields = Object.entries(state.fields);
     if (fields.length) lines.push(`  fields: ${fields.map(([name, present]) => `${name}=${present ? "stated" : "missing"}`).join(", ")}`);
     for (const item of state.evidence) lines.push(`  ${item}`);

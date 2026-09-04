@@ -9,7 +9,14 @@ policies:
     triggers:
       keywords: [delete, archive, trash, cancel, remove all, move meeting, clear out, get rid of, clean out, purge, nuke, wipe]
       tools: []
-      operations: [delete, archive, update]
+      artifactScope: [email, calendar_event]
+      artifactOperations:
+        - { artifactType: email, operation: delete }
+        - { artifactType: email, operation: archive }
+        - { artifactType: email, operation: update }
+        - { artifactType: calendar_event, operation: delete }
+        - { artifactType: calendar_event, operation: update }
+        - { artifactType: calendar_event, operation: reschedule }
     requires: [destructive_action_definition, email_calendar_privacy]
     obligations:
       - type: ask_confirmation
@@ -36,7 +43,10 @@ policies:
       keywords: [send email, send this email, email it, forward]
       intents: [send_email]
       tools: []
-      operations: [send, forward]
+      artifactScope: [email]
+      artifactOperations:
+        - { artifactType: email, operation: send }
+        - { artifactType: email, operation: forward }
     requires: [destructive_action_definition]
     obligations:
       - type: ask_confirmation
@@ -47,7 +57,7 @@ policies:
       - asks_confirmation_before_destructive_action
     branches:
       - id: already_authorized
-        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete, externalDisclosure: safe }
         runtimeInstruction: Explicit send intent and confirmation are already present in the request, so send exactly the confirmed message to the confirmed recipient with the available gmail tool now and do not ask for confirmation again. Do not draft instead, change the recipient, body, or attachments, or send anything else.
         obligations:
           - type: call_tool
@@ -63,7 +73,9 @@ policies:
     alwaysActive: false
     triggers:
       keywords: [forward, private thread, external advisor]
-      operations: [forward]
+      artifactScope: [email]
+      artifactOperations:
+        - { artifactType: email, operation: forward }
     requires: [send_email_requires_explicit_request, email_calendar_privacy]
     obligations:
       - type: ask_confirmation
@@ -73,8 +85,15 @@ policies:
     validators:
       - asks_confirmation_before_destructive_action
     branches:
+      - id: confidential_external_disclosure
+        when: { externalDisclosure: confidential_external }
+        runtimeInstruction: This forward would disclose confidential material to an external recipient. Identify the exact recipient and exact thread content or attachment scope, explain the irreversible external disclosure consequence, then ask the user to confirm that exact disclosure. Do not call Gmail on this turn.
+        obligations:
+          - type: ask_confirmation
+        prohibitions:
+          - { type: forbidden_tool_call, value: gmail }
       - id: already_authorized
-        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
+        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete, externalDisclosure: safe }
         runtimeInstruction: The user has already named the exact recipient and thread scope and confirmed the forward, so forward exactly that content to that recipient with the available gmail tool now and do not ask for confirmation again. Do not include anything outside the confirmed scope.
         obligations:
           - type: call_tool
@@ -130,7 +149,10 @@ policies:
     alwaysActive: false
     triggers:
       keywords: [archive, delete, trash, clear out, get rid of, clean out, purge, remove]
-      operations: [archive, delete]
+      artifactScope: [email, calendar_event]
+      artifactOperations:
+        - { artifactType: email, operation: archive }
+        - { artifactType: email, operation: delete }
     requires: [destructive_action_definition]
     obligations:
       - type: ask_confirmation
@@ -141,11 +163,16 @@ policies:
       - asks_confirmation_before_destructive_action
     branches:
       - id: already_authorized
-        when: { authorization: present, operationNamed: true, operationNegated: false, fields: complete }
+        when: { artifactType: email, authorization: present, operationNamed: true, operationNegated: false, fields: complete }
         runtimeInstruction: The user has confirmed the exact action by name, so perform only that confirmed action with the available gmail tool and do not ask for confirmation again. Archive means archive and delete means delete; never substitute one for the other or widen the confirmed target.
         obligations:
           - type: call_tool
             value: gmail
+        prohibitions: []
+      - id: already_authorized_calendar_delete
+        when: { artifactType: calendar_event, authorization: present, operationNamed: true, operationNegated: false, fields: complete }
+        runtimeInstruction: The request names and confirms an exact calendar deletion, so do not apply email archive semantics or ask again here; the calendar mutation policy owns that confirmed action.
+        obligations: []
         prohibitions: []
 
   - id: calendar_event_mutation_policies
@@ -160,7 +187,12 @@ policies:
       intents: [calendar_mutation]
       tools: []
       artifactTypes: [calendar_event]
-      operations: [create, update, delete, reschedule]
+      artifactScope: [calendar_event]
+      artifactOperations:
+        - { artifactType: calendar_event, operation: create }
+        - { artifactType: calendar_event, operation: update }
+        - { artifactType: calendar_event, operation: delete }
+        - { artifactType: calendar_event, operation: reschedule }
     requires: [destructive_action_definition]
     obligations:
       - type: ask_confirmation
@@ -187,6 +219,8 @@ policies:
     alwaysActive: false
     triggers:
       keywords: [recurring, weekly, starting tomorrow, all future occurrences, series]
+      artifactScope: [calendar_event]
+      operationScope: [delete]
     requires: [calendar_event_mutation_policies, email_calendar_privacy]
     obligations:
       - type: ask_confirmation

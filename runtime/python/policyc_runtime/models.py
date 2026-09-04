@@ -39,9 +39,21 @@ class SpecializationRecord(StrictModel):
     evidence: list[str]
 
 
+ARTIFACT_TYPES_1_3 = frozenset(
+    {"pdf", "spreadsheet", "image", "document", "email", "calendar_event", "generated_image", "unknown"}
+)
+
+
 class RequestState(StrictModel):
     operation: str | None = None
     artifactType: str | None = None
+    # Protocols 1.0-1.2 predate these facts. Conservative defaults keep their
+    # historical artifacts readable; protocol 1.3 will require them on the wire.
+    currentInformation: bool | None = None
+    deferredWork: bool | None = None
+    slideTask: bool | None = None
+    externalDisclosure: Literal["safe", "confidential_external", "unknown"] = "unknown"
+    requestedSlideReorder: bool | None = None
     authorization: Literal["present", "reported", "conditional", "absent"]
     limit: Literal["limited", "ambiguous", "none"]
     deliverable: Literal["text", "open", "unresolved"]
@@ -64,7 +76,7 @@ class EvaluationRecord(StrictModel):
 
 
 class CompiledArtifact(StrictModel):
-    schemaVersion: Literal["1.0.0", "1.1.0", "1.2.0"]
+    schemaVersion: Literal["1.0.0", "1.1.0", "1.2.0", "1.3.0"]
     compilerVersion: str
     candidateId: str
     policyPackHash: str
@@ -97,8 +109,24 @@ class CompiledArtifact(StrictModel):
         version = data.get("schemaVersion")
         if version == "1.1.0" and "specializations" not in data:
             raise ValueError("schemaVersion 1.1.0 artifacts must record specializations")
-        if version == "1.2.0" and any(key not in data for key in ("requestState", "evaluations", "conflicts")):
-            raise ValueError("schemaVersion 1.2.0 artifacts must record requestState, evaluations, and conflicts")
+        if version in ("1.2.0", "1.3.0") and any(
+            key not in data for key in ("requestState", "evaluations", "conflicts")
+        ):
+            raise ValueError(f"schemaVersion {version} artifacts must record requestState, evaluations, and conflicts")
+        if version == "1.3.0":
+            state = data.get("requestState")
+            required_facts = (
+                "currentInformation",
+                "deferredWork",
+                "slideTask",
+                "externalDisclosure",
+                "requestedSlideReorder",
+            )
+            if not isinstance(state, dict) or any(key not in state for key in required_facts):
+                raise ValueError("schemaVersion 1.3.0 requestState must record all compiler 0.10 facts")
+            artifact_type = state.get("artifactType")
+            if artifact_type is not None and artifact_type not in ARTIFACT_TYPES_1_3:
+                raise ValueError(f"schemaVersion 1.3.0 requestState artifactType is invalid: {artifact_type}")
         return data
 
 

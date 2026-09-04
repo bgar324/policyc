@@ -36,8 +36,9 @@ export function runEval(): MetricsReport {
 function runEvalCase(testCase: EvalCase, policies: Policy[], fullPrompt: string): EvalCaseResult {
   // Selector metrics score the raw selection; the emitted prompt, mock trace, and
   // validators see the specialized policies the model would actually receive.
-  const selection = selectPolicies(policies, { input: testCase.input, context: testCase.context });
-  const specialized = evaluateSelection(selection, defaultFrontend(testCase.input, testCase.context));
+  const state = defaultFrontend(testCase.input, testCase.context);
+  const selection = selectPolicies(policies, { input: testCase.input, context: testCase.context, state });
+  const specialized = evaluateSelection(selection, state);
   const compiledPrompt = emitRuntimePrompt(specialized, testCase.input, testCase.context);
   const tokenCounts = countBaselineTokens(fullPrompt, compiledPrompt);
   const selectedPolicyIds = selection.policies.map((policy) => policy.id);

@@ -91,6 +91,7 @@ class FrontendRecord(StrictModel):
     """
 
     frontendId: str = Field(min_length=1)
+    readContractSha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     readsPath: str | None = None
     readsSha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 

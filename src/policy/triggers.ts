@@ -110,6 +110,7 @@ export function matchPolicy(policy: Policy, selectionInput: SelectionInput, dete
   const input = selectionInput.input.toLowerCase();
   const context = selectionInput.context ?? undefined;
   const triggers = policy.triggers ?? {};
+  if (!triggerScopesMatch(policy, context)) return [];
   const artifactTypes = triggers.artifactTypes ?? [];
 
   // A declared artifact-type-plus-operation pair selects on its own: it names
@@ -127,6 +128,12 @@ export function matchPolicy(policy: Policy, selectionInput: SelectionInput, dete
   }
 
   const intentHits = triggers.intents?.filter((intent) => detectedIntents.includes(intent)) ?? [];
+  const stateKeys = Object.keys(triggers.state ?? {}) as Array<keyof NonNullable<typeof triggers.state>>;
+  for (const key of stateKeys) {
+    const value = selectionInput.state[key];
+    if (value === true) reasons.push(`state trigger: ${key}`);
+    else if (value === null) reasons.push(`state trigger retained while ${key} is unknown`);
+  }
   if (intentHits.length) reasons.push(`intent trigger: ${intentHits.join(", ")}`);
 
   if (
@@ -160,6 +167,14 @@ export function matchPolicy(policy: Policy, selectionInput: SelectionInput, dete
 
   return reasons;
 }
+export function triggerScopesMatch(policy: Policy, context?: ArtifactContext | null): boolean {
+  const artifactScope = policy.triggers.artifactScope ?? [];
+  if (artifactScope.length && (!context?.artifactType || !artifactScope.includes(context.artifactType))) return false;
+  const operationScope = policy.triggers.operationScope ?? [];
+  if (operationScope.length && (!context?.operation || !operationScope.includes(context.operation))) return false;
+  return true;
+}
+
 
 export function obligationToString(obligation: { type: string; value?: string }): string {
   return obligation.value ? `${obligation.type}:${obligation.value}` : obligation.type;

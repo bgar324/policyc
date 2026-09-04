@@ -196,6 +196,10 @@
           "type": "string",
           "minLength": 1
         },
+        "readContractSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
         "readsPath": {
           "type": "string"
         },
@@ -204,7 +208,7 @@
           "pattern": "^[a-f0-9]{64}$"
         }
       },
-      "description": "Frontend that produced this run's request states and therefore its compiled artifacts. frontendId 'deterministic' means the in-process baseline; any other id names a persisted reads file (readsPath) whose sha256 is readsSha256."
+      "description": "Frontend that produced this run's request states and therefore its compiled artifacts. frontendId 'deterministic' means the in-process baseline; any other id names a persisted reads file (readsPath) whose sha256 is readsSha256. New persisted reads also bind frontendId to their complete semantic contract with readContractSha256; historical manifests may omit it."
     }
   }
 }

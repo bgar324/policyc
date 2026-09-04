@@ -18,11 +18,23 @@ export const limitStateSchema = z.enum(["limited", "ambiguous", "none"]);
 export const deliverableSchema = z.enum(["text", "open", "unresolved"]);
 export const purposeSchema = z.enum(["sensitive_attribute_read", "identification", "none"]);
 export const formatSchema = z.enum(["requested", "none"]);
+export const externalDisclosureSchema = z.enum(["safe", "confidential_external", "unknown"]);
+export const artifactTypeSchema = z.enum(["pdf", "spreadsheet", "image", "document", "email", "calendar_event", "generated_image", "unknown"]);
 
 export const requestStateSchema = z.object({
   /** The operation the artifact context declares, when it declares one. */
   operation: z.string().optional(),
-  artifactType: z.string().optional(),
+  artifactType: artifactTypeSchema.optional(),
+  /** Whether the request needs facts that can change after training. */
+  currentInformation: z.boolean().nullable(),
+  /** Whether the request asks for work, monitoring, or reporting after this turn. */
+  deferredWork: z.boolean().nullable(),
+  /** Whether this request requires inspecting or changing an existing slide deck. */
+  slideTask: z.boolean().nullable(),
+  /** Whether sending would disclose confidential material to an external recipient. */
+  externalDisclosure: externalDisclosureSchema,
+  /** Whether the request moves named existing slides to a stated destination. */
+  requestedSlideReorder: z.boolean().nullable(),
   /** Whether the user has authorized the operation in their own voice. */
   authorization: authorizationStateSchema,
   /** Whether the user has bounded this turn to a text answer. */
@@ -120,6 +132,11 @@ export function conservativeState(context: ArtifactContext | null | undefined, f
   return {
     operation: context?.operation,
     artifactType: context?.artifactType,
+    currentInformation: null,
+    deferredWork: null,
+    slideTask: null,
+    externalDisclosure: "unknown",
+    requestedSlideReorder: null,
     authorization: "absent",
     limit: "ambiguous",
     deliverable: "unresolved",

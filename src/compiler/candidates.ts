@@ -13,14 +13,14 @@ import { defaultFrontend, evaluateSelection } from "./evaluate.js";
  * full-policy baseline records the state only.
  */
 export function generateCandidateSelections(policies: Policy[], input: string, context?: ArtifactContext | null, frontend?: Frontend): Array<{ strategy: CompilationStrategy; selection: PolicySelection }> {
-  const compiled = selectPolicies(policies, { input, context });
+  const state = (frontend ?? defaultFrontend)(input, context);
+  const compiled = selectPolicies(policies, { input, context, state });
   const directIds = new Set(compiled.reasons.filter((reason) => !reason.reasons.every((item) => item === "dependency closure")).map((reason) => reason.policyId));
   const directPolicies = compiled.policies.filter((policy) => directIds.has(policy.id));
   const directReasons = compiled.reasons.filter((reason) => directIds.has(reason.policyId)).map((reason) => ({ ...reason, dependencyOf: undefined }));
   const kernel = policies.filter((policy) => policy.alwaysActive);
   const expandedSeeds = uniquePolicies([...compiled.policies, ...policies.filter((policy) => policy.kind === "content_gated" && ["safety", "privacy", "tool"].includes(policy.severity))]);
   const expandedReasons: PolicySelectionReason[] = expandedSeeds.map((policy) => compiled.reasons.find((reason) => reason.policyId === policy.id) ?? { policyId: policy.id, reasons: ["conservative expansion"] });
-  const state = (frontend ?? defaultFrontend)(input, context);
   const specialize = (selection: PolicySelection) => evaluateSelection(selection, state);
 
   return [

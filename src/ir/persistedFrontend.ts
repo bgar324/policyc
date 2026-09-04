@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   authorizationStateSchema,
   conservativeState,
+  externalDisclosureSchema,
   formatSchema,
   guardedFrontend,
   limitStateSchema,
@@ -10,8 +11,17 @@ import {
   resolveDeliverable,
   type Frontend,
 } from "./requestState.js";
-import { requiredFieldNames } from "./deterministicFrontend.js";
+import {
+  requiredFieldNames,
+  resolveCurrentInformation,
+  resolveDeferredWork,
+  resolveExternalDisclosure,
+  resolveOperationFacts,
+  resolveRequestedSlideReorder,
+  resolveSlideTask,
+} from "./deterministicFrontend.js";
 import { authorizationDisqualifier } from "../compiler/authorization.js";
+import { isInlineTextRewrite } from "../compiler/limits.js";
 
 /**
  * What an extractor reads from one request: the semantic facts a policy
@@ -21,6 +31,11 @@ import { authorizationDisqualifier } from "../compiler/authorization.js";
  * the case it belongs to.
  */
 export const extractedReadSchema = z.object({
+  currentInformation: z.boolean().nullable(),
+  deferredWork: z.boolean().nullable(),
+  slideTask: z.boolean().nullable(),
+  externalDisclosure: externalDisclosureSchema,
+  requestedSlideReorder: z.boolean().nullable(),
   authorization: authorizationStateSchema,
   limit: limitStateSchema,
   purpose: purposeSchema,
@@ -43,6 +58,7 @@ export const extractedReadSchema = z.object({
  */
 export const persistedReadsSchema = z.object({
   frontendId: z.string().min(1),
+  readContractSha256: z.string().regex(/^[a-f0-9]{64}$/),
   reads: z.record(z.string(), extractedReadSchema),
 }).strict();
 
@@ -54,6 +70,11 @@ export const persistedReadsSchema = z.object({
  * boundary and the extractor's contract cannot drift apart.
  */
 export const extractorResponseSchema = z.object({
+  currentInformation: z.boolean().nullable(),
+  deferredWork: z.boolean().nullable(),
+  slideTask: z.boolean().nullable(),
+  externalDisclosure: externalDisclosureSchema,
+  requestedSlideReorder: z.boolean().nullable(),
   authorization: authorizationStateSchema,
   limit: limitStateSchema,
   purpose: purposeSchema,
@@ -80,8 +101,18 @@ export function toExtractedRead(response: ExtractorResponse): ExtractedRead {
 export type ExtractedRead = z.infer<typeof extractedReadSchema>;
 export type PersistedReads = z.infer<typeof persistedReadsSchema>;
 
-export function parsePersistedReads(raw: unknown): PersistedReads {
-  return persistedReadsSchema.parse(raw);
+export function parsePersistedReads(raw: unknown, expectedReadContractSha256: string): PersistedReads {
+  if (!raw || typeof raw !== "object" || typeof (raw as { readContractSha256?: unknown }).readContractSha256 !== "string") {
+    throw new Error("request-state reads predate the current extractor contract; re-extract them");
+  }
+  const persisted = persistedReadsSchema.parse(raw);
+  if (persisted.readContractSha256 !== expectedReadContractSha256) {
+    throw new Error(`request-state read contract ${persisted.readContractSha256} does not match running contract ${expectedReadContractSha256}; re-extract the reads`);
+  }
+  if (!persisted.frontendId.endsWith(`:${expectedReadContractSha256.slice(0, 12)}`)) {
+    throw new Error(`request-state frontend id ${persisted.frontendId} does not name contract ${expectedReadContractSha256}; re-extract the reads`);
+  }
+  return persisted;
 }
 
 /**
@@ -110,10 +141,30 @@ export function persistedFrontend(persisted: PersistedReads, key?: string): Fron
       authorization = disqualifier.state;
       evidence.push(`present read capped to ${disqualifier.state}: ${disqualifier.evidence}`);
     }
-    const proved = provesAction({ authorization, operationNamed: hit.operationNamed, operationNegated: hit.operationNegated, fields });
+    const sourceOperation = resolveOperationFacts(input, context?.operation, hit.operationNamed, hit.operationNegated);
+    const operationNamed = sourceOperation.operationNamed && !isInlineTextRewrite(input, context);
+    const operationNegated = operationNamed && sourceOperation.operationNegated;
+    evidence.push(...sourceOperation.evidence.map((line) => `operation read capped: ${line}`));
+    if (operationNamed !== sourceOperation.operationNamed) evidence.push("operation-named read capped: rewrite applies only to supplied text");
+    const currentInformation = resolveCurrentInformation(input, context, hit.currentInformation);
+    const deferredWork = resolveDeferredWork(input, context, hit.deferredWork);
+    const slideTask = resolveSlideTask(input, context, hit.slideTask);
+    const externalDisclosure = resolveExternalDisclosure(input, context, hit.externalDisclosure);
+    const requestedSlideReorder = resolveRequestedSlideReorder(input, context, slideTask, hit.requestedSlideReorder);
+    if (currentInformation !== hit.currentInformation) evidence.push(`current-information read capped to ${currentInformation}`);
+    if (deferredWork !== hit.deferredWork) evidence.push(`deferred-work read capped to ${deferredWork}`);
+    if (slideTask !== hit.slideTask) evidence.push(`slide-task read capped to ${slideTask}`);
+    if (externalDisclosure !== hit.externalDisclosure) evidence.push(`external-disclosure read capped to ${externalDisclosure}`);
+    if (requestedSlideReorder !== hit.requestedSlideReorder) evidence.push(`slide-reorder read capped to ${requestedSlideReorder}`);
+    const proved = provesAction({ authorization, operationNamed, operationNegated, fields });
     return {
       operation: context?.operation,
       artifactType: context?.artifactType,
+      currentInformation,
+      deferredWork,
+      slideTask,
+      externalDisclosure,
+      requestedSlideReorder,
       authorization,
       limit: hit.limit,
       deliverable: resolveDeliverable(hit.limit, proved),
@@ -121,8 +172,8 @@ export function persistedFrontend(persisted: PersistedReads, key?: string): Fron
       permittedTask: hit.permittedTask,
       format: hit.format,
       fields,
-      operationNamed: hit.operationNamed,
-      operationNegated: hit.operationNegated,
+      operationNamed,
+      operationNegated,
       toolsAvailable: context?.toolsAvailable?.map((tool) => tool.toLowerCase()),
       frontend: persisted.frontendId,
       evidence,

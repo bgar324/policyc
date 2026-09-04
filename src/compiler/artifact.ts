@@ -4,8 +4,8 @@ import type { RequestState } from "../ir/requestState.js";
 import { emitRuntimePrompt } from "./emitter.js";
 import { countTokens, type TokenCount } from "./tokenCounter.js";
 
-export const PROTOCOL_VERSION = "1.2.0";
-export const COMPILER_VERSION = "0.9.0";
+export const PROTOCOL_VERSION = "1.3.0";
+export const COMPILER_VERSION = "0.10.0";
 export type CompilationStrategy = "full_policy" | "compiler_slice" | "kernel_only" | "direct_matches" | "conservative_expanded";
 
 export type CompiledPolicyArtifact = {

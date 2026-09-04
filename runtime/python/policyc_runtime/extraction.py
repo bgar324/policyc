@@ -58,7 +58,7 @@ class ExtractionPlan(StrictModel):
     frontendId: str = Field(min_length=1)
     promptPath: str
     promptSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
-    # Hash of the prompt plus every field description the inputs carry: the read contract behind frontendId.
+    # Hash of the complete semantic read contract behind frontendId.
     readContractSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     source: ExtractionSource
     provider: Literal["fake", "openai"]
@@ -75,7 +75,10 @@ class ExtractionPlan(StrictModel):
 
 
 def load_plan(path: Path) -> ExtractionPlan:
-    return ExtractionPlan.model_validate(json.loads(path.read_text()))
+    plan = ExtractionPlan.model_validate(json.loads(path.read_text()))
+    if not plan.frontendId.endswith(f":{plan.readContractSha256[:12]}"):
+        raise ValueError("frontendId does not name readContractSha256")
+    return plan
 
 
 def spend_plan(plan: ExtractionPlan, price: ModelPrice) -> dict[str, Any]:
@@ -121,6 +124,11 @@ class FakeExtractor:
         await asyncio.sleep(0.01)
         names = _required_field_names(payload["input"])
         read = {
+            "currentInformation": None,
+            "deferredWork": None,
+            "slideTask": None,
+            "externalDisclosure": "unknown",
+            "requestedSlideReorder": None,
             "authorization": "absent",
             "limit": "none",
             "purpose": "none",
@@ -190,7 +198,11 @@ class ExtractionRuntime:
         await asyncio.gather(*(one(item) for item in self.plan.items))
         finished = datetime.now(UTC).isoformat()
         reads = {key: result["read"] for key, result in self.results.items() if result["status"] == "completed"}
-        reads_file = {"frontendId": self.plan.frontendId, "reads": reads}
+        reads_file = {
+            "frontendId": self.plan.frontendId,
+            "readContractSha256": self.plan.readContractSha256,
+            "reads": reads,
+        }
         (self.root / "reads.json").write_text(canonical_json(reads_file) + "\n")
         report = {
             "planId": self.plan.planId,

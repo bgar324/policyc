@@ -1,6 +1,6 @@
 import type { ArtifactContext, Policy, PolicySelection, PolicySelectionReason, SelectionInput } from "./types.js";
 import { computeDependencyClosure } from "./closure.js";
-import { detectIntents, matchPolicy } from "./triggers.js";
+import { detectIntents, matchPolicy, triggerScopesMatch } from "./triggers.js";
 
 const severityRank: Record<string, number> = {
   safety: 5,
@@ -17,19 +17,20 @@ export function selectPolicies(policies: Policy[], selectionInput: SelectionInpu
 
   for (const policy of policies) {
     if (policy.kind === "structural" && !policy.alwaysActive) continue;
+    if (!triggerScopesMatch(policy, selectionInput.context)) continue;
 
     const reasonList: string[] = [];
     if (policy.kind === "universal") reasonList.push("universal policy");
     if (policy.alwaysActive) reasonList.push("always active");
-    if (!suppressDirectMatch(policy, detectedIntents, selectionInput.context)) {
+    if (!suppressDirectMatch(policy, detectedIntents, selectionInput.state, selectionInput.context)) {
       reasonList.push(...matchPolicy(policy, selectionInput, detectedIntents));
     }
 
-    if (policy.id === "do_not_browse_for_simple_rewrites" && detectedIntents.includes("current_info")) {
+    if (policy.id === "do_not_browse_for_simple_rewrites" && selectionInput.state.currentInformation !== false) {
       continue;
     }
 
-    if (shouldConservativelyRetain(policy, selectionInput.input, detectedIntents, selectionInput.context)) {
+    if (shouldConservativelyRetain(policy, selectionInput.input, detectedIntents, selectionInput.state, selectionInput.context)) {
       reasonList.push("conservative retention for high-impact risk");
     }
 
@@ -53,17 +54,17 @@ export function selectPolicies(policies: Policy[], selectionInput: SelectionInpu
 function suppressDirectMatch(
   policy: Policy,
   detectedIntents: string[],
+  state: SelectionInput["state"],
   context?: ArtifactContext | null,
 ): boolean {
-  const currentIntent = detectedIntents.some((intent) => ["current_info", "weather"].includes(intent))
-    || context?.operation === "lookup";
+  const currentRequest = state.currentInformation !== false;
   if (["current_info_requires_web", "no_current_facts_from_memory"].includes(policy.id)) {
-    return !currentIntent;
+    return !currentRequest;
   }
   if (["citations_required", "authoritative_sources_preferred"].includes(policy.id)) {
     const webAvailable = [...(context?.toolsAvailable ?? []), ...(context?.toolsRequested ?? [])]
       .some((tool) => tool.toLowerCase() === "web");
-    return !currentIntent && !detectedIntents.includes("citation_request") && !webAvailable;
+    return !currentRequest && !detectedIntents.includes("citation_request") && !webAvailable;
   }
   return false;
 }
@@ -76,11 +77,10 @@ function comparePolicies(left: Policy, right: Policy): number {
   return left.id.localeCompare(right.id);
 }
 
-function shouldConservativelyRetain(policy: Policy, input: string, detectedIntents: string[], context?: ArtifactContext | null): boolean {
+function shouldConservativelyRetain(policy: Policy, input: string, detectedIntents: string[], state: SelectionInput["state"], context?: ArtifactContext | null): boolean {
   if (policy.kind !== "content_gated") return false;
   if (["current_info_requires_web", "no_current_facts_from_memory"].includes(policy.id)) {
-    return detectedIntents.some((intent) => ["current_info", "weather"].includes(intent))
-      || context?.operation === "lookup";
+    return state.currentInformation !== false;
   }
   if (!["safety", "privacy", "tool"].includes(policy.severity)) return false;
   if (policy.id === "send_email_requires_explicit_request") return false;

@@ -8,6 +8,7 @@ import type { Frontend } from "../ir/requestState.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { loadPolicies } from "../policy/loader.js";
 import { loadBehavioralCases, type BehavioralCase } from "./cases.js";
+import { extractorContract } from "../extractor/contract.js";
 
 const STRATEGIES: CompilationStrategy[] = ["full_policy", "compiler_slice", "kernel_only", "direct_matches", "conservative_expanded"];
 const INPUT_TOKEN_OVERHEAD_PER_CALL = 64;
@@ -76,15 +77,15 @@ type Options = {
 };
 
 /** Manifest record of the frontend; the exact file hash makes a persisted frontend's identity reproducible. */
-export type FrontendRecord = { frontendId: string; readsPath?: string; readsSha256?: string };
+export type FrontendRecord = { frontendId: string; readContractSha256?: string; readsPath?: string; readsSha256?: string };
 type FrontendSource = { record: FrontendRecord; frontendFor: (caseId: string) => Frontend | undefined };
 
 function loadFrontendSource(path: string | undefined): FrontendSource {
   if (!path) return { record: { frontendId: "deterministic" }, frontendFor: () => undefined };
   const text = readFileSync(path, "utf8");
-  const persisted = parsePersistedReads(JSON.parse(text));
+  const persisted = parsePersistedReads(JSON.parse(text), extractorContract().readContractSha256);
   return {
-    record: { frontendId: persisted.frontendId, readsPath: resolve(path), readsSha256: sha256(text) },
+    record: { frontendId: persisted.frontendId, readContractSha256: persisted.readContractSha256, readsPath: resolve(path), readsSha256: sha256(text) },
     frontendFor: (caseId) => persistedFrontend(persisted, caseId),
   };
 }

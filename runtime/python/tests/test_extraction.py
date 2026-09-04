@@ -29,6 +29,11 @@ SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "required": [
+        "currentInformation",
+        "deferredWork",
+        "slideTask",
+        "externalDisclosure",
+        "requestedSlideReorder",
         "authorization",
         "limit",
         "purpose",
@@ -40,6 +45,11 @@ SCHEMA = {
         "evidence",
     ],
     "properties": {
+        "currentInformation": {"type": ["boolean", "null"]},
+        "deferredWork": {"type": ["boolean", "null"]},
+        "slideTask": {"type": ["boolean", "null"]},
+        "externalDisclosure": {"enum": ["safe", "confidential_external", "unknown"]},
+        "requestedSlideReorder": {"type": ["boolean", "null"]},
         "authorization": {"enum": ["present", "reported", "conditional", "absent"]},
         "limit": {"enum": ["limited", "ambiguous", "none"]},
         "purpose": {"enum": ["sensitive_attribute_read", "identification", "none"]},
@@ -81,7 +91,7 @@ def _plan(tmp_path: Path, *, max_cost: float, items: int = 2, max_output: int = 
         "planId": "ext_test",
         "createdAt": "2026-01-01T00:00:00.000Z",
         "sourceControl": {"system": "git", "commit": "0" * 40, "dirty": False},
-        "frontendId": "extractor:test",
+        "frontendId": f"extractor:test:{'c' * 12}",
         "promptPath": "prompts/request-state-extractor.md",
         "promptSha256": "a" * 64,
         "readContractSha256": "c" * 64,
@@ -138,6 +148,11 @@ class ScriptedProvider:
 
 VALID = json.dumps(
     {
+        "currentInformation": False,
+        "deferredWork": False,
+        "slideTask": False,
+        "externalDisclosure": "safe",
+        "requestedSlideReorder": False,
         "authorization": "present",
         "limit": "none",
         "purpose": "none",
@@ -176,6 +191,15 @@ def test_worst_case_is_priced_from_the_plan_and_the_payload_is_strict(tmp_path: 
     assert payload["store"] is False and payload["max_output_tokens"] == 256
 
 
+def test_plan_rejects_a_frontend_id_that_does_not_name_its_read_contract(tmp_path: Path) -> None:
+    path = _plan(tmp_path, max_cost=1.0)
+    raw = json.loads(path.read_text())
+    raw["frontendId"] = "extractor:test:wrong"
+    path.write_text(json.dumps(raw))
+    with pytest.raises(ValueError, match="frontendId does not name readContractSha256"):
+        load_plan(path)
+
+
 def test_reads_keep_only_schema_valid_responses_and_only_the_given_fields(tmp_path: Path) -> None:
     path = _plan(tmp_path, max_cost=1.0)
     plan = load_plan(path)
@@ -183,7 +207,8 @@ def test_reads_keep_only_schema_valid_responses_and_only_the_given_fields(tmp_pa
     report = asyncio.run(ExtractionRuntime(plan, path, provider, _price()).run())
     assert report["outcomes"] == {"completed": 1, "invalid": 1}
     reads = json.loads((tmp_path / "reads.json").read_text())
-    assert reads["frontendId"] == "extractor:test"
+    assert reads["frontendId"] == f"extractor:test:{'c' * 12}"
+    assert reads["readContractSha256"] == "c" * 64
     assert set(reads["reads"]) == {"case-0"}
     read = reads["reads"]["case-0"]
     assert read["fields"] == {"recipient": True, "body": False}, "a field the plan did not ask for is dropped"
@@ -237,6 +262,8 @@ def test_fake_extractor_answers_in_the_response_shape(tmp_path: Path) -> None:
     assert report["outcomes"] == {"completed": 1}
     read = json.loads((tmp_path / "reads.json").read_text())["reads"]["case-0"]
     assert read["authorization"] == "absent" and read["fields"] == {"recipient": False, "body": False}
+    assert read["currentInformation"] is None
+    assert read["externalDisclosure"] == "unknown"
 
 
 class RejectingThenValidProvider:
