@@ -83,7 +83,18 @@ Preservation is flat across author batches and concentrated by tool: calendar an
 
 **Item 6, case-clustered sensitivity.** 54 cases had at least one full-policy critical pass; 37 of them had no full-only regression (68.52% regression-free). A case-level bootstrap (5,000 resamples of the 60 cases, seed 20260903) gives a 95% interval for conditional preservation of 64.49%–86.01%, wider than the trial-level Wilson interval because three samples from one case are not independent. Neither interval reaches the 90% lower-bound gate.
 
-**Item 7, held-out-v3 taxonomy over the 32 full-only pairs.** Emitter loss 27 (of which confirmation-state 7, tool availability emitted without the user's limit 13, confirmation bullet without target/scope or archive-versus-delete text 7), selector error 3 (`hv4-002`: web policy activated for a definitional question the user said not to look up), stochastic 2 (`hv4-024` simulated-inspection claim, `hv4-060` missed deadline, one sample each), context-interface asymmetry 0. Per-case assignments are in the root-cause section below. The confirmation-state class count, the diagnostic the preregistration singled out, is 7 pairs across 4 cases, and every one of them carries a `satisfied: false` specialization trace.
+**Item 7, held-out-v3 taxonomy over the 32 full-only pairs.** Emitter loss 27, selector error 3, stochastic 2, context-interface asymmetry 0. Explicit assignments:
+
+| Taxonomy class | Pairs | Cases | Assignment |
+| --- | ---: | ---: | --- |
+| Emitter loss: tool availability emitted, user's limit not | 11 | 6 | `hv4-025` ×2, `hv4-031` ×1, `hv4-033` ×1, `hv4-034` ×2, `hv4-038` ×2, `hv4-039` ×3 |
+| Emitter loss: confirmation state, predicate unmatched | 7 | 4 | `hv4-041` ×1, `hv4-044` ×2, `hv4-048` ×3, `hv4-052` ×1 |
+| Emitter loss: confirmation asked without target/scope or archive-versus-delete text | 7 | 3 | `hv4-017` ×1, `hv4-018` ×3, `hv4-019` ×3 |
+| Emitter loss: privacy-minimization and readout text not emitted | 2 | 1 | `hv4-046` ×2 |
+| Selector error: web policy activated against a stated no-lookup | 3 | 1 | `hv4-002` ×3 |
+| Stochastic | 2 | 2 | `hv4-024` ×1 (simulated-inspection claim), `hv4-060` ×1 (missed deadline in a readback) |
+
+The confirmation-state class count, the diagnostic the preregistration singled out, is 7 pairs across 4 cases, and every one of them carries a `satisfied: false` specialization trace. The forbidden-tool behavior in the thematic breakdown below spans two taxonomy classes: 11 emitter pairs where the tool was listed and the user's limit was not emitted, plus `hv4-002`'s 3 selector pairs where the current-information policy activated against an explicit no-lookup.
 
 ## Gates
 
