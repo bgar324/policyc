@@ -61,7 +61,17 @@ SCHEMA = {
 }
 
 
-INPUT = "Request:\nsend it\n\nDeclared context:\n- required fields for this operation: recipient, body"
+INPUT = "\n".join(
+    [
+        "Request:",
+        "send it",
+        "",
+        "Declared context:",
+        "- required fields for this operation: ",
+        "  - recipient: an address",
+        "  - body: what it says",
+    ]
+)
 
 
 def _plan(tmp_path: Path, *, max_cost: float, items: int = 2, max_output: int = 256) -> Path:
@@ -226,3 +236,30 @@ def test_fake_extractor_answers_in_the_response_shape(tmp_path: Path) -> None:
     assert report["outcomes"] == {"completed": 1}
     read = json.loads((tmp_path / "reads.json").read_text())["reads"]["case-0"]
     assert read["authorization"] == "absent" and read["fields"] == {"recipient": False, "body": False}
+
+
+class RejectingThenValidProvider:
+    def __init__(self) -> None:
+        self.posts = 0
+
+    async def post(self, payload: dict[str, Any]) -> RawProviderResponse:
+        self.posts += 1
+        if self.posts == 1:
+            body = {"error": {"code": "insufficient_quota", "message": "no credit"}}
+            return RawProviderResponse(
+                status_code=429, headers={}, body=body, received_at=datetime.now(UTC), duration_ms=1.0
+            )
+        return _response(VALID)
+
+
+def test_http_errors_are_kept_but_retried_on_the_next_run(tmp_path: Path) -> None:
+    path = _plan(tmp_path, max_cost=1.0, items=1)
+    plan = load_plan(path)
+    provider = RejectingThenValidProvider()
+    first = asyncio.run(ExtractionRuntime(plan, path, provider, _price()).run())
+    assert first["outcomes"] == {"failed": 1}
+    assert len(list((tmp_path / "errors").iterdir())) == 1
+    assert not (tmp_path / "raw").exists() or not list((tmp_path / "raw").iterdir())
+    second = asyncio.run(ExtractionRuntime(plan, path, provider, _price()).run())
+    assert provider.posts == 2
+    assert second["outcomes"] == {"completed": 1}

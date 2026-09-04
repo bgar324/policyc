@@ -147,11 +147,17 @@ class FakeExtractor:
 
 
 def _required_field_names(input_block: str) -> list[str]:
+    names: list[str] = []
+    listing = False
     for line in input_block.splitlines():
-        if line.startswith("- required fields for this operation: "):
-            value = line.split(": ", 1)[1]
-            return [] if value == "none" else [name.strip() for name in value.split(",")]
-    return []
+        if line.startswith("- required fields for this operation:"):
+            listing = True
+            continue
+        if listing and line.startswith("  - "):
+            names.append(line[4:].split(":", 1)[0].strip())
+        elif listing:
+            break
+    return names
 
 
 class ExtractionRuntime:
@@ -238,6 +244,21 @@ class ExtractionRuntime:
             async with self.lock:
                 self.in_flight_worst_case -= worst_case
             return {"status": "failed", "error": {"type": error.outcome, "message": str(error)}}
+        if raw.status_code >= 400:
+            # Kept for the record under errors/, never resumed: a re-run posts again.
+            error_dir = self.root / "errors"
+            error_dir.mkdir(exist_ok=True)
+            stamp = raw.received_at.strftime("%Y%m%dT%H%M%S%f")
+            (error_dir / f"{_safe(item.key)}-{stamp}.json").write_text(
+                json.dumps({"key": item.key, "statusCode": raw.status_code, "body": raw.body}, indent=2, sort_keys=True)
+                + "\n"
+            )
+            async with self.lock:
+                self.in_flight_worst_case -= worst_case
+            return {
+                "status": "failed",
+                "error": {"type": "http_error", "message": f"provider status {raw.status_code}"},
+            }
         raw_path.write_text(
             json.dumps(
                 {

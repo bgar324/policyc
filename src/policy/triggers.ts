@@ -9,6 +9,7 @@ const INTENT_KEYWORDS: Array<{ intent: IntentTrigger; patterns: RegExp[] }> = [
       /\brecent(?:ly)?\b/i,
       /\bnew guidance\b/i,
       /\bnews\b/i,
+      /\bas of (?:today|now|this (?:week|month|year))\b/i,
       /\b(?:today|this week|now)\b.{0,40}\b(?:news|weather|forecast|price|score|status|guidance|release|update|ceo)\b/i,
       /\b(?:news|weather|forecast|price|score|status|guidance|release|update|ceo)\b.{0,40}\b(?:today|this week|now)\b/i,
     ],

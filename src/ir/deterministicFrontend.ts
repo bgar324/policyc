@@ -36,7 +36,7 @@ export function deterministicFrontend(): Frontend {
     const fields: Record<string, boolean> = {};
     const rule = context ? requiredFields(context) : undefined;
     if (rule) {
-      for (const [field, pattern] of rule) fields[field] = pattern.test(input);
+      for (const field of rule) fields[field.name] = field.pattern.test(input);
       const missing = Object.entries(fields).filter(([, present]) => !present).map(([field]) => field);
       evidence.push(missing.length ? `fields missing for ${operation}: ${missing.join(", ")}` : `all ${operation} fields stated`);
     } else if (operation) {
@@ -143,8 +143,32 @@ const RECURRENCE_SCOPE = /\b(?:recurr\w*|one[- ]off|one-time|one time|once|singl
 const OCCURRENCE_SCOPE = /\b(?:occurrences?|series|all future|only the|this instance|just the|the rest of the|leave the (?:rest|others))\b/i;
 const LOCATION_OR_CONFERENCING = /\b(?:location|room|on-?site|in[- ]person|virtual|remote|conferenc\w*|video|zoom|google meet|teams|meet link|dial-?in|call link|bridge|same link|no location)\b/i;
 
-type FieldRule = Array<[string, RegExp]>;
-const CALENDAR_CHANGE: FieldRule = [["event", NAMED_TARGET], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE]];
+/**
+ * A required field: its name, the way people state it (the description an
+ * extractor is given, so a model reads the field by the same convention the
+ * recognizer encodes), and the recognizer the deterministic frontend applies.
+ */
+export type RequiredField = { name: string; description: string; pattern: RegExp };
+type FieldRule = RequiredField[];
+
+const FIELD = {
+  recipient: { name: "recipient", description: "an email address, or a named person the message goes to", pattern: ADDRESS },
+  body: { name: "body", description: "what the message must say, quoted or described (\"body should say\", \"saying\")", pattern: BODY },
+  attachmentScope: { name: "attachment scope", description: "what is attached or that nothing is; when the body is fully stated and nothing mentions an attachment, the scope is none and counts as stated", pattern: ATTACHMENT_SCOPE },
+  contentScope: { name: "thread or content scope", description: "the named thread, message, or content being forwarded", pattern: NAMED_TARGET },
+  exactTarget: { name: "exact target", description: "the named thread, message set, count of messages, label, folder, or event the action applies to", pattern: NAMED_TARGET },
+  event: { name: "event", description: "the named event, meeting, or series", pattern: NAMED_TARGET },
+  title: { name: "title", description: "the event's name", pattern: NAMED_TARGET },
+  date: { name: "date", description: "the calendar date, or a weekday that fixes one", pattern: DATE },
+  time: { name: "time", description: "the clock time or time range", pattern: TIME },
+  timeZone: { name: "time zone", description: "a time zone, a city or region that fixes one, or the user's or attendees' own time", pattern: TIME_ZONE },
+  attendeeScope: { name: "attendee scope", description: "who attends, including only the user or the same people as before", pattern: ATTENDEE_SCOPE },
+  location: { name: "location or conferencing", description: "the venue, a room, in person or virtual, or the conferencing link or bridge", pattern: LOCATION_OR_CONFERENCING },
+  recurrenceScope: { name: "recurrence scope", description: "whether it recurs and how, or that it happens once", pattern: RECURRENCE_SCOPE },
+  occurrenceScope: { name: "occurrence scope", description: "whether the change applies to one occurrence, several, or the whole series", pattern: OCCURRENCE_SCOPE },
+} satisfies Record<string, RequiredField>;
+
+const CALENDAR_CHANGE: FieldRule = [FIELD.event, FIELD.date, FIELD.time, FIELD.timeZone];
 
 /**
  * Fields the source policy requires before an action is executable, keyed by
@@ -154,24 +178,28 @@ const CALENDAR_CHANGE: FieldRule = [["event", NAMED_TARGET], ["date", DATE], ["t
  */
 const REQUIRED_FIELDS: Partial<Record<ArtifactType, Partial<Record<OperationTrigger, FieldRule>>>> = {
   email: {
-    send: [["recipient", ADDRESS], ["body", BODY], ["attachment scope", ATTACHMENT_SCOPE]],
-    forward: [["recipient", ADDRESS], ["thread or content scope", NAMED_TARGET], ["attachment scope", ATTACHMENT_SCOPE]],
-    archive: [["exact thread", NAMED_TARGET]],
-    delete: [["exact thread", NAMED_TARGET]],
+    send: [FIELD.recipient, FIELD.body, FIELD.attachmentScope],
+    forward: [FIELD.recipient, FIELD.contentScope, FIELD.attachmentScope],
+    archive: [FIELD.exactTarget],
+    delete: [FIELD.exactTarget],
   },
   calendar_event: {
     // The source policy: "Confirm title, attendees, date, time, time zone, location, conferencing, and recurrence."
     // Location and conferencing are one field here: a virtual meeting's "location" is its bridge.
-    create: [["title", NAMED_TARGET], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE], ["attendee scope", ATTENDEE_SCOPE], ["location or conferencing", LOCATION_OR_CONFERENCING], ["recurrence scope", RECURRENCE_SCOPE]],
+    create: [FIELD.title, FIELD.date, FIELD.time, FIELD.timeZone, FIELD.attendeeScope, FIELD.location, FIELD.recurrenceScope],
     reschedule: CALENDAR_CHANGE,
     update: CALENDAR_CHANGE,
     delete: CALENDAR_CHANGE,
   },
 };
 
-/** The names of the fields the policy requires for the declared operation; empty when no rule exists. */
+/** The fields the policy requires for the declared operation; empty when no rule exists. */
+export function requiredFieldRules(context: ArtifactContext | null | undefined): RequiredField[] {
+  return context ? (requiredFields(context) ?? []) : [];
+}
+
 export function requiredFieldNames(context: ArtifactContext | null | undefined): string[] {
-  return context ? (requiredFields(context) ?? []).map(([name]) => name) : [];
+  return requiredFieldRules(context).map((field) => field.name);
 }
 
 function requiredFields(context: ArtifactContext): FieldRule | undefined {
@@ -179,6 +207,6 @@ function requiredFields(context: ArtifactContext): FieldRule | undefined {
   const rule = REQUIRED_FIELDS[context.artifactType]?.[context.operation];
   if (!rule) return undefined;
   return context.artifactType === "calendar_event" && context.features?.includes("recurring")
-    ? [...rule, ["occurrence scope", OCCURRENCE_SCOPE]]
+    ? [...rule, FIELD.occurrenceScope]
     : rule;
 }

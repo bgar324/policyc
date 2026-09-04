@@ -4,6 +4,7 @@ import test from "node:test";
 import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
 import { extractorResponseJsonSchema, parsePersistedReads, persistedFrontend, toExtractedRead, type ExtractedRead } from "../src/ir/persistedFrontend.js";
 import { inputBlock } from "../src/extractor/plan.js";
+import { requiredFieldRules } from "../src/ir/deterministicFrontend.js";
 import { scoreFixtures } from "../src/extractor/reads.js";
 import { defaultFrontend } from "../src/compiler/evaluate.js";
 import type { Frontend } from "../src/ir/requestState.js";
@@ -183,9 +184,10 @@ test("the extractor's response schema is strict structured output and folds back
 });
 
 test("the extraction input block declares context, tools, and the required field names", () => {
-  const block = inputBlock("send it to pat", { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] }, ["recipient", "body", "attachment scope"]);
+  const block = inputBlock("send it to pat", { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] }, requiredFieldRules({ artifactType: "email", operation: "send" }));
   assert.match(block, /^Request:\nsend it to pat\n/);
-  assert.match(block, /- artifact type: email\n- operation: send\n- features: none\n- tools available on this turn: gmail\n- required fields for this operation: recipient, body, attachment scope$/);
+  assert.match(block, /- artifact type: email\n- operation: send\n- features: none\n- tools available on this turn: gmail\n- required fields for this operation: \n  - recipient: an email address/);
+  assert.match(block, /\n  - attachment scope: what is attached or that nothing is; when the body is fully stated/);
   const bare = inputBlock("what is the latest?", { toolsAvailable: [] }, []);
   assert.match(bare, /- operation: none declared/);
   assert.match(bare, /- tools available on this turn: none\n- required fields for this operation: none$/);
