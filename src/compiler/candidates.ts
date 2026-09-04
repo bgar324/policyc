@@ -3,13 +3,14 @@ import { computeDependencyClosure } from "../policy/closure.js";
 import { selectPolicies } from "../policy/selector.js";
 import type { CompilationStrategy } from "./artifact.js";
 import type { Frontend } from "../ir/requestState.js";
-import { evaluateSelection, readRequestState } from "./evaluate.js";
+import { defaultFrontend, evaluateSelection } from "./evaluate.js";
 
 /**
- * Builds every candidate strategy for one request. `frontend` produces the
- * request state; the planner passes the same frontend for every candidate so
- * a run's artifacts share one read. Every compiled candidate records the state
- * and every evaluation; the full-policy baseline records the state only.
+ * Builds every candidate strategy for one request. The frontend is read once
+ * here and that state is passed to every candidate, so a run's artifacts for
+ * one case share one read even when the frontend is paid or nondeterministic.
+ * Every compiled candidate records the state and every evaluation; the
+ * full-policy baseline records the state only.
  */
 export function generateCandidateSelections(policies: Policy[], input: string, context?: ArtifactContext | null, frontend?: Frontend): Array<{ strategy: CompilationStrategy; selection: PolicySelection }> {
   const compiled = selectPolicies(policies, { input, context });
@@ -19,12 +20,13 @@ export function generateCandidateSelections(policies: Policy[], input: string, c
   const kernel = policies.filter((policy) => policy.alwaysActive);
   const expandedSeeds = uniquePolicies([...compiled.policies, ...policies.filter((policy) => policy.kind === "content_gated" && ["safety", "privacy", "tool"].includes(policy.severity))]);
   const expandedReasons: PolicySelectionReason[] = expandedSeeds.map((policy) => compiled.reasons.find((reason) => reason.policyId === policy.id) ?? { policyId: policy.id, reasons: ["conservative expansion"] });
-  const specialize = (selection: PolicySelection) => evaluateSelection(selection, input, context, frontend);
+  const state = (frontend ?? defaultFrontend)(input, context);
+  const specialize = (selection: PolicySelection) => evaluateSelection(selection, state);
 
   return [
     // The full-policy baseline is not compiled: its prompt is the source text.
     // It records the same request state so the paired artifacts share one read.
-    { strategy: "full_policy", selection: { ...selectionFrom(policies, policies, policies.map((policy) => ({ policyId: policy.id, reasons: ["full policy baseline"] })), compiled.detectedIntents, []), requestState: readRequestState(input, context, frontend), evaluations: [], conflicts: [] } },
+    { strategy: "full_policy", selection: { ...selectionFrom(policies, policies, policies.map((policy) => ({ policyId: policy.id, reasons: ["full policy baseline"] })), compiled.detectedIntents, []), requestState: state, evaluations: [], conflicts: [] } },
     { strategy: "compiler_slice", selection: specialize(compiled) },
     { strategy: "kernel_only", selection: specialize(selectionFrom(policies, kernel, kernel.map((policy) => ({ policyId: policy.id, reasons: ["always-active kernel"] })), compiled.detectedIntents, [])) },
     { strategy: "direct_matches", selection: specialize(selectionFrom(policies, directPolicies, directReasons, compiled.detectedIntents, [])) },

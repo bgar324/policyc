@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
 import { guardedReader, parsePersistedAuthorizationReads, persistedReader } from "../src/compiler/authorization.js";
-import { frontendWithReader } from "../src/compiler/evaluate.js";
+import { defaultFrontend, frontendWithReader } from "../src/compiler/evaluate.js";
+import type { Frontend } from "../src/ir/requestState.js";
 import { loadBehavioralCases } from "../src/experiment/cases.js";
 import { deriveInputLimit, estimateCallInputTokens, INPUT_ESTIMATE_HEADROOM, providerToolPayload, type ProviderToolPayload } from "../src/experiment/plan.js";
 import { generateCandidateSelections } from "../src/compiler/candidates.js";
@@ -151,4 +152,24 @@ test("persisted authorization reads are schema-validated and drive the planner p
   const noEntry = guardedReader(persistedReader(absentReads, "some-other-case"), "fixture-absent")("anything");
   assert.equal(noEntry.state, "absent");
   assert.match(noEntry.evidence[0], /no persisted read from fixture-absent/);
+});
+
+test("the frontend is read exactly once per request and every candidate is evaluated against that read", () => {
+  const policies = loadPolicies();
+  const item = loadBehavioralCases("eval/behavioral/compiler-v0.9-regressions.jsonl").cases.find((c) => c.caseId === "cv09-041v4")!;
+  const context = { ...(item.artifactContext ?? {}), toolsAvailable: item.tools.map((tool) => tool.name) };
+  // A frontend that is paid and nondeterministic: it counts calls and answers
+  // differently each time. Only one answer may exist in a case's artifacts.
+  let calls = 0;
+  const flaky: Frontend = (input, ctx) => {
+    calls += 1;
+    return { ...defaultFrontend(input, ctx), authorization: calls % 2 ? "present" : "absent", frontend: `flaky-${calls}` };
+  };
+  const candidates = generateCandidateSelections(policies, item.request, context, flaky);
+  assert.equal(calls, 1);
+  assert.equal(candidates.length, 5);
+  for (const candidate of candidates) {
+    assert.strictEqual(candidate.selection.requestState, candidates[0].selection.requestState, `${candidate.strategy} shares the one read`);
+    assert.equal(candidate.selection.requestState?.frontend, "flaky-1");
+  }
 });

@@ -15,15 +15,18 @@ export function frontendWithReader(reader: AuthorizationReader): Frontend {
   return guardedFrontend(deterministicFrontend(reader), "deterministic");
 }
 
-/** Selection, then partial evaluation: the one path every emitted compiled prompt goes through. */
+/** One read, then selection and partial evaluation: the path a single compiled prompt goes through. */
 export function compileSelection(policies: Policy[], input: string, context?: ArtifactContext | null, frontend: Frontend = defaultFrontend): PolicySelection {
-  return evaluateSelection(selectPolicies(policies, { input, context }), input, context, frontend);
+  return evaluateSelection(selectPolicies(policies, { input, context }), frontend(input, context));
 }
 
 /**
  * Partial evaluation. Runs after selection and dependency closure and before
- * emission. It never adds or removes policies, and the emitter prints what it
- * returns without further judgment. Three ordered steps, each recorded on the
+ * emission. It takes the request state, never a frontend: the frontend is read
+ * exactly once per request by the caller, so every candidate compiled for one
+ * request is evaluated against the same read, whatever that read cost. It
+ * never adds or removes policies, and the emitter prints what it returns
+ * without further judgment. Three ordered steps, each recorded on the
  * selection and persisted in the artifact:
  *
  *  1. Branches. Each node's declared branches are evaluated in order against
@@ -43,8 +46,7 @@ export function compileSelection(policies: Policy[], input: string, context?: Ar
  *     cannot be met; the node emits the unavailable-tool statement instead and
  *     the obligation is dropped. Skipped when the context declares no tool list.
  */
-export function evaluateSelection(selection: PolicySelection, input: string, context: ArtifactContext | null | undefined, frontend: Frontend = defaultFrontend): PolicySelection {
-  const state = frontend(input, context);
+export function evaluateSelection(selection: PolicySelection, state: RequestState): PolicySelection {
   const evaluations: EvaluationRecord[] = [];
 
   const resolved = selection.policies.map((policy) => {
@@ -94,11 +96,6 @@ export function evaluateSelection(selection: PolicySelection, input: string, con
     : undefined;
 
   return { ...selection, policies, requestState: state, evaluations, limit, conflicts: findConflicts(policies, limit !== undefined) };
-}
-
-/** The request state alone, for a candidate whose prompt is not compiled from its selection. */
-export function readRequestState(input: string, context: ArtifactContext | null | undefined, frontend: Frontend = defaultFrontend): RequestState {
-  return frontend(input, context);
 }
 
 export function unavailableToolInstruction(tool: string): string {
