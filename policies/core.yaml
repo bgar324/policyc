@@ -194,6 +194,13 @@ policies:
         runtimeInstruction: Explicit confirmation for this exact action is already present in the request, so perform exactly the confirmed action now and do not ask for confirmation again. Stay within the confirmed target and scope; if any required detail is missing, contradictory, or would widen the scope, stop and ask before acting.
         obligations: []
         prohibitions: []
+      - id: approved_without_scope
+        when: { authorization: present }
+        runtimeInstruction: The request approves the action in advance but does not specify the exact target, scope, or operation, and a confirmation must specify all of them; an approval cannot cover a change it does not name, and an irreversible action requires stronger confirmation, not less. Do not perform the action on this turn. State exactly what you would change, in which file, page, or record, what could go wrong, and whether it can be undone, then ask a focused question for confirmation of that exact scope.
+        obligations:
+          - type: ask_confirmation
+        prohibitions:
+          - type: destructive_action_without_confirmation
 
   - id: citation_definition
     title: Citation definition

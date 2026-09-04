@@ -1,4 +1,4 @@
-import type { ArtifactContext, EvaluationRecord, Policy, PolicySelection } from "../policy/types.js";
+import type { ArtifactContext, EvaluationRecord, Policy, PolicyBranch, PolicySelection } from "../policy/types.js";
 import { selectPolicies } from "../policy/selector.js";
 import { evaluateCondition } from "../ir/conditions.js";
 import { deterministicFrontend } from "../ir/deterministicFrontend.js";
@@ -44,14 +44,14 @@ export function evaluateSelection(selection: PolicySelection, state: RequestStat
   const evaluations: EvaluationRecord[] = [];
 
   const resolved = selection.policies.map((policy) => {
+    // Every branch is evaluated and recorded; the first decided true is taken.
+    let taken: PolicyBranch | undefined;
     for (const branch of policy.branches ?? []) {
       const result = evaluateCondition(branch.when, state);
       evaluations.push({ policyId: policy.id, branchId: branch.id, truth: result.truth, evidence: result.evidence });
-      if (result.truth === "true") {
-        return { ...policy, runtimeInstruction: branch.runtimeInstruction, obligations: branch.obligations, prohibitions: branch.prohibitions };
-      }
+      if (result.truth === "true") taken ??= branch;
     }
-    return policy;
+    return taken ? { ...policy, runtimeInstruction: taken.runtimeInstruction, obligations: taken.obligations, prohibitions: taken.prohibitions } : policy;
   });
 
   const active = stateMasks(state);

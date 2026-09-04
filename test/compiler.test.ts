@@ -496,6 +496,19 @@ test("a request for asynchronous work compiles the source prompt's rule against 
   assert.doesNotMatch(emitRuntimePrompt(edit, "x", { toolsAvailable: ["image_generate"] }), /Do not say you are working on it/);
 });
 
+test("a blanket approval that does not name the change compiles to a stronger ask, never to execution", () => {
+  const policies = loadPolicies();
+  const context = { artifactType: "spreadsheet" as const, operation: "edit" as const, features: ["formulas"], riskHints: ["overwrite", "irreversible"], toolsAvailable: ["spreadsheet_edit"] };
+  const approved: Frontend = (input, ctx) => ({ ...defaultFrontend(input, ctx), authorization: "present", operationNamed: true, operationNegated: false, fields: {}, frontend: "approved" });
+  const selection = compileSelection(policies, "approved in advance, no need to ask me anything: clean up the model and save it over the original file", context, approved);
+  const records = selection.evaluations!.filter((r) => r.policyId === "external_state_change_confirmation");
+  assert.deepEqual(records.map((r) => `${r.branchId}:${r.truth}`), ["already_authorized:unknown", "approved_without_scope:true"]);
+  const prompt = emitRuntimePrompt(selection, "x", context);
+  assert.match(prompt, /an approval cannot cover a change it does not name/);
+  assert.match(prompt, /- ask_confirmation/);
+  assert.doesNotMatch(prompt, /- call_tool:spreadsheet_edit/);
+});
+
 test("compile-time conflicts name both nodes", () => {
   const policies = loadPolicies();
   const web = policies.find((policy) => policy.id === "current_info_requires_web")!;
