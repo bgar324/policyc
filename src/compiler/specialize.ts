@@ -1,12 +1,15 @@
 import type { ArtifactContext, ArtifactType, Obligation, OperationTrigger, Policy, PolicySelection, SpecializationRecord } from "../policy/types.js";
 import { selectPolicies } from "../policy/selector.js";
-import { readAuthorization } from "./authorization.js";
+import { baselineAuthorizationReader, guardedReader, type AuthorizationReader } from "./authorization.js";
 import { evaluateExplicitLimit, limitInstruction } from "./limits.js";
 
 /** Selection plus specialization: the one path every emitted compiled prompt goes through. */
-export function compileSelection(policies: Policy[], input: string, context?: ArtifactContext | null): PolicySelection {
-  return specializeSelection(selectPolicies(policies, { input, context }), input, context);
+export function compileSelection(policies: Policy[], input: string, context?: ArtifactContext | null, reader?: AuthorizationReader): PolicySelection {
+  return specializeSelection(selectPolicies(policies, { input, context }), input, context, reader);
 }
+
+/** The reader used when none is injected: the deterministic baseline, guarded. */
+export const defaultAuthorizationReader: AuthorizationReader = guardedReader(baselineAuthorizationReader, "baseline");
 
 /**
  * Specialization runs after selection and dependency closure and before emission.
@@ -24,8 +27,8 @@ export function compileSelection(policies: Policy[], input: string, context?: Ar
  *
  * Every evaluation is recorded in the selection's `specializations` trace.
  */
-export function specializeSelection(selection: PolicySelection, input: string, context?: ArtifactContext | null): PolicySelection {
-  const confirmation = evaluateExplicitConfirmation(input, context);
+export function specializeSelection(selection: PolicySelection, input: string, context?: ArtifactContext | null, reader: AuthorizationReader = defaultAuthorizationReader): PolicySelection {
+  const confirmation = evaluateExplicitConfirmation(input, context, reader);
   const limit = evaluateExplicitLimit(input, context);
   const specializations: SpecializationRecord[] = [];
   const toolBound = (obligation: Obligation) => obligation.type === "call_tool" || obligation.type === "inspect_artifact";
@@ -153,12 +156,12 @@ function requiredFields(context: ArtifactContext): FieldRule | undefined {
  * sentences and rarely use that verb. The read is now request-level and
  * structural; the field checks are unchanged.
  */
-function evaluateExplicitConfirmation(input: string, context?: ArtifactContext | null): PredicateResult {
+function evaluateExplicitConfirmation(input: string, context: ArtifactContext | null | undefined, reader: AuthorizationReader): PredicateResult {
   const operation = context?.operation;
   if (!context || !operation) return { satisfied: false, evidence: ["no operation in artifact context"] };
   const required = requiredFields(context);
   if (!required) return { satisfied: false, evidence: [`no completeness rule for ${context.artifactType ?? "unknown"} ${operation}`] };
-  const read = readAuthorization(input);
+  const read = reader(input);
   if (read.state !== "present") {
     return { satisfied: false, evidence: [`authorization ${read.state}`, ...read.evidence] };
   }

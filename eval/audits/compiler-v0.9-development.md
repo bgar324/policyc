@@ -14,7 +14,7 @@ Honesty about the gate: while making the held-back gate pass, the specialization
 
 ## What changed from compiler 0.8
 
-All changes are in selection triggers, node text, and the specialization stage. The policy graph is unchanged (43 nodes, 32 edges); `pnpm eval` selector metrics are unchanged (157 cases, precision 90.2%, recall 99.8%, critical recall 100%).
+Changes touch selection triggers (new destructive-intent patterns and node keywords), node text, the emitter's precedence rules, and the specialization stage. The policy graph is unchanged (43 nodes, 32 edges); `pnpm eval` selector metrics are unchanged (157 cases, precision 90.2%, recall 99.8%, critical recall 100%).
 
 **Selector (destructive intents).** `detectIntents` now recognizes releasing to production ("ship … to prod"), saving over an original, mass mailbox removal without the words delete or archive ("clear out … mailbox", "get rid of … emails"), and edit-and-save ("dedupe … and save it"). `destructive_email_calendar_confirm` and `archive_delete_distinction` gained matching keywords. On v4 these shapes never selected a confirmation node at all, so compiler 0.8's predicate was never evaluated on them.
 
@@ -26,9 +26,26 @@ All changes are in selection triggers, node text, and the specialization stage. 
 
 Artifacts record both predicates in the `specializations` trace under protocol 1.1.0; the compiled-artifact schema and Python model accept `explicit_limit`.
 
+## Reader boundary and blind paraphrase measurement
+
+The authorization read now sits behind an injectable, schema-validated boundary (`AuthorizationReader` in `src/compiler/authorization.ts`, `guardedReader` wrapping any reader so a thrown error or invalid shape becomes `absent`). `specializeSelection` and `compileSelection` accept a reader; the default is the guarded deterministic baseline. A compile-time model-assisted extractor, once authorized, plugs in at this seam; the field-completeness checks run over whatever the reader returns, so an over-eager reader still cannot execute without every field (tested).
+
+The current reader is a phrase-pattern baseline, not the planned extractor. To measure its recall without tuning on the measurement, 23 paraphrase fixtures (`eval/behavioral/compiler-v0.9-paraphrases.jsonl`) were written and labeled before either reader was run on them: 6 present-authorization, 7 non-present (reported, conditional, absent), 5 limited, 5 not limited. Result, unchanged since first run:
+
+| Fixture group | Matched | Unsafe reads |
+| --- | ---: | ---: |
+| Authorization, expect `present` | 0 / 6 | 0 |
+| Authorization, expect reported/conditional/absent | 5 / 7 | 0 (two `reported` cases read `absent`, the safe side) |
+| Limit, expect `limited` | 1 / 5 | 0 |
+| Limit, expect `none` | 5 / 5 | 0 |
+
+The baseline reader fails closed on every fixture and recognizes almost none of the fresh phrasings. That is the same shape as compiler 0.8's held-out-v4 result, measured offline this time, before any paid call, on a fixture set that will not be used to tune. Held-out v5 would very likely reproduce it for the authorization class. The regexes were not adjusted in response; the fixtures stay as a fixed offline recall benchmark for whichever reader replaces the baseline.
+
+Consequence for the roadmap: compiler 0.9's selector, checklist, limit-precedence, and emission-precedence changes stand on their own and are expected to move the ask-side, limit, and readout classes. The authorization class needs a reader that generalizes, and this measurement says a deterministic phrase reader is not it. The next step on that class is a compile-time extractor behind the existing boundary, developed against these 23 fixtures plus the held-back slice, which is a separate authorization decision because it introduces a model call into compilation.
+
 ## Offline verification
 
-- `pnpm test:all` green: 30 TypeScript tests (including the four 0.9 tests over both slices), graph valid, ruff, mypy, 94 pytest.
+- `pnpm test:all` green: 32 TypeScript tests (including the four 0.9 regression tests over both slices, the blind paraphrase measurement, and the reader-boundary test), graph valid, ruff, mypy, 94 pytest.
 - Fake-provider contract run over the 20 visible cases: 40/40 completed, all artifacts `0.9.0 / 1.1.0`.
 - Sweep over all 60 held-out-v4 cases: `explicit_confirmation` satisfied on exactly the four act-side cases (`hv4-041`, `044`, `048`, `052`) and on no ask-side case; `explicit_limit` fires on eight cases, none of which requires a tool; no forbidden tool is emitted as a required action anywhere; every ask-side case asks. Three earlier over-limits (`hv4-001`, `027`, `055`) were found by this sweep and fixed before the version bump. Held-out v4 is spent, so this sweep is development evidence about safety, not a preservation estimate.
 

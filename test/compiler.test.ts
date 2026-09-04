@@ -7,6 +7,9 @@ import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
 import { generateCandidateSelections } from "../src/compiler/candidates.js";
 import { countTokens } from "../src/compiler/tokenCounter.js";
 import { emitRuntimePrompt } from "../src/compiler/emitter.js";
+import { guardedReader } from "../src/compiler/authorization.js";
+import { evaluateExplicitLimit } from "../src/compiler/limits.js";
+import { compileSelection, defaultAuthorizationReader } from "../src/compiler/specialize.js";
 import { computeDependencyClosure } from "../src/policy/closure.js";
 import { loadPolicies } from "../src/policy/loader.js";
 import type { Policy } from "../src/policy/types.js";
@@ -403,6 +406,46 @@ test("compiler 0.9 held-back regressions meet the generic contract", () => {
   for (const item of loadRegressions("eval/behavioral/compiler-v0.9-regressions-heldback.jsonl")) {
     assertRegressionContract(policies, item);
   }
+});
+
+type Paraphrase = { id: string; kind: "authorization" | "limit"; expect: string; text: string; tools?: string[] };
+
+test("compiler 0.9 paraphrase fixtures: authorization and limit reads on phrasings written before the readers ran", () => {
+  // Written blind, labeled by intent, never used to tune. Report every miss;
+  // the assertion is on the unsafe direction only, the rest is measured.
+  const fixtures = readFileSync("eval/behavioral/compiler-v0.9-paraphrases.jsonl", "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Paraphrase);
+  const misses: string[] = [];
+  const unsafe: string[] = [];
+  for (const item of fixtures) {
+    if (item.kind === "authorization") {
+      const read = defaultAuthorizationReader(item.text);
+      if (read.state !== item.expect) misses.push(`${item.id}: expected ${item.expect}, read ${read.state}`);
+      if (read.state === "present" && item.expect !== "present") unsafe.push(`${item.id}: read present on a ${item.expect} case`);
+    } else {
+      const verdict = evaluateExplicitLimit(item.text, { toolsAvailable: item.tools ?? [] }).verdict;
+      const matched = item.expect === "none" ? verdict === "none" : verdict !== "none";
+      if (!matched) misses.push(`${item.id}: expected ${item.expect}, read ${verdict}`);
+      if (item.expect === "none" && verdict === "limited") unsafe.push(`${item.id}: limited a request that asks for the tool`);
+    }
+  }
+  console.log(`paraphrase fixtures: ${fixtures.length - misses.length}/${fixtures.length} matched${misses.length ? "; misses: " + misses.join(" | ") : ""}`);
+  assert.deepEqual(unsafe, [], "no read may fail in the unsafe direction");
+});
+
+test("authorization reader boundary validates output and fails closed", () => {
+  const broken = guardedReader(() => ({ state: "present", evidence: [] }) as unknown as ReturnType<typeof defaultAuthorizationReader>, "broken");
+  assert.equal(broken("I confirm sending it").state, "absent");
+  const throwing = guardedReader(() => { throw new Error("provider unavailable"); }, "throwing");
+  const read = throwing("I confirm sending it");
+  assert.equal(read.state, "absent");
+  assert.match(read.evidence[0], /provider unavailable/);
+  // An injected reader that asserts authorization still cannot execute without the fields.
+  const policies = loadPolicies();
+  const always = guardedReader(() => ({ state: "present", evidence: ["injected"] }), "always");
+  const selection = compileSelection(policies, "send the note to pat@example.com", { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] }, always);
+  const records = (selection.specializations ?? []).filter((record) => record.predicate === "explicit_confirmation");
+  assert.ok(records.length > 0 && records.every((record) => !record.satisfied), "missing fields must block execution even when the reader says present");
+  assert.ok(records.some((record) => record.evidence.some((line) => /missing send fields/.test(line))));
 });
 
 test("compiled prompt emits one compact universal kernel without duplicated universal actions", () => {

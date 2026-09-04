@@ -28,8 +28,42 @@
  * that check is not this module's job.
  */
 
-export type AuthorizationState = "present" | "reported" | "conditional" | "absent";
-export type AuthorizationRead = { state: AuthorizationState; evidence: string[]; statement?: string };
+import { z } from "zod";
+
+export const authorizationReadSchema = z.object({
+  state: z.enum(["present", "reported", "conditional", "absent"]),
+  evidence: z.array(z.string()).min(1),
+  statement: z.string().optional(),
+}).strict();
+
+export type AuthorizationState = z.infer<typeof authorizationReadSchema>["state"];
+export type AuthorizationRead = z.infer<typeof authorizationReadSchema>;
+
+/**
+ * The boundary the specialization stage calls. Any reader (this deterministic
+ * baseline, a fixture-backed reader in tests, or a compile-time model-assisted
+ * extractor once one is authorized) must return a schema-valid read. Readers are
+ * injected; the stage never calls a provider itself.
+ */
+export type AuthorizationReader = (input: string) => AuthorizationRead;
+
+/**
+ * Wraps a reader so its output is validated and its failures fail closed: a
+ * thrown error or an invalid shape becomes `absent`, with the reason recorded.
+ */
+export function guardedReader(reader: AuthorizationReader, name: string): AuthorizationReader {
+  return (input) => {
+    let raw: unknown;
+    try {
+      raw = reader(input);
+    } catch (error) {
+      return { state: "absent", evidence: [`${name} reader failed: ${error instanceof Error ? error.message : String(error)}`] };
+    }
+    const parsed = authorizationReadSchema.safeParse(raw);
+    if (!parsed.success) return { state: "absent", evidence: [`${name} reader returned an invalid read: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`] };
+    return parsed.data;
+  };
+}
 
 const SETTLED_FIRST_PERSON = /\b(?:I|we|ive|i've|we've|i’ve|we’ve)\s+(?:(?:explicitly|hereby|now|also|formally|fully|again|do|already|myself)\s+)*(?:confirm|authorize|approve|sign(?:ed)? off|have (?:already )?(?:reviewed|checked|been through|cleared|approved|signed off)|(?:'ve|’ve) (?:already )?(?:reviewed|checked|been through|cleared|approved|signed off)|been through|reviewed|checked|cleared)\b/i;
 const SETTLED_THIRD_PARTY = /\b(?!I\b|we\b)(?:[A-Z][a-z]+|[a-z]+|everyone|everybody|the team|legal|finance|my manager|she|he|they)(?:'s|’s)?\s+(?:already\s+|has\s+|have\s+|all\s+)*(?:signed off|confirmed|approved|cleared|okayed|ok'd|said (?:it's|its) fine|is fine with)\b/i;
@@ -47,6 +81,14 @@ const QUESTION = /\?\s*$/;
 function insideQuotation(text: string, index: number): boolean {
   return ((text.slice(0, index).match(/["“”]/g)?.length ?? 0) % 2) === 1;
 }
+
+/**
+ * Deterministic baseline reader. It recognizes the three parts of an
+ * authorization act by phrase pattern. This is an offline baseline, not the
+ * planned extractor: it was tuned on spent held-out cases and its recall on
+ * unseen phrasing is exactly what held-out v5 measures.
+ */
+export const baselineAuthorizationReader: AuthorizationReader = (input) => readAuthorization(input);
 
 export function readAuthorization(input: string): AuthorizationRead {
   const evidence: string[] = [];

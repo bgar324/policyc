@@ -31,7 +31,7 @@ The protocol boundary is defined by JSON Schemas under [`protocol/`](protocol/).
 
 ## Compiler pipeline
 
-Compiler 0.9 (unfrozen, development) loads 43 manually structured policy nodes from six YAML packs. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
+Compiler 0.9 (unfrozen, development) loads 43 manually structured policy nodes from six YAML packs. Its authorization read sits behind an injectable, schema-validated reader boundary; the shipped reader is a deterministic baseline whose blind-paraphrase recall is recorded in `eval/audits/compiler-v0.9-development.md`. PolicyC does not yet extract those nodes from arbitrary natural-language prompts.
 
 1. Zod validates required fields, enums, priorities, triggers, and unknown fields.
 2. Graph validation rejects duplicate IDs/edges, missing references, self-dependencies, cycles, unreachable structural nodes, unknown validators, and invalid always-active configurations.
