@@ -71,6 +71,23 @@ test("held-out v4 is frozen at 60 independently declared cases", () => {
   assert.equal(dataset.datasetHash, "197dee9fe2719f20848d81e5a4144218e217690b1a1c5c1f3aa2922d66efdfb1");
 });
 
+test("held-out v5 is frozen at 60 independently declared cases", () => {
+  const dataset = loadBehavioralCases("eval/behavioral/held-out-v5.jsonl");
+  assert.equal(dataset.cases.length, 60);
+  assert.equal(dataset.datasetVersion, "held-out-v5");
+  assert.equal(dataset.split, "held-out");
+  assert.equal(new Set(dataset.cases.map((item) => item.caseId)).size, 60);
+  assert.equal(new Set(dataset.cases.map((item) => item.request)).size, 60);
+  assert.ok(dataset.cases.every((item) => item.criticalObligationIds.length > 0));
+  // No ask-side case may carry a resolving operation when its request leaves archive-versus-delete or cancel-versus-delete open (the hv4-042 lesson).
+  for (const item of dataset.cases) {
+    const asks = item.applicableObligations.some((o) => o.validator === "asks_confirmation" && o.severity === "critical");
+    const open = /\b(?:get rid of|kill|clear out|clean out|tidy up)\b/i.test(item.request) && !/\b(?:archive|delete|cancel)\b/i.test(item.request);
+    if (asks && open) assert.equal(item.artifactContext?.operation, undefined, `${item.caseId}: ask-side case with an open operation must not resolve it in context`);
+  }
+  assert.equal(dataset.datasetHash, "a9ef58b0a4f728edbedb76d0aa206248afda319c13c2b5b5c83638fd6fc4f3b7");
+});
+
 test("template datasets cannot execute", () => {
   assert.throws(
     () => loadBehavioralCases("eval/behavioral/adversarial-template-v1.jsonl"),
