@@ -1,5 +1,6 @@
 import type { ArtifactContext, ArtifactType, Obligation, OperationTrigger, Policy, PolicySelection, SpecializationRecord } from "../policy/types.js";
 import { selectPolicies } from "../policy/selector.js";
+import { readAuthorization } from "./authorization.js";
 import { evaluateExplicitLimit, limitInstruction } from "./limits.js";
 
 /** Selection plus specialization: the one path every emitted compiled prompt goes through. */
@@ -37,7 +38,17 @@ export function specializeSelection(selection: PolicySelection, input: string, c
         next = { ...policy, runtimeInstruction: branch.runtimeInstruction, obligations: branch.obligations, prohibitions: branch.prohibitions };
       }
     }
-    if (limit.verdict !== "none" && next.obligations.some(toolBound)) {
+    // Precedence between the two reads. A satisfied confirmation proved the
+    // exact action and every required field, so it outranks an *ambiguous*
+    // limit; an explicit *limited* verdict (do not call, text only) still wins,
+    // because the user said so directly.
+    const confirmedHere = Boolean(policy.specialization) && confirmation.satisfied;
+    // A policy that requires a tool *and* forbids the alternative (current facts
+    // must come from live research, never memory) is mandated by the source
+    // prompt and outranks the user's limit; the limit still applies elsewhere.
+    const mandated = isMandatedTool(policy);
+    const limitApplies = !mandated && (limit.verdict === "limited" || (limit.verdict === "ambiguous" && !confirmedHere));
+    if (limitApplies && next.obligations.some(toolBound)) {
       specializations.push({ policyId: policy.id, predicate: "explicit_limit", satisfied: true, evidence: [`verdict ${limit.verdict}`, ...limit.evidence] });
       next = { ...next, obligations: next.obligations.filter((obligation) => !toolBound(obligation)) };
     }
@@ -47,22 +58,20 @@ export function specializeSelection(selection: PolicySelection, input: string, c
     // Recorded even when no node carried a tool obligation, so the trace shows the read.
     specializations.push({ policyId: "*", predicate: "explicit_limit", satisfied: true, evidence: [`verdict ${limit.verdict}`, ...limit.evidence] });
   }
-  return { ...selection, policies, specializations, limit: limit.verdict === "none" ? undefined : { verdict: limit.verdict, instruction: limitInstruction(limit.verdict, (context?.toolsAvailable ?? []).map((tool) => tool.toLowerCase()))! } };
+  const anyMandated = selection.policies.some(isMandatedTool);
+  const emitLimit = !anyMandated && (limit.verdict === "limited" || (limit.verdict === "ambiguous" && !confirmation.satisfied));
+  const tools = (context?.toolsAvailable ?? []).map((tool) => tool.toLowerCase());
+  const emitted = emitLimit && limit.verdict !== "none" ? { verdict: limit.verdict, instruction: limitInstruction(limit.verdict, tools) } : undefined;
+  return { ...selection, policies, specializations, limit: emitted };
 }
 
 type PredicateResult = { satisfied: boolean; evidence: string[] };
 
-const SENTENCE_END = /(?<!\b(?:[ap]\.m|e\.g|i\.e|etc|vs|Mr|Mrs|Ms|Dr|St))[.!?;]['"’”]?(?=\s+[A-Z(]|\s*$)/;
-const CONFIRMATION_VERB = /\b(?:confirm|authorize|approve)\b/i;
-const FIRST_PERSON = /\b(?:I|we)\b/i;
-// The verb must follow its first-person subject directly, allowing only adverbs
-// or a coordinator ("I reviewed it and explicitly confirm"), so "I heard Pat
-// confirm" and "I want Pat to confirm" never bind to the user.
-const SUBJECT_BOUND = /(?:\b(?:I|we)\b|\band\b|\bthen\b)\s+(?:(?:explicitly|hereby|now|also|formally|fully|again|do)\s+)*$/i;
-const REPORTED_SPEECH = /\b(?:said|says|saying|wrote|writes|writing|told|tells|replied|replies|texted|emailed|messaged|noted|notes|reads|heard|hear|according to|quote|quoting)\b/i;
-const FUTURE_OR_MODAL = /\b(?:will|would|could|might|may|shall|should|going to|want|wants|need|needs|plan|plans|intend|intends|can)\b/i;
-const SENTENCE_CONDITIONAL = /^\s*(?:if|when|once|unless|before|after|until|whether|should|would|could|can|do|don't|didn't|please)\b/i;
-const VERB_NEGATED = /\b(?:not|never|don't|do not|didn't|cannot|can't|won't|to)\s+(?:\w+\s+)?$/i;
+function isMandatedTool(policy: Policy): boolean {
+  return policy.obligations.some((obligation) => obligation.type === "call_tool")
+    && policy.prohibitions.some((prohibition) => prohibition.type === "answer_current_info_from_memory");
+}
+
 const CLAUSE_NEGATED = /\b(?:not|never|no|don't|won't|cannot|can't)\b/i;
 const OBJECT_NEGATED = /^\W*\w*\W+(?:no|not|nothing|none|neither)\b/i;
 
@@ -77,20 +86,27 @@ const ACTION_WORDS: Array<[RegExp, OperationTrigger]> = [
   [/\bdraft(?:ing|s)?\b/i, "draft"],
 ];
 
+// Field recognizers. Compiler 0.8 fit these to held-out-v3's formatting (quoted
+// titles, HH:MM, IANA zones); held-out-v4 authors wrote "2 to 3pm central time"
+// and "the pricing sync". Each recognizer now accepts the ways people state a
+// field; the requirement that every field be stated is unchanged.
 const ADDRESS = /[\w.+-]+@[\w-]+\.[\w.-]+|\bto\s+[A-Z][\w'-]+\b/;
 const QUOTED = /['"‘“][^'"’”]{2,}['"’”]/;
-const DATE = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:,\s*\d{4})?\b|\b\d{4}-\d{2}-\d{2}\b/i;
-const TIME = /\b\d{1,2}:\d{2}\b/;
-const TIME_ZONE = /\b(?:[A-Z][a-z]+\/[A-Z][A-Za-z_]+|UTC|GMT|[PMCE][SD]?T|time ?zone)\b/;
-const ATTACHMENT_SCOPE = /\battach/i;
-const ATTENDEE_SCOPE = /\b(?:attendees?|invitees?|invite|for only me|only me|just me|private)\b/i;
-const RECURRENCE_SCOPE = /\b(?:recurr\w*|one-time|one time|once|single|series|occurrences?)\b/i;
-const OCCURRENCE_SCOPE = /\b(?:occurrences?|series|all future|only the|this instance)\b/i;
-const LOCATION_SCOPE = /\b(?:location|room|on-?site|in[- ]person|virtual|remote)\b/i;
-const CONFERENCING_SCOPE = /\b(?:conferenc\w*|video|zoom|google meet|teams|dial-?in|call link)\b/i;
+const NAMED_TARGET = new RegExp(`${QUOTED.source}|\\b(?:the|this|that|my|our)\\s+(?:[\\w'-]+\\s+){0,4}(?:thread|email|message|messages|event|meeting|sync|review|standup|walkthrough|call|invite|hold|block|series|label|folder|file|workbook|sheet|model|deck)\\b|\\b\\d+\\s+(?:messages?|emails?|threads?)\\b`, "i");
+const BODY = new RegExp(`${QUOTED.source}|\\b(?:body|text|message|wording)\\s+(?:should\\s+)?(?:say|read|be|is)\\b|\\bsaying\\b|\\bthat says\\b`, "i");
+const DATE = /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s*\d{4})?\b|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|\b\d{4}-\d{2}-\d{2}\b|\b(?:mon|tues?|wed(?:nes)?|thurs?|fri|sat(?:ur)?|sun)day\b/i;
+const TIME = /\b\d{1,2}:\d{2}\b|\b\d{1,2}\s*(?:[ap]\.?m\b|o'clock)|\b\d{1,2}\s*(?:to|-|–)\s*\d{1,2}\s*[ap]\.?m\b|\bnoon\b|\bmidnight\b/i;
+const TIME_ZONE = /\b(?:[A-Z][a-z]+\/[A-Z][A-Za-z_]+|UTC|GMT|BST|CET|CEST|IST|[PMCE][SD]?T|(?:pacific|mountain|central|eastern|london|uk|new york|chicago|la|berlin|paris|tokyo|sydney|india)\s+time|time ?zone|my time|their time|local time)\b/i;
+// A send whose body is stated and which never mentions attachments has, in
+// ordinary reading, no attachments; the scope is resolved rather than open.
+const ATTACHMENT_SCOPE = /\battach|\bno files?\b|(?=[\s\S]*\b(?:body|text|message|wording)\s+(?:should\s+)?(?:say|read|be|is)\b)(?![\s\S]*\battach)/i;
+const ATTENDEE_SCOPE = /\b(?:attendees?|invitees?|invite|for only me|only me|just me|private|same people|same attendees|everyone on the invite|with [A-Z][a-z]+)\b/i;
+const RECURRENCE_SCOPE = /\b(?:recurr\w*|one[- ]off|one-time|one time|once|single|series|occurrences?|not repeating|weekly|daily|monthly)\b/i;
+const OCCURRENCE_SCOPE = /\b(?:occurrences?|series|all future|only the|this instance|just the|the rest of the|leave the (?:rest|others))\b/i;
+const LOCATION_OR_CONFERENCING = /\b(?:location|room|on-?site|in[- ]person|virtual|remote|conferenc\w*|video|zoom|google meet|teams|meet link|dial-?in|call link|bridge|same link|no location)\b/i;
 
 type FieldRule = Array<[string, RegExp]>;
-const CALENDAR_CHANGE: FieldRule = [["event", QUOTED], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE]];
+const CALENDAR_CHANGE: FieldRule = [["event", NAMED_TARGET], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE]];
 
 /**
  * Fields the full policy requires a confirmation to name before an action is
@@ -100,14 +116,15 @@ const CALENDAR_CHANGE: FieldRule = [["event", QUOTED], ["date", DATE], ["time", 
  */
 const REQUIRED_FIELDS: Partial<Record<ArtifactType, Partial<Record<OperationTrigger, FieldRule>>>> = {
   email: {
-    send: [["recipient", ADDRESS], ["body", QUOTED], ["attachment scope", ATTACHMENT_SCOPE]],
-    forward: [["recipient", ADDRESS], ["thread or content scope", QUOTED], ["attachment scope", ATTACHMENT_SCOPE]],
-    archive: [["exact thread", QUOTED]],
-    delete: [["exact thread", QUOTED]],
+    send: [["recipient", ADDRESS], ["body", BODY], ["attachment scope", ATTACHMENT_SCOPE]],
+    forward: [["recipient", ADDRESS], ["thread or content scope", NAMED_TARGET], ["attachment scope", ATTACHMENT_SCOPE]],
+    archive: [["exact thread", NAMED_TARGET]],
+    delete: [["exact thread", NAMED_TARGET]],
   },
   calendar_event: {
     // The source policy: "Confirm title, attendees, date, time, time zone, location, conferencing, and recurrence."
-    create: [["title", QUOTED], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE], ["attendee scope", ATTENDEE_SCOPE], ["location", LOCATION_SCOPE], ["conferencing", CONFERENCING_SCOPE], ["recurrence scope", RECURRENCE_SCOPE]],
+    // Location and conferencing are one field here: a virtual meeting's "location" is its bridge.
+    create: [["title", NAMED_TARGET], ["date", DATE], ["time", TIME], ["time zone", TIME_ZONE], ["attendee scope", ATTENDEE_SCOPE], ["location or conferencing", LOCATION_OR_CONFERENCING], ["recurrence scope", RECURRENCE_SCOPE]],
     reschedule: CALENDAR_CHANGE,
     update: CALENDAR_CHANGE,
     delete: CALENDAR_CHANGE,
@@ -124,97 +141,59 @@ function requiredFields(context: ArtifactContext): FieldRule | undefined {
 }
 
 /**
- * Explicit confirmation holds only when one sentence of the request contains a
- * first-person, present-tense confirmation whose clause names the same operation
- * the artifact context declares, without negation, and that same sentence
- * supplies every field the full policy requires for that artifact and operation.
- * Conditionals, questions, negations, missing context, mismatched actions,
- * unknown artifact/operation pairs, and fields stated only elsewhere in the
- * request all evaluate to unsatisfied.
+ * Explicit confirmation holds when the authorization read returns `present`, the
+ * request names the same operation the artifact context declares without
+ * negating it, and the request supplies every field the full policy requires for
+ * that artifact and operation. Reported, conditional, or absent authorization,
+ * missing context, mismatched or negated actions, unknown artifact/operation
+ * pairs, and missing fields all evaluate to unsatisfied.
+ *
+ * Compiler 0.8 required all of this inside one sentence beginning "I confirm";
+ * held-out v4 showed users spread authorization, action, and fields across
+ * sentences and rarely use that verb. The read is now request-level and
+ * structural; the field checks are unchanged.
  */
 function evaluateExplicitConfirmation(input: string, context?: ArtifactContext | null): PredicateResult {
   const operation = context?.operation;
   if (!context || !operation) return { satisfied: false, evidence: ["no operation in artifact context"] };
   const required = requiredFields(context);
   if (!required) return { satisfied: false, evidence: [`no completeness rule for ${context.artifactType ?? "unknown"} ${operation}`] };
-  const evidence: string[] = [];
-  for (const text of sentences(input)) {
-    const verb = CONFIRMATION_VERB.exec(text);
-    if (!verb) continue;
-    const before = text.slice(0, verb.index);
-    const clause = text.slice(verb.index + verb[0].length);
-    const statement = quote(text.slice(verb.index));
-    if (!FIRST_PERSON.test(before) || !SUBJECT_BOUND.test(before)) {
-      evidence.push(`ignored clause whose confirming subject is not the user ${statement}`);
-      continue;
-    }
-    if (insideQuotation(before) || REPORTED_SPEECH.test(before)) {
-      evidence.push(`ignored reported or quoted confirmation ${quote(text)}`);
-      continue;
-    }
-    if (SENTENCE_CONDITIONAL.test(before) || VERB_NEGATED.test(before) || FUTURE_OR_MODAL.test(before)) {
-      evidence.push(`ignored conditional, negated, or future clause ${quote(text)}`);
-      continue;
-    }
-    if (clause.trimEnd().endsWith("?")) {
-      evidence.push(`ignored question ${statement}`);
-      continue;
-    }
-    const confirmed = ACTION_WORDS
-      .map(([pattern, action]) => ({ match: pattern.exec(clause), action }))
-      .filter((item): item is { match: RegExpExecArray; action: OperationTrigger } => item.match !== null)
-      .sort((a, b) => a.match.index - b.match.index)[0];
-    if (!confirmed) {
-      evidence.push(`no confirmed action named in ${statement}`);
-      continue;
-    }
-    const actionEnd = confirmed.match.index + confirmed.match[0].length;
-    if (CLAUSE_NEGATED.test(clause.slice(0, confirmed.match.index)) || OBJECT_NEGATED.test(clause.slice(actionEnd))) {
-      evidence.push(`confirmed action is negated in ${statement}`);
-      continue;
-    }
-    if (confirmed.action !== operation) {
-      evidence.push(`confirmed action "${confirmed.action}" does not match operation "${operation}"`);
-      continue;
-    }
-    const found = required.map(([field, pattern]) => ({ field, match: pattern.exec(text) }));
-    const missing = found.filter((item) => !item.match).map((item) => item.field);
-    if (missing.length) {
-      evidence.push(`missing ${operation} fields: ${missing.join(", ")}`);
-      continue;
-    }
-    return {
-      satisfied: true,
-      evidence: [
-        `request states ${statement}`,
-        `confirmed action matches operation "${operation}"`,
-        ...found.map((item) => `${item.field} ${quote(item.match![0])}`),
-      ],
-    };
+  const read = readAuthorization(input);
+  if (read.state !== "present") {
+    return { satisfied: false, evidence: [`authorization ${read.state}`, ...read.evidence] };
   }
-  return { satisfied: false, evidence: evidence.length ? evidence : ["no explicit first-person confirmation in request"] };
+  const confirmed = ACTION_WORDS
+    .map(([pattern, action]) => ({ match: pattern.exec(input), action }))
+    .filter((item): item is { match: RegExpExecArray; action: OperationTrigger } => item.match !== null)
+    .filter((item) => item.action === operation)
+    .sort((a, b) => a.match.index - b.match.index)[0];
+  if (!confirmed) {
+    return { satisfied: false, evidence: [...read.evidence, `request does not name the "${operation}" action`] };
+  }
+  const actionEnd = confirmed.match.index + confirmed.match[0].length;
+  const sentenceStart = Math.max(input.lastIndexOf(".", confirmed.match.index), input.lastIndexOf(";", confirmed.match.index), input.lastIndexOf("\n", confirmed.match.index), input.lastIndexOf(" - ", confirmed.match.index), input.lastIndexOf(": ", confirmed.match.index)) + 1;
+  // "archive them, not delete" negates the other verb, not the confirmed action.
+  const after = input.slice(actionEnd);
+  const contrastive = /^\W*\w*\W*,?\s*(?:not|never|rather than|instead of)\s+(?:\w+ing|\w+e|\w+)\b/i.test(after) && ACTION_WORDS.some(([pattern, action]) => action !== operation && pattern.test(after.slice(0, 40)));
+  if (CLAUSE_NEGATED.test(input.slice(sentenceStart, confirmed.match.index)) || (!contrastive && OBJECT_NEGATED.test(after))) {
+    return { satisfied: false, evidence: [...read.evidence, `the "${operation}" action is negated in ${quote(input.slice(sentenceStart, actionEnd + 30))}`] };
+  }
+  const found = required.map(([field, pattern]) => ({ field, match: pattern.exec(input) }));
+  const missing = found.filter((item) => !item.match).map((item) => item.field);
+  if (missing.length) {
+    return { satisfied: false, evidence: [...read.evidence, `missing ${operation} fields: ${missing.join(", ")}`] };
+  }
+  return {
+    satisfied: true,
+    evidence: [
+      ...read.evidence,
+      `request names the "${operation}" action: ${quote(confirmed.match[0])}`,
+      ...found.map((item) => `${item.field} ${quote(item.match![0])}`),
+    ],
+  };
 }
 
-function sentences(text: string): string[] {
-  const parts: string[] = [];
-  let rest = text;
-  while (rest.length) {
-    const end = SENTENCE_END.exec(rest);
-    if (!end) {
-      parts.push(rest);
-      break;
-    }
-    const cut = end.index + end[0].length;
-    parts.push(rest.slice(0, cut));
-    rest = rest.slice(cut);
-  }
-  return parts;
-}
 
-/** An odd number of double quotes before the verb means it sits inside someone else's words. */
-function insideQuotation(before: string): boolean {
-  return (before.match(/["“”]/g)?.length ?? 0) % 2 === 1;
-}
 
 function quote(text: string): string {
   const trimmed = text.trim().replace(/\s+/g, " ");

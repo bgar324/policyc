@@ -24,11 +24,13 @@ export type LimitResult = { verdict: LimitVerdict; evidence: string[] };
 const NEGATED_ACTION = /\b(?:do not|don't|dont|never|without)\s+(?:\w+\s+){0,2}(?:use|call|run|touch|modify|change|edit|generate|render|create|save|overwrite|write|send|delete|move|update|apply|execute|open|inspect|look ?up|search|browse)\b/i;
 const NOT_NOW = /\b(?:not (?:right )?now|not yet|later|for later|at this point)\b/i;
 const ONLY_TEXT = /\b(?:only|just)\s+(?:want|need|give me|tell me|show me|explain|describe|list|say|answer)\b|\b(?:i (?:only|just) (?:want|need))\b|\bthats all i need\b|\bthat's all i need\b|\bnothing else\b|\bin words\b|\bin plain (?:language|english|words)\b/i;
-const ADVICE_QUESTION = /\b(?:what should i (?:watch|look|know|do|check|worry)|what (?:would|could) (?:you|i) (?:change|watch)|what (?:are|is) the (?:risks?|pitfalls?|gotchas?|differences?)|how (?:does|do|would|should)|which (?:one|is|should)|is it (?:safe|ok|okay|fine) to)\b/i;
+// Only a clause that opens a sentence or follows a boundary is a question; "...,
+// which is 10am for me" is a relative clause.
+const ADVICE_QUESTION = /(?:^|[.?!;:]\s+|\band\s+|\bbut\s+|\bso\s+|\bthen\s+)(?:what should i (?:watch|look|know|do|check|worry)|what (?:would|could) (?:you|i) (?:change|watch)|what (?:are|is) the (?:risks?|pitfalls?|gotchas?|differences?)|how (?:does|do|would|should)|which (?:one|should)|is it (?:safe|ok|okay|fine) to)\b/i;
 const TEXT_DELIVERABLE = /\b(?:write|draft|give|produce)\s+(?:me\s+)?(?:a |an |the )?(?:\w+\s+){0,3}(?:prompt|prompt text|explanation|summary|paragraph|blurb|copy|words|sentence|note|description|advice|checklist)\b/i;
 const VALUES_SUPPLIED = /\b(?:values?|numbers?|figures?|table|data) (?:are|is) (?:already )?(?:here|below|above|in (?:the|this) (?:message|request|text))\b|\b(?:i(?:'ve| have)? )?(?:already )?(?:pulled|copied|pasted|extracted)\b.{0,40}\b(?:myself|for you|here|below)\b|\bthis is the complete\b/i;
 const BEFORE_ACTION = /\bbefore you (?:touch|edit|change|modify|run|do|send|save|call)\b/i;
-const ACTION_REQUEST = /\b(?:go ahead and|please)?\s*(?:edit|modify|change|update|save|overwrite|generate|render|create|send|forward|archive|delete|move|reschedule|reorder|dedupe|clean up|fix|apply|run)\b/i;
+const ACTION_REQUEST = /\b(?:go ahead and|please)?\s*(?:edit|modify|change|update|save|overwrite|generate|render|create|send|forward|archive|delete|move|reschedule|reorder|dedupe|clean up|fix|apply|run|draft|put (?:it|this|that) in (?:my )?drafts?|write .{0,40}(?:and )?(?:save|put) it)\b/i;
 
 const CATALOG_VERBS: Record<string, RegExp> = {
   image_generate: /\bgenerat\w*|\brender\w*|\bcreat\w*|\bdraw\w*|\bmake (?:an? )?(?:image|picture|illustration|poster)/i,
@@ -48,12 +50,23 @@ export function evaluateExplicitLimit(input: string, context?: ArtifactContext |
   if (negated) evidence.push(`request negates an action: "${negated[0]}"`);
   const notNow = negated && NOT_NOW.test(input.slice(negated.index, negated.index + 80));
   if (notNow) evidence.push("negation is scoped to this turn (not now / later)");
-  const onlyText = ONLY_TEXT.exec(input);
+  // "just say X" / "only tell me Y" limits the turn only when nothing else in the
+  // request asks for an action on an available tool; inside an action request it
+  // constrains wording ("if you mention her, just say she is unavailable").
+  const toolActionRequested = tools.some((tool) => CATALOG_VERBS[tool]?.test(input) ?? false) && ACTION_REQUEST.test(input);
+  const onlyTextRaw = ONLY_TEXT.exec(input);
+  const onlyText = onlyTextRaw && !(toolActionRequested && /^(?:just|only)\s+(?:say|tell|mention)/i.test(onlyTextRaw[0])) ? onlyTextRaw : null;
   if (onlyText) evidence.push(`request limits the deliverable to text: "${onlyText[0]}"`);
+  else if (onlyTextRaw) evidence.push(`"${onlyTextRaw[0]}" constrains wording inside an action request`);
   const advice = ADVICE_QUESTION.exec(input);
   if (advice) evidence.push(`request is an advice question: "${advice[0]}"`);
-  const deliverable = TEXT_DELIVERABLE.exec(input);
+  const deliverableRaw = TEXT_DELIVERABLE.exec(input);
+  // A summary or explanation *of an attached artifact* is produced by reading it;
+  // the text deliverable does not limit the reader tool.
+  const artifactAttached = Boolean(context?.artifactType && context.artifactType !== "unknown") || /\b(?:attached|i attached|the attachment|this file|this pdf|this deck|this sheet)\b/i.test(input);
+  const deliverable = deliverableRaw && !artifactAttached ? deliverableRaw : null;
   if (deliverable) evidence.push(`requested deliverable is text: "${deliverable[0]}"`);
+  else if (deliverableRaw) evidence.push(`"${deliverableRaw[0]}" is produced from an attached artifact`);
   const supplied = VALUES_SUPPLIED.exec(input);
   if (supplied) evidence.push(`inputs are supplied in the request: "${supplied[0]}"`);
   const before = BEFORE_ACTION.exec(input);
@@ -88,13 +101,10 @@ export function evaluateExplicitLimit(input: string, context?: ArtifactContext |
   return { verdict: "none", evidence: scopedNegation ? evidence : ["no explicit limit on action in request"] };
 }
 
-export function limitInstruction(verdict: LimitVerdict, tools: string[]): string | undefined {
-  const named = tools.length ? tools.sort().join(", ") : "any tool";
+export function limitInstruction(verdict: Exclude<LimitVerdict, "none">, tools: string[]): string {
+  const named = tools.length ? [...tools].sort().join(", ") : "any tool";
   if (verdict === "limited") {
     return `The user has limited this turn to a text answer and has not asked for an action, so do not call ${named}. Answer from the information in the request and state plainly anything you cannot verify without the tool.`;
   }
-  if (verdict === "ambiguous") {
-    return `The request both constrains what may be done and could be read as asking for an action. Do not call ${named} on this turn; answer the parts you can, and ask the user to confirm the action and its exact scope before acting.`;
-  }
-  return undefined;
+  return `The request both constrains what may be done and could be read as asking for an action. Do not call ${named} on this turn; answer the parts you can, and ask the user to confirm the action and its exact scope before acting.`;
 }
