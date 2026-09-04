@@ -193,6 +193,11 @@ const REQUIRED_FIELDS: Partial<Record<ArtifactType, Partial<Record<OperationTrig
   },
 };
 
+/** Every field the policy can require, with its description: the read contract an extractor is held to. */
+export function fieldContract(): Array<{ name: string; description: string }> {
+  return Object.values(FIELD).map(({ name, description }) => ({ name, description })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** The fields the policy requires for the declared operation; empty when no rule exists. */
 export function requiredFieldRules(context: ArtifactContext | null | undefined): RequiredField[] {
   return context ? (requiredFields(context) ?? []) : [];

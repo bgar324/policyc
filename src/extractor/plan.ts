@@ -6,7 +6,7 @@ import { canonicalJson, sha256 } from "../compiler/artifact.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { loadBehavioralCases } from "../experiment/cases.js";
 import { gitProvenance } from "../experiment/plan.js";
-import { requiredFieldRules, type RequiredField } from "../ir/deterministicFrontend.js";
+import { fieldContract, requiredFieldRules, type RequiredField } from "../ir/deterministicFrontend.js";
 import { extractorResponseJsonSchema } from "../ir/persistedFrontend.js";
 
 /**
@@ -51,8 +51,9 @@ export function runExtractCommand(argv: string[]): void {
     return { key: item.key, input, requiredFields: fields.map((field) => field.name), estimatedInputTokens: countTokens(`${instructions}\n${input}`, options.model).tokens + INPUT_TOKEN_OVERHEAD };
   });
   // The frontend's identity is everything that shapes a read: the model, the
-  // instructions, and the field descriptions the input block carries.
-  const readContractSha256 = sha256(canonicalJson({ promptSha256, fields: fieldDescriptions(source.items) }));
+  // instructions, and the field contract (every field description an input
+  // block can carry), independent of which cases this plan happens to hold.
+  const readContractSha256 = sha256(canonicalJson({ promptSha256, fields: fieldContract() }));
   const frontendId = `extractor:${options.model}:${readContractSha256.slice(0, 12)}`;
   const output = resolve(options.output);
   const planPath = resolve(output, "extraction-plan.json");
@@ -134,12 +135,6 @@ export function inputBlock(request: string, context: ArtifactContext | null, req
   return lines.join("\n");
 }
 
-/** Every distinct field description a plan's inputs carry, sorted by name, for the frontend identity. */
-function fieldDescriptions(items: SourceItem[]): Array<{ name: string; description: string }> {
-  const seen = new Map<string, string>();
-  for (const item of items) for (const field of requiredFieldRules(item.context)) seen.set(field.name, field.description);
-  return [...seen].sort(([a], [b]) => a.localeCompare(b)).map(([name, description]) => ({ name, description }));
-}
 
 function readExistingPlan(path: string): { planId: string; createdAt: string } | undefined {
   if (!existsSync(path)) return undefined;
