@@ -10,6 +10,7 @@ import uvicorn
 from .adjudication import build_adjudication_bundle, build_completion_bundle
 from .catalog import RunCatalog, default_catalog_path
 from .events import serialize_sse
+from .extraction import run_extraction
 from .manifest import load_run
 from .paired_manifest import load_paired_run
 from .paired_runtime import PairedExperimentRuntime, spend_plan
@@ -29,6 +30,10 @@ def main() -> None:
     experiment.add_argument("manifest", type=Path)
     experiment.add_argument("--dry-run", action="store_true")
     experiment.add_argument("--yes", action="store_true")
+    extract = subcommands.add_parser("extract")
+    extract.add_argument("plan", type=Path)
+    extract.add_argument("--dry-run", action="store_true")
+    extract.add_argument("--yes", action="store_true")
     runs = subcommands.add_parser("runs")
     runs.add_argument("action", choices=["list", "show", "rebuild"])
     runs.add_argument("run_id", nargs="?")
@@ -51,6 +56,8 @@ def main() -> None:
         uvicorn.run("policyc_runtime.service:app", host=args.host, port=args.port)
     elif args.command == "experiment":
         asyncio.run(run_paired_manifest(args.manifest, dry_run=args.dry_run, yes=args.yes))
+    elif args.command == "extract":
+        asyncio.run(run_extraction(args.plan, dry_run=args.dry_run, yes=args.yes))
     elif args.command == "runs":
         run_catalog_command(args.action, args.run_id, args.catalog, args.root, args.limit, args.json)
     elif args.command == "adjudication-bundle":

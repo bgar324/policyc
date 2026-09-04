@@ -67,6 +67,19 @@ Events receive a per-run monotonic sequence number, persist as JSONL, and serial
 
 Raw response retention is explicit in each manifest: `none`, `text`, or `full`. Secrets are never written by the runtime.
 
+## Extractor frontend
+
+The deterministic frontend reads the request by phrase pattern and is known to miss fresh phrasing (0 of 6 blind authorization paraphrases, 1 of 5 blind limits). The extractor frontend replaces that read with one model call per request at compile time, behind the same boundary:
+
+```bash
+pnpm policyc extract --cases eval/behavioral/compiler-v0.9-regressions.jsonl --provider openai --model gpt-5-mini-2025-08-07 --max-cost-usd 0.25 --output runs/extract-cv09 --dry-run
+pnpm policyc reads check --reads runs/extract-cv09/reads.json --cases eval/behavioral/compiler-v0.9-regressions.jsonl
+pnpm policyc reads score --reads runs/extract-fixtures/reads.json --fixtures eval/behavioral/compiler-v0.9-paraphrases.jsonl
+pnpm policyc experiment ... --request-state-reads runs/extract-cv09/reads.json
+```
+
+TypeScript plans the extraction: the instructions (`prompts/request-state-extractor.md`), the strict structured-output schema derived from the persisted-read Zod schema, and one input block per request naming the declared context, the tools, and the required field names. The Python runtime makes the calls under the same rules as a paired run: worst case priced against the ceiling before anything is sent, typed `RUN <planId>` confirmation, every raw response kept, and a re-run of the same plan reads stored responses instead of posting again. Only responses that match the schema reach `reads.json`; the compiler validates the file again when a run loads it. The reads file's identity (`frontendId`, sha256) goes into the run manifest and compiler hash. `reads score` measures a reads file against the blind paraphrase fixtures beside the deterministic frontend; `reads check` compiles a case set under the reads and reports regression-contract violations.
+
 ## Research question and evaluation
 
 > Given a large system prompt P and a user request x, can we compile P into a much smaller active policy subset Pₓ such that a model using Pₓ preserves the same critical obligations as a model using the full prompt P?

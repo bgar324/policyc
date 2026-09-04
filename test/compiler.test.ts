@@ -11,6 +11,7 @@ import { baselineAuthorizationReader } from "../src/compiler/authorization.js";
 import { parsePersistedReads, persistedFrontend, type ExtractedRead } from "../src/ir/persistedFrontend.js";
 import { evaluateExplicitLimit } from "../src/compiler/limits.js";
 import { compileSelection, defaultFrontend, findConflicts } from "../src/compiler/evaluate.js";
+import { compileRegressionCase, loadRegressions, regressionContractViolations, type RegressionCase } from "../src/eval/regressionContract.js";
 import type { Frontend } from "../src/ir/requestState.js";
 import { computeDependencyClosure } from "../src/policy/closure.js";
 import { loadPolicies } from "../src/policy/loader.js";
@@ -329,35 +330,13 @@ test("compiler 0.8 executes already-confirmed exact actions instead of re-asking
   );
 });
 
-type RegressionCase = { caseId: string; request: string; artifactContext: Record<string, unknown> | null; tools: Array<{ name: string }>; toolExpectation: { required: string[]; forbidden: string[] }; tags: string[]; applicableObligations: Array<{ validator: string; severity: string }> };
-
-function loadRegressions(path: string): RegressionCase[] {
-  return readFileSync(path, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as RegressionCase);
-}
-
 function compileCase(policies: Policy[], item: RegressionCase) {
-  const context = { ...(item.artifactContext ?? {}), toolsAvailable: item.tools.map((tool) => tool.name) } as NonNullable<Parameters<typeof generateCandidateSelections>[2]>;
-  const selection = generateCandidateSelections(policies, item.request, context)[1].selection;
-  return { selection, prompt: emitRuntimePrompt(selection, item.request, context) };
+  return compileRegressionCase(policies, item);
 }
 
-/** Observable contract every regression case must meet, independent of which case it is. */
 function assertRegressionContract(policies: Policy[], item: RegressionCase) {
   const { selection, prompt } = compileCase(policies, item);
-  for (const tool of item.toolExpectation.forbidden) {
-    assert.doesNotMatch(prompt, new RegExp(`- (call_tool|inspect_artifact):?${tool}`), `${item.caseId}: forbidden tool ${tool} must not be a required action`);
-    assert.doesNotMatch(prompt, /^- inspect_artifact$/m, `${item.caseId}: bare inspect_artifact invites the forbidden tool`);
-  }
-  for (const tool of item.toolExpectation.required) {
-    assert.match(prompt, new RegExp(`- call_tool:${tool}`), `${item.caseId}: required tool ${tool} must be a required action`);
-    assert.doesNotMatch(prompt, /ask_confirmation/, `${item.caseId}: required action must not be gated on re-asking`);
-  }
-  const asks = item.applicableObligations.some((o) => o.validator === "asks_confirmation" && o.severity === "critical");
-  if (asks) {
-    assert.match(prompt, /ask_confirmation/, `${item.caseId}: ask-side case must ask`);
-    assert.match(prompt, /exact (target|action|event|thread|recipient)/i, `${item.caseId}: ask must name what to pin down`);
-    assert.ok((selection.evaluations ?? []).every((record) => record.branchId !== "already_authorized" || record.truth !== "true"), `${item.caseId}: ask-side case must not resolve to execute`);
-  }
+  assert.deepEqual(regressionContractViolations(item, selection, prompt), [], `${item.caseId}: contract violations`);
 }
 
 test("compiler 0.9 visible regressions: explicit limits suppress tool obligations", () => {

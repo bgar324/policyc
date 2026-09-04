@@ -70,7 +70,10 @@ class OpenAIResponsesProvider:
         return payload
 
     async def send(self, request: ProviderRequest) -> RawProviderResponse:
-        payload = self.build_payload(request)
+        return await self.post(self.build_payload(request))
+
+    async def post(self, payload: dict[str, Any]) -> RawProviderResponse:
+        """One Responses API call for an already-built payload; the transport seam every paid call goes through."""
         started = perf_counter()
         try:
             async with httpx.AsyncClient(timeout=None, transport=self.transport) as client:

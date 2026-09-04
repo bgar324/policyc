@@ -155,7 +155,7 @@ export function runExperimentCommand(argv: string[]): void {
   if (result.status !== 0) throw new Error(`experiment runtime exited with status ${result.status}`);
 }
 
-function gitProvenance(): { system: "git"; commit: string; dirty: boolean } {
+export function gitProvenance(): { system: "git"; commit: string; dirty: boolean } {
   const revision = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" });
   const status = spawnSync("git", ["status", "--porcelain"], { encoding: "utf8" });
   if (revision.status !== 0 || status.status !== 0 || !revision.stdout.trim()) {

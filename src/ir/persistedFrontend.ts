@@ -45,6 +45,37 @@ export const persistedReadsSchema = z.object({
   reads: z.record(z.string(), extractedReadSchema),
 }).strict();
 
+/**
+ * The shape an extractor model returns. It differs from `extractedReadSchema`
+ * in one place: strict structured output cannot express a map with open keys,
+ * so `fields` is a list of named entries; `toExtractedRead` folds it back.
+ * The JSON schema sent to the provider is derived from this object, so the
+ * boundary and the extractor's contract cannot drift apart.
+ */
+export const extractorResponseSchema = z.object({
+  authorization: authorizationStateSchema,
+  limit: limitStateSchema,
+  purpose: purposeSchema,
+  permittedTask: z.boolean(),
+  format: formatSchema,
+  operationNamed: z.boolean(),
+  operationNegated: z.boolean(),
+  fields: z.array(z.object({ name: z.string(), stated: z.boolean() }).strict()),
+  evidence: z.array(z.string()),
+}).strict();
+
+export type ExtractorResponse = z.infer<typeof extractorResponseSchema>;
+
+export function extractorResponseJsonSchema(): Record<string, unknown> {
+  const { $schema: _omit, ...schema } = z.toJSONSchema(extractorResponseSchema, { target: "draft-7" }) as Record<string, unknown>;
+  return schema;
+}
+
+export function toExtractedRead(response: ExtractorResponse): ExtractedRead {
+  const { fields, ...rest } = response;
+  return { ...rest, fields: Object.fromEntries(fields.map((entry) => [entry.name, entry.stated])) };
+}
+
 export type ExtractedRead = z.infer<typeof extractedReadSchema>;
 export type PersistedReads = z.infer<typeof persistedReadsSchema>;
 

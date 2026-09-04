@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { canonicalJson, createArtifact } from "../src/compiler/artifact.js";
-import { parsePersistedReads, persistedFrontend, type ExtractedRead } from "../src/ir/persistedFrontend.js";
+import { extractorResponseJsonSchema, parsePersistedReads, persistedFrontend, toExtractedRead, type ExtractedRead } from "../src/ir/persistedFrontend.js";
+import { inputBlock } from "../src/extractor/plan.js";
+import { scoreFixtures } from "../src/extractor/reads.js";
 import { defaultFrontend } from "../src/compiler/evaluate.js";
 import type { Frontend } from "../src/ir/requestState.js";
 import { loadBehavioralCases } from "../src/experiment/cases.js";
@@ -164,4 +166,35 @@ test("the frontend is read exactly once per request and every candidate is evalu
     assert.strictEqual(candidate.selection.requestState, candidates[0].selection.requestState, `${candidate.strategy} shares the one read`);
     assert.equal(candidate.selection.requestState?.frontend, "flaky-1");
   }
+});
+
+test("the extractor's response schema is strict structured output and folds back into a read", () => {
+  const schema = extractorResponseJsonSchema() as { type: string; required: string[]; additionalProperties: boolean; properties: Record<string, { type?: string; enum?: string[]; items?: { additionalProperties?: boolean; required?: string[] } }> };
+  assert.equal(schema.additionalProperties, false);
+  assert.deepEqual(schema.required.sort(), Object.keys(schema.properties).sort(), "strict mode requires every property");
+  assert.equal(schema.properties.fields.items?.additionalProperties, false);
+  assert.deepEqual(schema.properties.fields.items?.required, ["name", "stated"]);
+  assert.deepEqual(schema.properties.authorization.enum, ["present", "reported", "conditional", "absent"]);
+  assert.deepEqual(schema.properties.limit.enum, ["limited", "ambiguous", "none"]);
+  assert.deepEqual(schema.properties.format.enum, ["requested", "none"]);
+  const read = toExtractedRead({ authorization: "present", limit: "none", purpose: "none", permittedTask: false, format: "none", operationNamed: true, operationNegated: false, fields: [{ name: "recipient", stated: true }, { name: "body", stated: false }], evidence: ["e"] });
+  assert.deepEqual(read.fields, { recipient: true, body: false });
+  parsePersistedReads({ frontendId: "x", reads: { k: read } });
+});
+
+test("the extraction input block declares context, tools, and the required field names", () => {
+  const block = inputBlock("send it to pat", { artifactType: "email", operation: "send", toolsAvailable: ["gmail"] }, ["recipient", "body", "attachment scope"]);
+  assert.match(block, /^Request:\nsend it to pat\n/);
+  assert.match(block, /- artifact type: email\n- operation: send\n- features: none\n- tools available on this turn: gmail\n- required fields for this operation: recipient, body, attachment scope$/);
+  const bare = inputBlock("what is the latest?", { toolsAvailable: [] }, []);
+  assert.match(bare, /- operation: none declared/);
+  assert.match(bare, /- tools available on this turn: none\n- required fields for this operation: none$/);
+});
+
+test("reads score measures the deterministic frontend at its known fixture recall", () => {
+  const score = scoreFixtures("eval/behavioral/compiler-v0.9-paraphrases.jsonl", () => defaultFrontend);
+  assert.equal(score.total, 23);
+  assert.equal(score.matched, 11);
+  assert.deepEqual(score.unsafe, []);
+  assert.equal(score.groups["authorization, expect present"].matched, 0);
 });
