@@ -60,6 +60,31 @@ The exhaustive bundle `adjudication_0e67ed402be63860` held all 163 pairs with tw
 
 Billed reduction clears the 15% gate narrowly; most of the full prompt's input was served from cache, and the compiled condition ran more searches (10 vs 6). Report billed and uncached-equivalent separately; neither substitutes for the behavioral gate.
 
+## Secondary outcomes (preregistered items 4, 6, 7)
+
+**Item 4, over the 163 complete pairs.** Refusal correctness (automated evaluator 2.6): full 163/163, compiled 161/163. Tool correctness (required tools called, forbidden tools not called): full 151/163 = 92.6%, compiled 132/163 = 81.0%; the 19-trial gap is the forbidden-tool class below. Severe-violation rate (any high or critical automated failure): full 71/163 = 43.6%, compiled 84/163 = 51.5%; both are high because many v4 rubrics carry high-severity prose obligations that a tool-call-only turn cannot satisfy, which affects both strategies.
+
+Blind-semantic conditional preservation by slice:
+
+| Slice | Pairs | Full pass | Preserved |
+| --- | ---: | ---: | ---: |
+| Batch A (universal, writing, privacy, destructive) | 49 | 41 | 31/41 = 75.6% |
+| Batch B (artifacts) | 58 | 50 | 38/50 = 76.0% |
+| Batch C (email, calendar) | 56 | 41 | 31/41 = 75.6% |
+| Tool: none | 41 | 28 | 23/28 = 82.1% |
+| Tool: gmail | 39 | 30 | 25/30 = 83.3% |
+| Tool: calendar | 20 | 16 | 9/16 = 56.2% |
+| Tool: spreadsheet_edit | 20 | 16 | 9/16 = 56.2% |
+| Tool: web | 11 | 11 | 8/11 = 72.7% |
+| Tool: pdf_read | 8 | 8 | 8/8 |
+| Tool: image_inspect / image_generate / slides_edit | 9 / 6 / 9 | 8 / 6 / 9 | 6/8, 5/6, 7/9 |
+
+Preservation is flat across author batches and concentrated by tool: calendar and spreadsheet cases sit at 56%, where the act-side confirmation misses (calendar) and forbidden-edit calls (spreadsheet) live.
+
+**Item 6, case-clustered sensitivity.** 54 cases had at least one full-policy critical pass; 37 of them had no full-only regression (68.52% regression-free). A case-level bootstrap (5,000 resamples of the 60 cases, seed 20260903) gives a 95% interval for conditional preservation of 64.49%–86.01%, wider than the trial-level Wilson interval because three samples from one case are not independent. Neither interval reaches the 90% lower-bound gate.
+
+**Item 7, held-out-v3 taxonomy over the 32 full-only pairs.** Emitter loss 27 (of which confirmation-state 7, tool availability emitted without the user's limit 13, confirmation bullet without target/scope or archive-versus-delete text 7), selector error 3 (`hv4-002`: web policy activated for a definitional question the user said not to look up), stochastic 2 (`hv4-024` simulated-inspection claim, `hv4-060` missed deadline, one sample each), context-interface asymmetry 0. Per-case assignments are in the root-cause section below. The confirmation-state class count, the diagnostic the preregistration singled out, is 7 pairs across 4 cases, and every one of them carries a `satisfied: false` specialization trace.
+
 ## Gates
 
 | Gate | Result |
