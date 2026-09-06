@@ -4,13 +4,15 @@ import { spawnSync } from "node:child_process";
 import { canonicalJson, COMPILER_VERSION, createArtifact, sha256, type CompilationStrategy, type CompiledPolicyArtifact } from "../compiler/artifact.js";
 import { generateCandidateSelections } from "../compiler/candidates.js";
 import { parsePersistedReads, persistedFrontend } from "../ir/persistedFrontend.js";
+import { identifyReaderContract, parsePersistedReadings } from "../compiler/policyReader.js";
+import type { PolicyReadingRecord } from "../policy/types.js";
 import type { Frontend } from "../ir/requestState.js";
 import { countTokens } from "../compiler/tokenCounter.js";
 import { loadPolicies } from "../policy/loader.js";
 import { loadBehavioralCases, type BehavioralCase } from "./cases.js";
 import { extractorContract } from "../extractor/contract.js";
 
-const STRATEGIES: CompilationStrategy[] = ["full_policy", "compiler_slice", "kernel_only", "direct_matches", "conservative_expanded"];
+const STRATEGIES: CompilationStrategy[] = ["full_policy", "compiler_slice", "kernel_only", "direct_matches", "conservative_expanded", "source_preserving_slice", "source_matched_authored", "source_matched_semantic", "source_clause_slice", "source_evidence_bare", "source_evidence_apply", "model_reader_slice", "condition_list_slice"];
 const INPUT_TOKEN_OVERHEAD_PER_CALL = 64;
 
 type CaseTool = BehavioralCase["tools"][number];
@@ -74,6 +76,8 @@ type Options = {
   runLabel?: string;
   /** Path to a persisted, schema-validated authorization-read file; absent means the deterministic baseline. */
   requestStateReads?: string;
+  /** Path to a persisted policy-readings file; required by, and only by, model_reader_slice. */
+  policyReadings?: string;
 };
 
 /** Manifest record of the frontend; the exact file hash makes a persisted frontend's identity reproducible. */
@@ -87,6 +91,27 @@ function loadFrontendSource(path: string | undefined): FrontendSource {
   return {
     record: { frontendId: persisted.frontendId, readContractSha256: persisted.readContractSha256, readsPath: resolve(path), readsSha256: sha256(text) },
     frontendFor: (caseId) => persistedFrontend(persisted, caseId),
+  };
+}
+
+/** Manifest record of the reader; the exact file hash makes a persisted reading's identity reproducible. */
+export type ReaderRecord = { readerId: string; readingContractSha256: string; readingsPath: string; readingsSha256: string };
+type ReadingSource = { record?: ReaderRecord; readingFor: (caseId: string) => PolicyReadingRecord | undefined };
+
+function loadReadingSource(path: string | undefined): ReadingSource {
+  if (!path) return { readingFor: () => undefined };
+  const text = readFileSync(path, "utf8");
+  const raw = JSON.parse(text) as { readingContractSha256?: unknown };
+  // The file names its contract; either running contract is accepted, and the hash binds the run to it.
+  const contract = identifyReaderContract(typeof raw.readingContractSha256 === "string" ? raw.readingContractSha256 : "");
+  const persisted = parsePersistedReadings(raw, contract.readingContractSha256);
+  return {
+    record: { readerId: persisted.readerId, readingContractSha256: persisted.readingContractSha256, readingsPath: resolve(path), readingsSha256: sha256(text) },
+    readingFor: (caseId) => {
+      const reading = persisted.readings[caseId];
+      if (!reading) throw new Error(`no persisted reading from ${persisted.readerId} for case ${caseId}; complete the reader run first`);
+      return { readerId: persisted.readerId, readingContractSha256: persisted.readingContractSha256, resolutions: reading.resolutions };
+    },
   };
 }
 
@@ -104,12 +129,16 @@ export function runExperimentCommand(argv: string[]): void {
   const createdAt = existingManifest?.createdAt ?? new Date().toISOString();
   const pendingArtifacts: Array<{ path: string; artifact: CompiledPolicyArtifact; callInputTokens: number }> = [];
   const frontendSource = loadFrontendSource(options.requestStateReads);
+  const readerArm = options.strategies.includes("model_reader_slice");
+  if (readerArm !== Boolean(options.policyReadings)) throw new Error("--policy-readings is required by, and only by, the model_reader_slice strategy");
+  const readingSource = loadReadingSource(options.policyReadings);
+  const sourceExperiment = options.strategies.some((strategy) => strategy.startsWith("source_") || strategy === "condition_list_slice") || readerArm;
   const casePlans = caseSet.cases.map((testCase) => {
     const executionContext = {
       ...(testCase.artifactContext ?? {}),
       toolsAvailable: testCase.tools.map((tool) => tool.name),
     };
-    const available = generateCandidateSelections(policies, testCase.request, executionContext, frontendSource.frontendFor(testCase.caseId));
+    const available = generateCandidateSelections(policies, testCase.request, executionContext, frontendSource.frontendFor(testCase.caseId), sourceExperiment ? sourcePolicyText : undefined, readerArm ? readingSource.readingFor(testCase.caseId) : undefined);
     const selected = options.strategies.map((strategy) => {
       const candidate = available.find((item) => item.strategy === strategy);
       if (!candidate) throw new Error(`unsupported strategy ${strategy}`);
@@ -127,12 +156,12 @@ export function runExperimentCommand(argv: string[]): void {
   const derivedInputLimit = deriveInputLimit(estimatedInputTokens, maxAttempts, options.maxInputTokens);
   const derivedOutputLimit = options.maxOutputTokensTotal ?? logicalTrials * options.maxOutputTokens * maxAttempts;
   if (options.provider === "openai" && options.maxCalls < logicalTrials) throw new Error(`--max-calls ${options.maxCalls} is below ${logicalTrials} logical trials`);
-  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, frontend: frontendSource.record, policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
+  const compilerHash = sha256(canonicalJson({ compilerVersion: COMPILER_VERSION, frontend: frontendSource.record, ...(readingSource.record ? { reader: readingSource.record } : {}), policyPackHash: casePlans[0].candidates.map((item) => item.candidateId), strategies: options.strategies }));
   const identityCore = {
     schemaVersion: "2.0.0", experimentName: "paired-policy-preservation", dataset: { path: resolve(options.cases), hash: caseSet.datasetHash, version: caseSet.datasetVersion, split: caseSet.split },
     ...(options.runLabel ? { runLabel: options.runLabel } : {}),
     sourceControl,
-    compilerHash, frontend: frontendSource.record, casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
+    compilerHash, frontend: frontendSource.record, ...(readingSource.record ? { reader: readingSource.record } : {}), casePlans, strategies: options.strategies, provider: options.provider, model: options.model,
     modelParameters: { max_output_tokens: options.maxOutputTokens, max_tool_calls: 1, store: false }, sampleCount: options.samples,
     inputTokenOverheadPerCall: INPUT_TOKEN_OVERHEAD_PER_CALL,
     maxConcurrency: options.concurrency, timeoutSeconds: 60,
@@ -203,6 +232,6 @@ function parseOptions(argv: string[]): Options {
     maxCalls: integer("--max-calls"), maxInputTokens: values.has("--max-input-tokens") ? integer("--max-input-tokens") : undefined,
     maxOutputTokensTotal: values.has("--max-output-tokens-total") ? integer("--max-output-tokens-total") : undefined,
     maxCostUsd, retries: integer("--retries", 0, true), output: required("--output"), dryRun: flags.has("--dry-run"), yes: flags.has("--yes"), retryAmbiguous: flags.has("--retry-ambiguous"), runLabel,
-    requestStateReads: values.get("--request-state-reads")
+    requestStateReads: values.get("--request-state-reads"), policyReadings: values.get("--policy-readings")
   };
 }

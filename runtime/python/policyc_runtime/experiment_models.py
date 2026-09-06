@@ -102,6 +102,15 @@ class FrontendRecord(StrictModel):
         return self
 
 
+class ReaderRecord(StrictModel):
+    """Identity of the model reader whose persisted readings a run's model_reader_slice arm used."""
+
+    readerId: str = Field(min_length=1)
+    readingContractSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    readingsPath: str
+    readingsSha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class CandidateRef(StrictModel):
     strategy: str
     candidateId: str
@@ -185,6 +194,8 @@ class PairedRunManifest(StrictModel):
     # Identity of the frontend that produced this run's request states; manifests
     # written before compiler 0.9 omit it and mean the deterministic frontend.
     frontend: FrontendRecord = Field(default_factory=lambda: FrontendRecord(frontendId="deterministic"))
+    # Present only when the run compiled the model_reader_slice arm.
+    reader: ReaderRecord | None = None
     casePlans: list[CasePlan] = Field(min_length=1)
     strategies: list[str] = Field(min_length=2)
     provider: Literal["fake", "openai"]

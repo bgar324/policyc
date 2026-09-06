@@ -26,7 +26,13 @@ export const behavioralCaseSchema = z.object({
   split: z.enum(["development", "pilot", "held-out", "adversarial", "smoke"]),
   caseId: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/),
   request: z.string().min(1),
-  artifactContext: z.custom<ArtifactContext>().nullable(),
+  // Present fields stay a pass-through for historical datasets; the exhaustive
+  // declaration is exclusion evidence for the source arm, so it is parsed strictly.
+  artifactContext: z.custom<ArtifactContext>().nullable().superRefine((value, ctx) => {
+    if (!value || value.exhaustive === undefined) return;
+    const parsed = z.object({ artifacts: z.literal(true).optional(), tools: z.literal(true).optional() }).strict().safeParse(value.exhaustive);
+    if (!parsed.success) ctx.addIssue({ code: "custom", message: `artifactContext.exhaustive: ${parsed.error.issues.map((issue) => issue.message).join("; ")}` });
+  }),
   sourceArtifact: z.record(z.string(), z.unknown()).nullable().optional(),
   applicableObligations: z.array(requirement),
   criticalObligationIds: z.array(z.string()).min(1),

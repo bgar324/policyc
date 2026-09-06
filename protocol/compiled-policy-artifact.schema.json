@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://policyc.dev/schema/compiled-policy-artifact-1.3.0.json",
+  "$id": "https://policyc.dev/schema/compiled-policy-artifact-1.4.0.json",
   "title": "PolicyC compiled policy artifact",
   "type": "object",
   "additionalProperties": false,
@@ -32,7 +32,8 @@
         "1.0.0",
         "1.1.0",
         "1.2.0",
-        "1.3.0"
+        "1.3.0",
+        "1.4.0"
       ]
     },
     "compilerVersion": {
@@ -139,7 +140,15 @@
         "compiler_slice",
         "kernel_only",
         "direct_matches",
-        "conservative_expanded"
+        "conservative_expanded",
+        "source_preserving_slice",
+        "source_matched_semantic",
+        "source_matched_authored",
+        "source_clause_slice",
+        "source_evidence_bare",
+        "source_evidence_apply",
+        "model_reader_slice",
+        "condition_list_slice"
       ]
     },
     "createdAt": {
@@ -321,6 +330,568 @@
       "items": {
         "type": "string"
       }
+    },
+    "sourceSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Protocol 1.4.0 source-slice provenance. Sections are half-open UTF-8 byte spans of the original source in original order. Omissions are current-selector predictions, not proven irrelevance; unmapped or unresolved context is retained. This is not proof of semantic equivalence. endByte > startByte, source ordering, and span disjointness are enforced by the runtime reader, which JSON Schema cannot express.",
+      "required": [
+        "contractVersion",
+        "selectionBasis",
+        "sourceMapHash",
+        "seedPolicyIds",
+        "sections"
+      ],
+      "properties": {
+        "contractVersion": {
+          "const": "source-sections-v1"
+        },
+        "selectionBasis": {
+          "const": "current-selector-prediction"
+        },
+        "sourceMapHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "seedPolicyIds": {
+          "$ref": "#/$defs/strings"
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "heading",
+              "startByte",
+              "endByte",
+              "sha256",
+              "policyIds",
+              "retained",
+              "context",
+              "reasons"
+            ],
+            "properties": {
+              "heading": {
+                "type": "string",
+                "minLength": 1
+              },
+              "startByte": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "endByte": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "policyIds": {
+                "$ref": "#/$defs/strings"
+              },
+              "retained": {
+                "type": "boolean"
+              },
+              "context": {
+                "type": "boolean"
+              },
+              "reasons": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "context"
+                  ],
+                  "properties": {
+                    "context": {
+                      "const": true
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "retained": {
+                      "const": true
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "required": [
+                    "retained"
+                  ],
+                  "properties": {
+                    "retained": {
+                      "const": false
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "reasons": {
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "sourceClauseSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Protocol 1.4.0 clause-level provenance for source_clause_slice. Every span is one whole source line. Retention cites a positive selector signal or a source-semantic dependency; pruning cites the exhaustive structural fact that justified it. Boilerplate records one canonical copy and the label-only copies it subsumes. Ordering, non-overlap, dependency closure, and the pruning-reason rule are enforced by the runtime reader.",
+      "required": [
+        "contractVersion",
+        "clauseMapHash",
+        "exhaustive",
+        "seedPolicyIds",
+        "retainedSections",
+        "clauses",
+        "boilerplate"
+      ],
+      "properties": {
+        "contractVersion": {
+          "const": "source-clauses-v1"
+        },
+        "clauseMapHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "exhaustive": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifacts",
+            "tools"
+          ],
+          "properties": {
+            "artifacts": {
+              "type": "boolean"
+            },
+            "tools": {
+              "type": "boolean"
+            }
+          }
+        },
+        "seedPolicyIds": {
+          "$ref": "#/$defs/strings"
+        },
+        "retainedSections": {
+          "$ref": "#/$defs/strings"
+        },
+        "clauses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "section",
+              "line",
+              "startByte",
+              "endByte",
+              "sha256",
+              "retained",
+              "dependsOn",
+              "reasons"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "section": {
+                "type": "string",
+                "minLength": 1
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "startByte": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "endByte": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "retained": {
+                "type": "boolean"
+              },
+              "dependsOn": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "reasons": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "boilerplate": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "section",
+              "line",
+              "startByte",
+              "endByte",
+              "sha256",
+              "retained",
+              "subsumes"
+            ],
+            "properties": {
+              "section": {
+                "type": "string",
+                "minLength": 1
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "startByte": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "endByte": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "sha256": {
+                "$ref": "#/$defs/hash"
+              },
+              "retained": {
+                "type": "boolean"
+              },
+              "subsumes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "section",
+                    "line",
+                    "startByte",
+                    "endByte",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "section": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "line": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "startByte": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "endByte": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "sha256": {
+                      "$ref": "#/$defs/hash"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "sourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Protocol 1.4.0 evidence binding for the source_evidence_* arms. Verbatim request sentences bound to retained clauses and proposed actions, tagged with the evidence roles they touch. No field is a verdict; the reader quotes and never judges.",
+      "required": [
+        "contractVersion",
+        "evidenceContractHash",
+        "request",
+        "actions",
+        "bindings"
+      ],
+      "properties": {
+        "contractVersion": {
+          "const": "source-evidence-v1"
+        },
+        "evidenceContractHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "sentences"
+          ],
+          "properties": {
+            "sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "sentences": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "operation",
+              "sentence",
+              "phrase"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "operation": {
+                "type": "string"
+              },
+              "sentence": {
+                "type": "integer",
+                "minimum": -1
+              },
+              "phrase": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "bindings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clause",
+              "action",
+              "roles",
+              "quotes"
+            ],
+            "properties": {
+              "clause": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "requirement"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "requirement": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "quotes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sentence",
+                    "start",
+                    "end",
+                    "text",
+                    "roles"
+                  ],
+                  "properties": {
+                    "sentence": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "start": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "end": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "roles": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "policyReading": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Protocol 1.4.0 model_reader_slice provenance: a model reader's resolutions of the policy's own conditions for this request. Contract 1 resolutions quote the condition the reader found; contract 2 resolutions answer a listed condition by id with a verdict and the deciding words. Only the directives are rendered after the clause slice. Not a verdict on preservation.",
+      "required": [
+        "readerId",
+        "readingContractSha256",
+        "resolutions"
+      ],
+      "properties": {
+        "readerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "readingContractSha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "resolutions": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "condition",
+                  "finding",
+                  "directive"
+                ],
+                "properties": {
+                  "condition": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "finding": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "directive": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "condition",
+                  "holds",
+                  "quote",
+                  "directive"
+                ],
+                "properties": {
+                  "condition": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "holds": {
+                    "enum": [
+                      "yes",
+                      "no",
+                      "undecidable",
+                      "not-applicable"
+                    ]
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "directive": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "policyConditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Protocol 1.4.0 provenance for the indexed conditions listed for this request: rendered after the slice by condition_list_slice, and answered by a contract-2 model_reader_slice reading. The index is a hand-audited, verbatim projection of the source; nothing here is a verdict.",
+      "required": [
+        "conditionIndexHash",
+        "conditions"
+      ],
+      "properties": {
+        "conditionIndexHash": {
+          "$ref": "#/$defs/hash"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clause",
+              "id",
+              "sentence",
+              "condition"
+            ],
+            "properties": {
+              "clause": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sentence": {
+                "type": "string",
+                "minLength": 1
+              },
+              "condition": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -330,7 +901,8 @@
           "schemaVersion": {
             "enum": [
               "1.2.0",
-              "1.3.0"
+              "1.3.0",
+              "1.4.0"
             ]
           }
         }
@@ -361,7 +933,10 @@
       "if": {
         "properties": {
           "schemaVersion": {
-            "const": "1.3.0"
+            "enum": [
+              "1.3.0",
+              "1.4.0"
+            ]
           }
         }
       },
@@ -390,6 +965,208 @@
                 ]
               }
             }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "schemaVersion"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "1.4.0"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "compilationStrategy": {
+            "enum": [
+              "source_preserving_slice",
+              "source_matched_semantic",
+              "source_matched_authored",
+              "source_clause_slice",
+              "source_evidence_bare",
+              "source_evidence_apply",
+              "model_reader_slice",
+              "condition_list_slice"
+            ]
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "compilationStrategy": {
+                  "enum": [
+                    "source_clause_slice",
+                    "source_evidence_bare",
+                    "source_evidence_apply",
+                    "model_reader_slice",
+                    "condition_list_slice"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "sourceClauseSelection"
+              ],
+              "not": {
+                "required": [
+                  "sourceSelection"
+                ]
+              }
+            },
+            "else": {
+              "required": [
+                "sourceSelection"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "sourceClauseSelection"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "sourceEvidence"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "policyReading"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "policyConditions"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "compilationStrategy": {
+                  "enum": [
+                    "source_evidence_bare",
+                    "source_evidence_apply"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "sourceEvidence"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "sourceEvidence"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "compilationStrategy": {
+                  "const": "model_reader_slice"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "policyReading"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "policyReading"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "compilationStrategy": {
+                  "const": "condition_list_slice"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "policyConditions"
+              ]
+            },
+            "else": {
+              "if": {
+                "properties": {
+                  "compilationStrategy": {
+                    "const": "model_reader_slice"
+                  }
+                }
+              },
+              "then": {},
+              "else": {
+                "not": {
+                  "required": [
+                    "policyConditions"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "sourceSelection"
+              ]
+            },
+            {
+              "required": [
+                "sourceClauseSelection"
+              ]
+            },
+            {
+              "required": [
+                "sourceEvidence"
+              ]
+            },
+            {
+              "required": [
+                "policyReading"
+              ]
+            },
+            {
+              "required": [
+                "policyConditions"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "compilationStrategy": {
+            "enum": [
+              "full_policy",
+              "compiler_slice",
+              "kernel_only",
+              "direct_matches",
+              "conservative_expanded"
+            ]
           }
         }
       }

@@ -13,6 +13,7 @@ import type { ArtifactContext } from "./policy/types.js";
 import { formatJson, formatMetrics, formatModelComparison, formatPolicySummary, formatSelection } from "./util/format.js";
 import { runExperimentCommand } from "./experiment/plan.js";
 import { runExtractCommand } from "./extractor/plan.js";
+import { runReadCommand } from "./reader/plan.js";
 import { runReadsCommand } from "./extractor/reads.js";
 import { loadBehavioralCases } from "./experiment/cases.js";
 
@@ -48,6 +49,11 @@ async function main(): Promise<void> {
 
   if (command === "extract") {
     runExtractCommand(process.argv.slice(3));
+    return;
+  }
+
+  if (command === "read") {
+    runReadCommand(process.argv.slice(3));
     return;
   }
 
@@ -182,6 +188,9 @@ Commands:
   policyc experiment --cases eval/behavioral/smoke-v1.jsonl --strategies full_policy,compiler_slice --provider openai --model gpt-5-mini-2025-08-07 --samples 1 --concurrency 1 --max-output-tokens 1024 --max-calls 2 --max-cost-usd 0.02 --retries 0 --run-label smoke-1 --output runs/openai-smoke --dry-run
   policyc extract --cases eval/behavioral/compiler-v0.9-regressions.jsonl --provider openai --model gpt-5-mini-2025-08-07 --max-cost-usd 0.25 --output runs/extract-cv09 --dry-run
   policyc experiment --cases eval/behavioral/compiler-v0.9-regressions.jsonl --request-state-reads runs/extract-cv09/reads.json ...
+  policyc read --cases eval/behavioral/canary-v3.jsonl --provider openai --model gpt-5-mini-2025-08-07 --max-cost-usd 0.25 --output runs/read-canary-v3 --dry-run
+  policyc read --cases <cases> --contract 2 --provider openai --model gpt-5-nano-2025-08-07 --reasoning-effort low --max-cost-usd 0.10 --max-output-tokens 8192 --output runs/read-<label> --dry-run
+  policyc experiment --cases eval/behavioral/canary-v3.jsonl --strategies full_policy,compiler_slice,source_clause_slice,condition_list_slice,model_reader_slice --policy-readings runs/read-canary-v3/reads.json ...
   policyc reads score --reads runs/extract-fixtures/reads.json --fixtures eval/behavioral/compiler-v0.9-paraphrases.jsonl
   policyc reads check --reads runs/extract-cv09/reads.json --cases eval/behavioral/compiler-v0.9-regressions.jsonl
   policyc cases validate --cases eval/behavioral/smoke-v1.jsonl

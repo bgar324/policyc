@@ -84,10 +84,12 @@ INPUT = "\n".join(
 )
 
 
-def _plan(tmp_path: Path, *, max_cost: float, items: int = 2, max_output: int = 256) -> Path:
+def _plan(
+    tmp_path: Path, *, max_cost: float, items: int = 2, max_output: int = 256, kind: str = "request-state-extraction"
+) -> Path:
     plan = {
         "schemaVersion": "1.0.0",
-        "kind": "request-state-extraction",
+        "kind": kind,
         "planId": "ext_test",
         "createdAt": "2026-01-01T00:00:00.000Z",
         "sourceControl": {"system": "git", "commit": "0" * 40, "dirty": False},
@@ -258,12 +260,169 @@ def test_refusal_is_a_failure_not_a_read(tmp_path: Path) -> None:
 def test_fake_extractor_answers_in_the_response_shape(tmp_path: Path) -> None:
     path = _plan(tmp_path, max_cost=1.0, items=1)
     plan = load_plan(path)
-    report = asyncio.run(ExtractionRuntime(plan, path, FakeExtractor(), _price()).run())
+    report = asyncio.run(ExtractionRuntime(plan, path, FakeExtractor(plan.kind), _price()).run())
     assert report["outcomes"] == {"completed": 1}
     read = json.loads((tmp_path / "reads.json").read_text())["reads"]["case-0"]
     assert read["authorization"] == "absent" and read["fields"] == {"recipient": False, "body": False}
     assert read["currentInformation"] is None
     assert read["externalDisclosure"] == "unknown"
+
+
+READING_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["resolutions"],
+    "properties": {
+        "resolutions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["condition", "finding", "directive"],
+                "properties": {
+                    "condition": {"type": "string"},
+                    "finding": {"type": "string"},
+                    "directive": {"type": "string"},
+                },
+            },
+        }
+    },
+}
+
+
+def test_policy_reading_plans_persist_readings_verbatim_under_reader_keys(tmp_path: Path) -> None:
+    path = _plan(tmp_path, max_cost=1.0, items=2, kind="policy-reading")
+    raw = json.loads(path.read_text())
+    raw["responseSchema"] = READING_SCHEMA
+    raw["frontendId"] = f"reader:test:{'c' * 12}"
+    for item in raw["items"]:
+        item["requiredFields"] = []
+    path.write_text(json.dumps(raw))
+    plan = load_plan(path)
+    assert build_payload(plan, plan.items[0])["text"]["format"]["name"] == "policy_reading"
+    resolution = {"condition": "c", "finding": "f", "directive": "d"}
+    provider = ScriptedProvider(
+        [json.dumps({"resolutions": [resolution]}), json.dumps({"resolutions": [{"condition": "c"}]})]
+    )
+    report = asyncio.run(ExtractionRuntime(plan, path, provider, _price()).run())
+    assert report["outcomes"] == {"completed": 1, "invalid": 1}
+    persisted = json.loads((tmp_path / "reads.json").read_text())
+    assert set(persisted) == {"readerId", "readingContractSha256", "readings"}
+    assert persisted["readerId"] == plan.frontendId
+    assert persisted["readings"] == {"case-0": {"resolutions": [resolution]}}
+
+
+def test_fake_reader_answers_with_no_resolutions(tmp_path: Path) -> None:
+    path = _plan(tmp_path, max_cost=1.0, items=1, kind="policy-reading")
+    raw = json.loads(path.read_text())
+    raw["responseSchema"] = READING_SCHEMA
+    # A contract-1 plan lists no conditions; the fixture's request-state fields do not apply to a reading.
+    raw["items"][0]["requiredFields"] = []
+    path.write_text(json.dumps(raw))
+    plan = load_plan(path)
+    report = asyncio.run(ExtractionRuntime(plan, path, FakeExtractor(plan.kind), _price()).run())
+    assert report["outcomes"] == {"completed": 1}
+    assert json.loads((tmp_path / "reads.json").read_text())["readings"] == {"case-0": {"resolutions": []}}
+
+
+READING_SCHEMA_V2 = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["resolutions"],
+    "properties": {
+        "resolutions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["condition", "holds", "quote", "directive"],
+                "properties": {
+                    "condition": {"type": "string"},
+                    "holds": {"enum": ["yes", "no", "undecidable", "not-applicable"]},
+                    "quote": {"type": "string"},
+                    "directive": {"type": "string"},
+                },
+            },
+        }
+    },
+}
+
+CONTRACT_2_INPUT = "\n".join(
+    [
+        "Policy excerpt (the rules that apply to this request, quoted verbatim):",
+        "",
+        "Ask for confirmation before destructive actions.",
+        "",
+        "Conditions to resolve (each once, by id):",
+        "- id: destructive.confirm/confirmation",
+        "  sentence: Ask for confirmation before destructive actions.",
+        "  condition: Confirmation should specify the target, scope, operation, and consequence",
+        "- id: destructive.confirm/ambiguity",
+        "  sentence: If ambiguity remains, ask a focused clarifying question.",
+        "  condition: If ambiguity remains",
+        "",
+        "Request:",
+        "archive them, that part is settled",
+    ]
+)
+LISTED = ["destructive.confirm/confirmation", "destructive.confirm/ambiguity"]
+
+
+def _contract_2_plan(directory: Path) -> Path:
+    directory.mkdir()
+    path = _plan(directory, max_cost=1.0, items=1, kind="policy-reading")
+    raw = json.loads(path.read_text())
+    raw["responseSchema"] = READING_SCHEMA_V2
+    raw["frontendId"] = f"reader:test:low:{'c' * 12}"
+    raw["items"][0]["input"] = CONTRACT_2_INPUT
+    raw["items"][0]["requiredFields"] = LISTED
+    path.write_text(json.dumps(raw))
+    return path
+
+
+def test_contract_2_readings_must_answer_each_listed_condition_exactly_once(tmp_path: Path) -> None:
+    answered = {"condition": LISTED[0], "holds": "yes", "quote": "that part is settled", "directive": "Archive now."}
+    inert = {"condition": LISTED[1], "holds": "not-applicable", "quote": "", "directive": ""}
+    stranger = {"condition": "email.privacy/task-requires", "holds": "no", "quote": "", "directive": "Ask."}
+    scenarios = {
+        "complete": ([answered, inert], "completed"),
+        "missing": ([answered], "invalid"),
+        "duplicate": ([answered, answered], "invalid"),
+        "extra": ([answered, inert, stranger], "invalid"),
+        "empty": ([], "invalid"),
+    }
+    for name, (resolutions, expected) in scenarios.items():
+        path = _contract_2_plan(tmp_path / name)
+        plan = load_plan(path)
+        provider = ScriptedProvider([json.dumps({"resolutions": resolutions})])
+        report = asyncio.run(ExtractionRuntime(plan, path, provider, _price()).run())
+        assert report["outcomes"] == {expected: 1}, name
+        if expected == "invalid":
+            written = json.loads((tmp_path / name / "report.json").read_text())["items"]["case-0"]
+            assert "exactly once" in written["error"]["message"], name
+            assert (
+                not (tmp_path / name / "reads.json").exists()
+                or json.loads((tmp_path / name / "reads.json").read_text())["readings"] == {}
+            ), name
+        else:
+            persisted = json.loads((tmp_path / name / "reads.json").read_text())
+            assert persisted["readings"] == {"case-0": {"resolutions": resolutions}}
+
+
+def test_fake_reader_answers_every_listed_condition_as_not_applicable(tmp_path: Path) -> None:
+    path = _contract_2_plan(tmp_path / "fake")
+    plan = load_plan(path)
+    report = asyncio.run(ExtractionRuntime(plan, path, FakeExtractor(plan.kind), _price()).run())
+    assert report["outcomes"] == {"completed": 1}
+    persisted = json.loads((tmp_path / "fake" / "reads.json").read_text())
+    assert persisted["readings"] == {
+        "case-0": {
+            "resolutions": [
+                {"condition": condition_id, "holds": "not-applicable", "quote": "", "directive": ""}
+                for condition_id in LISTED
+            ]
+        }
+    }
 
 
 class RejectingThenValidProvider:

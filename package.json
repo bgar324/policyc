@@ -19,7 +19,9 @@
     "runtime:serve": ".venv/bin/policyc-runtime serve",
     "demo": "pnpm build && node dist/cli.js experiment --cases eval/behavioral/smoke-v1.jsonl --strategies full_policy,compiler_slice --provider fake --model gpt-5-mini-2025-08-07 --samples 1 --concurrency 1 --max-output-tokens 1024 --max-calls 2 --max-cost-usd 0.02 --retries 0 --run-label demo --output demo-run --yes",
     "policyc": "node dist/cli.js",
-    "eval": "node dist/cli.js eval"
+    "eval": "node dist/cli.js eval",
+    "compare:source": "tsx src/tools/compareSourceSlices.ts",
+    "trace:source": "tsx src/tools/traceSourceCase.ts"
   },
   "dependencies": {
     "gpt-tokenizer": "^3.4.0",

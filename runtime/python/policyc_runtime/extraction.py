@@ -50,7 +50,11 @@ class ExtractionSource(StrictModel):
 
 class ExtractionPlan(StrictModel):
     schemaVersion: Literal["1.0.0"]
-    kind: Literal["request-state-extraction"]
+    # request-state-extraction: one read per request in the RequestState shape,
+    # loaded by `--request-state-reads`. policy-reading: one reading per request
+    # (the model-as-reader arm), loaded by `--policy-readings`. Both are paid
+    # under the same ceilings, confirmation, retention, and resume rules.
+    kind: Literal["request-state-extraction", "policy-reading"]
     planId: str
     label: str | None = None
     createdAt: str
@@ -107,7 +111,7 @@ def build_payload(plan: ExtractionPlan, item: ExtractionItem) -> dict[str, Any]:
         "text": {
             "format": {
                 "type": "json_schema",
-                "name": "request_state_read",
+                "name": "policy_reading" if plan.kind == "policy-reading" else "request_state_read",
                 "strict": True,
                 "schema": plan.responseSchema,
             }
@@ -116,29 +120,42 @@ def build_payload(plan: ExtractionPlan, item: ExtractionItem) -> dict[str, Any]:
 
 
 class FakeExtractor:
-    """Offline stand-in: answers every request with the conservative read, in the response shape."""
+    """Offline stand-in: the conservative read for request-state plans; for policy-reading plans an empty
+    reading, or under contract 2 one not-applicable resolution per listed condition (the bare slice either way)."""
 
     name = "fake"
 
+    def __init__(self, kind: str) -> None:
+        self.kind = kind
+
     async def post(self, payload: dict[str, Any]) -> RawProviderResponse:
         await asyncio.sleep(0.01)
-        names = _required_field_names(payload["input"])
-        read = {
-            "currentInformation": None,
-            "deferredWork": None,
-            "slideTask": None,
-            "externalDisclosure": "unknown",
-            "requestedSlideReorder": None,
-            "authorization": "absent",
-            "limit": "none",
-            "purpose": "none",
-            "permittedTask": False,
-            "format": "none",
-            "operationNamed": False,
-            "operationNegated": False,
-            "fields": [{"name": name, "stated": False} for name in names],
-            "evidence": ["fake extractor: conservative read"],
-        }
+        if self.kind == "policy-reading":
+            # No directives: the reader arm then renders the bare clause slice.
+            answer: dict[str, Any] = {
+                "resolutions": [
+                    {"condition": condition_id, "holds": "not-applicable", "quote": "", "directive": ""}
+                    for condition_id in _listed_condition_ids(payload["input"])
+                ]
+            }
+        else:
+            names = _required_field_names(payload["input"])
+            answer = {
+                "currentInformation": None,
+                "deferredWork": None,
+                "slideTask": None,
+                "externalDisclosure": "unknown",
+                "requestedSlideReorder": None,
+                "authorization": "absent",
+                "limit": "none",
+                "purpose": "none",
+                "permittedTask": False,
+                "format": "none",
+                "operationNamed": False,
+                "operationNegated": False,
+                "fields": [{"name": name, "stated": False} for name in names],
+                "evidence": ["fake extractor: conservative read"],
+            }
         body = {
             "id": "resp_fake",
             "status": "completed",
@@ -146,7 +163,7 @@ class FakeExtractor:
             "output": [
                 {
                     "type": "message",
-                    "content": [{"type": "output_text", "text": json.dumps(read)}],
+                    "content": [{"type": "output_text", "text": json.dumps(answer)}],
                 }
             ],
             "usage": {"input_tokens": 100, "output_tokens": 60, "input_tokens_details": {"cached_tokens": 0}},
@@ -168,6 +185,11 @@ def _required_field_names(input_block: str) -> list[str]:
         elif listing:
             break
     return names
+
+
+def _listed_condition_ids(input_block: str) -> list[str]:
+    """The `- id:` lines of a contract-2 reader input; empty for contract 1."""
+    return [line[len("- id: ") :].strip() for line in input_block.splitlines() if line.startswith("- id: ")]
 
 
 class ExtractionRuntime:
@@ -198,11 +220,18 @@ class ExtractionRuntime:
         await asyncio.gather(*(one(item) for item in self.plan.items))
         finished = datetime.now(UTC).isoformat()
         reads = {key: result["read"] for key, result in self.results.items() if result["status"] == "completed"}
-        reads_file = {
-            "frontendId": self.plan.frontendId,
-            "readContractSha256": self.plan.readContractSha256,
-            "reads": reads,
-        }
+        if self.plan.kind == "policy-reading":
+            reads_file: dict[str, Any] = {
+                "readerId": self.plan.frontendId,
+                "readingContractSha256": self.plan.readContractSha256,
+                "readings": reads,
+            }
+        else:
+            reads_file = {
+                "frontendId": self.plan.frontendId,
+                "readContractSha256": self.plan.readContractSha256,
+                "reads": reads,
+            }
         (self.root / "reads.json").write_text(canonical_json(reads_file) + "\n")
         report = {
             "planId": self.plan.planId,
@@ -308,6 +337,20 @@ class ExtractionRuntime:
             jsonschema.validate(parsed, self.plan.responseSchema)
         except (json.JSONDecodeError, jsonschema.ValidationError) as error:
             return {**base, **usage, "status": "invalid", "error": {"type": "schema", "message": str(error)[:300]}}
+        if self.plan.kind == "policy-reading":
+            # A reading is recorded exactly as validated; nothing is folded or resolved here. Under
+            # contract 2 the listed condition ids must each be answered exactly once: a reading can be
+            # neither empty nor an enumeration.
+            listed = list(item.requiredFields)
+            if listed:
+                answered = [resolution.get("condition") for resolution in parsed.get("resolutions", [])]
+                if sorted(answered) != sorted(listed):
+                    message = (
+                        "resolutions must answer each listed condition exactly once; "
+                        f"listed {listed}, answered {answered}"
+                    )
+                    return {**base, **usage, "status": "invalid", "error": {"type": "schema", "message": message[:300]}}
+            return {**base, **usage, "status": "completed", "read": parsed}
         given = set(item.requiredFields)
         fields = {entry["name"]: entry["stated"] for entry in parsed["fields"] if entry["name"] in given}
         read = {key: value for key, value in parsed.items() if key != "fields"}
@@ -368,7 +411,7 @@ async def run_extraction(path: Path, *, dry_run: bool, yes: bool) -> None:
         authorization = await asyncio.to_thread(input, f"Type {expected} to authorize paid API calls: ")
         if authorization.strip() != expected:
             raise SystemExit("paid extraction not authorized")
-    provider: Any = FakeExtractor() if plan.provider == "fake" else OpenAIResponsesProvider()
+    provider: Any = FakeExtractor(plan.kind) if plan.provider == "fake" else OpenAIResponsesProvider()
     runtime = ExtractionRuntime(plan, path, provider, price)
     report = await runtime.run()
     print(json.dumps(report, indent=2, sort_keys=True))

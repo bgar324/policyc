@@ -273,8 +273,9 @@ function detectPurpose(input: string, context: ArtifactContext | null | undefine
   return { purpose: "none", permittedTask: false };
 }
 
-// Action words that name each operation.
-const ACTION_WORDS: Array<[RegExp, OperationTrigger]> = [
+// Action words that name each operation. Exported for the evidence binder,
+// which uses them to locate proposed actions and never to judge them.
+export const ACTION_WORDS: Array<[RegExp, OperationTrigger]> = [
   [/\bsend(?:ing|s)?\b/i, "send"],
   [/\bforward(?:ing|s)?\b/i, "forward"],
   [/\b(?:creat(?:e|ing|es)|add(?:ing|s)?|schedul(?:e|ing|es)|book(?:ing|s)?)\b/i, "create"],

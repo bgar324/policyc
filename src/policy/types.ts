@@ -161,6 +161,14 @@ export type ArtifactContext = {
   riskHints?: string[];
   toolsAvailable?: string[];
   toolsRequested?: string[];
+  /**
+   * Declares a context dimension complete. Present fields are hints that may
+   * describe one part of a request; only an exhaustive declaration is exclusion
+   * evidence for the source arm. `artifacts: true` means the request touches no
+   * artifact beyond `artifactType` and `features` (none at all when
+   * `artifactType` is absent). `tools: true` means `toolsAvailable` is complete.
+   */
+  exhaustive?: { artifacts?: true; tools?: true };
 };
 
 export type SelectionInput = {
@@ -183,11 +191,106 @@ export type EvaluationRecord = {
   evidence: string[];
 };
 
+/** Source spans are UTF-8 byte offsets, with an exclusive end. Not entailment evidence. */
+export type SourceSelection = {
+  contractVersion: "source-sections-v1";
+  selectionBasis: "current-selector-prediction";
+  sourceMapHash: string;
+  seedPolicyIds: string[];
+  sections: Array<{
+    heading: string;
+    startByte: number;
+    endByte: number;
+    sha256: string;
+    policyIds: string[];
+    retained: boolean;
+    context: boolean;
+    reasons: string[];
+  }>;
+};
+
+/** Span-level provenance for the clause arm. Every span is a whole source line; the newline belongs to the span. */
+export type SourceClauseSelection = {
+  contractVersion: "source-clauses-v1";
+  clauseMapHash: string;
+  /** What the case context declared exhaustive; false means nothing could be pruned on that dimension. */
+  exhaustive: { artifacts: boolean; tools: boolean };
+  seedPolicyIds: string[];
+  retainedSections: string[];
+  clauses: Array<{
+    id: string;
+    section: string;
+    line: number;
+    startByte: number;
+    endByte: number;
+    sha256: string;
+    retained: boolean;
+    dependsOn: string[];
+    /** Retention cites a signal or dependency; pruning cites the exhaustive fact. */
+    reasons: string[];
+  }>;
+  /** One canonical copy per distinct boilerplate text, with every label-only copy it subsumes. */
+  boilerplate: Array<{
+    section: string;
+    line: number;
+    startByte: number;
+    endByte: number;
+    sha256: string;
+    retained: boolean;
+    subsumes: Array<{ section: string; line: number; startByte: number; endByte: number; sha256: string }>;
+  }>;
+};
+
+/** Verbatim evidence bound to retained clauses and proposed actions. No field is a verdict. */
+export type SourceEvidenceBinding = {
+  contractVersion: "source-evidence-v1";
+  evidenceContractHash: string;
+  request: { sha256: string; sentences: number };
+  /** Proposed actions in request order; `a0` is the declared operation when the request does not name it. */
+  actions: Array<{ id: string; operation: OperationTrigger; sentence: number; phrase: string }>;
+  bindings: Array<{
+    clause: string;
+    /** The proposed action this evidence is bound to. */
+    action: string;
+    roles: Array<{ id: string; requirement: string }>;
+    /** Whole sentences of the request, each tagged with the roles it touches. */
+    quotes: Array<{ sentence: number; start: number; end: number; text: string; roles: string[] }>;
+  }>;
+};
+
+/** One reader resolution: contract 1 quotes the condition it found; contract 2 answers a listed condition by id with a verdict and the deciding words. */
+export type PolicyResolution =
+  | { condition: string; finding: string; directive: string }
+  | { condition: string; holds: "yes" | "no" | "undecidable" | "not-applicable"; quote: string; directive: string };
+
+/** A model reader's resolution of the policy's own conditions for one request; rendered as directives after the clause slice. */
+export type PolicyReadingRecord = {
+  readerId: string;
+  readingContractSha256: string;
+  resolutions: PolicyResolution[];
+};
+
+/** The indexed conditions listed for one request: provenance for the condition_list_slice arm and for contract-2 readings. */
+export type PolicyConditionsRecord = {
+  conditionIndexHash: string;
+  conditions: Array<{ clause: string; id: string; sentence: string; condition: string }>;
+};
+
 export type PolicySelection = {
   policies: Policy[];
   reasons: PolicySelectionReason[];
   detectedIntents: IntentTrigger[];
   dependencyEdges: Array<{ from: string; requires: string }>;
+  /** Only the opt-in source experiment records original section provenance. */
+  sourceSelection?: SourceSelection;
+  /** Clause-level provenance for the source_clause_slice arm. */
+  sourceClauseSelection?: SourceClauseSelection;
+  /** Evidence bound for the source_evidence_* arms; the frame is chosen at emission. */
+  sourceEvidence?: SourceEvidenceBinding;
+  /** The persisted reading for the model_reader_slice arm. */
+  policyReading?: PolicyReadingRecord;
+  /** The indexed conditions listed for this request: the condition_list_slice arm and contract-2 readings. */
+  policyConditions?: PolicyConditionsRecord;
   /** Request state the compiled candidate was evaluated against; absent before evaluation. */
   requestState?: RequestState;
   /** Every branch evaluation, in node order. */
