@@ -1,0 +1,181 @@
+{
+  "body": {
+    "background": false,
+    "billing": {
+      "payer": "developer"
+    },
+    "completed_at": 1788659012,
+    "created_at": 1788659009,
+    "error": null,
+    "frequency_penalty": 0.0,
+    "id": "resp_076f360596eae7ac016a9cc541844887d081002286ce888d4e",
+    "incomplete_details": null,
+    "instructions": "You are the policy reader for an enterprise assistant. You receive an excerpt of the assistant's policy, quoted verbatim, holding the rules that apply to one request; a list of the conditions in that excerpt whose effect depends on what the request says, each with an id, the policy's own sentence, and the words of that sentence that state the condition; the request itself; and the declared context and tools available on this turn. Your job is the reading the full policy would give this request: decide, from the request's own words, how each listed condition comes out, and write the directive that follows for the assistant that will answer.\n\nYou do not answer the request. You do not call tools. You write directives for the assistant that will.\n\nResolve every listed condition exactly once, by its id, and nothing else. For each, write:\n\n- condition: the id, exactly as listed.\n- holds: \"yes\" when the request's own words meet the condition as the policy states it, with whatever the policy says it must carry; \"no\" when the request's words establish that it is not met; \"undecidable\" when the words given do not settle it; \"not-applicable\" when the rule the condition belongs to does not bear on what this request asks.\n- quote: the request's words that decide it, verbatim. Leave it empty when nothing in the request bears on it.\n- directive: one imperative sentence addressed to the assistant. When the condition holds, say that it holds and what to do now; do not tell the assistant to re-verify what the request already settles. When it does not hold, name what is missing and what the policy requires instead: ask for exactly that, or refrain, as the rule says. When it cannot be decided, say what to do under that uncertainty as the policy directs. Leave it empty when the condition is not applicable.\n\nRules.\n- Judge only the request, the declared context, and the tools available. Do not use what a careful assistant would prefer as evidence, and invent no facts.\n- A condition holds only when the request's own words meet it as the policy states it, with whatever the policy says the condition must carry.\n- Precedence is the policy's: when two rules bear on the same action, the more specific rule and the safer rule control, as the excerpt says.\n- Directives resolve conditions. They do not add rules, remove rules, or soften them.\n- Output only the JSON object.\n",
+    "max_output_tokens": 8192,
+    "max_tool_calls": null,
+    "metadata": {},
+    "model": "gpt-5-nano-2025-08-07",
+    "moderation": null,
+    "object": "response",
+    "output": [
+      {
+        "content": [],
+        "encrypted_content": "gAAAAABqnMVE-rot6bhqXuA2SWM0uZ5o4euSnr9KGo9umKK2IteStUqG2i3annnnQrmqX6ZUeIeECBduK1aA05hId4DmS69YnSxROQ8PBdnZXPoHavIWWS_gyEa26jecsD30IpOKSWcwl7vlpNWVLB5PgTSgrBNedx9vKvnioOXBvCIACliYYk_SpVkvqAMtqmRkby0J6oDHX2_eJpmfUgDz4laEPr2LUPleWI_t9fiQIl49qdR8I6d_XOdMp0JA-YihhNkxXIjoVkSIXaiG13UEtE0pPLbbcbJy64QTbDsGvRMqJLq5bECPBxUs6JmwZZtMOgjl09ssxlGLZyQSIhyCfgPycuEe9wEW9ObPCkdYs2fAKaHLCsg2qPBQ_N4Mkbf3YiYXZEMvBe1OEcGKGMOQy5djB4CbTJO-Rj6q2MS9Mz_l4UMu_xxTJdZrjAgq2DNWI2G1slUsnOWSZqSx1Qfo40kPj4ZqJCF8E2vmagf6emoNGnGWW8aLJlaTzEsucqaHa1RikwfHCAJCxSk9n-toAcrQSMdxqjFKEzCu9Um5l8Y1hgShulvpO3gkrrmGRSckS9d15Kg9pJDtt70IQjTl8DsfT6IiXndBp-Y0gHJMLJ_zbtCWCPjMLjr6mhkw6tpBsASpv5A_JpPY3SIoD1E7C7vT_uTPhTDNeS-rj9001w5jhk_9prgSsV5Q_3BmTUy7NyNZDGmqUcSUZO81pmlruUymNNLaQNUHK9QBS_C3hqbDlBVD68InSqszrRwxb3l2wy_qi4E-rIExAiurWrzZ9KnVA9X2kDbgvQcqnxpRyd2XDBWZBYstMljTCRcNrpDYJ8HHVNgnZFoP8x9nQnT4oibqbF8k7J9CIpwfVykmdxxANyXhAYUmJthvSYpwD1G8SAkCn_9L99Pp-iXq6ltaseyLeTu1CJYR3FkhiV68Butq5bJOBlA7tvnTGhkO8_Yb-0b3rPzJQt-6VRwzx-AdeaNvU8n8ai_J4CvVkBlaXBocEppcaaYx-TQAUi5DD8YwFOSpkt4Xe4WOMvL0kogqyTIGDG-s_9NSvfVttGMNVsXVrrnHoeB8iUKkAgTchGctFl3nxkT1XPu9va-CgYId-8b-a1WV6N3ZBIrzVsp2PwRPfC0jnQC0SIkoo_B2sw2eF6dyk5SrbTgp2Bi4jCGw5Px_xIMOGhu8U-vS03wSifpj5LQjpNnp4xN7Adgf4nEcq3yAKMrbIgE0u-gCWdtDQ_wJAWwD3g==",
+        "id": "rs_076f360596eae7ac016a9cc541da0c87d085581e6d906f1860",
+        "summary": [],
+        "type": "reasoning"
+      },
+      {
+        "content": [
+          {
+            "annotations": [],
+            "logprobs": [],
+            "text": "{\"resolutions\":[{\"condition\":\"web.verify-first/user-limit\",\"directive\":\"Do not browse unless necessary for current facts; since the user asks to send a privileged memo and no browsing is indicated, do not browse.\",\"holds\":\"undecidable\",\"quote\":\"If the user says not to browse but asks for current or high-stakes information the need for verification still controls.\"},{\"condition\":\"writing.preserve-meaning/substantive-changes\",\"directive\":\"Preserve the meaning of the user\u2019s request and do not introduce substantive changes: proceed to draft the action as requested.\",\"holds\":\"yes\",\"quote\":\"unless they explicitly request substantive changes\"},{\"condition\":\"writing.format-and-browse/verification\",\"directive\":\"If you are rewriting or formatting, do not browse for current facts unless explicitly asked to verify; here the user requests sending a memo, not rewriting text, so this rule does not apply.\",\"holds\":\"undecidable\",\"quote\":\"unless the user asks for factual verification or the text requires current facts\"},{\"condition\":\"writing.not-an-action/draft-not-send\",\"directive\":\"This is a request to perform an action (send an email). Do not draft or prepare without confirmation; proceed to action only if compliant with policy and user intent.\",\"holds\":\"no\",\"quote\":\"A writing task that mentions email\"},{\"condition\":\"image-read.inspect-and-identify/identity-provided\",\"directive\":\"Do not identify a person in an image unless identity is provided or publicly known context; not applicable to email sending.\",\"holds\":\"not-applicable\",\"quote\":\"Do not name a person unless the user provided the identity or the task is clearly about a known public figure in a provided context that allows identification.\"},{\"condition\":\"sheets.inspect-and-preserve/formulas\",\"directive\":\"Preserve formulas when dealing with spreadsheets; not applicable to email sending.\",\"holds\":\"not-applicable\",\"quote\":\"Do not overwrite formulas unless explicitly requested.\"},{\"condition\":\"email.privacy/task-requires\",\"directive\":\"Respect privacy: do not expose sensitive addresses or confidential details beyond what the task requires; ensure the recipient is appropriate and the content is permissible.\",\"holds\":\"yes\",\"quote\":\"Do not expose addresses, private threads, or confidential details beyond what the task requires.\"},{\"condition\":\"email.state-changes/explicit-intent\",\"directive\":\"Confirm explicit intent and appropriate authorization before sending confidential or privileged material; verify that sharing counsel material with consultants is allowed and that the correct recipient is intended.\",\"holds\":\"undecidable\",\"quote\":\"Require explicit user intent and confirmation when appropriate.\"},{\"condition\":\"email.archive-delete/scope\",\"directive\":\"Not applicable; not performing archive/delete actions.\",\"holds\":\"not-applicable\",\"quote\":\"Confirm the exact action, scope, and target messages before acting.\"},{\"condition\":\"email.archive-delete/draft-not-send\",\"directive\":\"Not applicable; not drafting to send later; this is an immediate send request.\",\"holds\":\"not-applicable\",\"quote\":\"A request to draft or prepare an email is not permission to send it.\"},{\"condition\":\"calendar.mutations/fields\",\"directive\":\"Not applicable; no calendar mutation involved.\",\"holds\":\"not-applicable\",\"quote\":\"Confirm title, attendees, date, time, time zone, location, conferencing, and recurrence\"},{\"condition\":\"destructive.confirm/confirmation\",\"directive\":\"If action is destructive and confirmation is required, prompt for confirmation; sending privileged material could be sensitive\u2014assess necessity for confirmation before proceeding.\",\"holds\":\"undecidable\",\"quote\":\"Ask for confirmation before destructive actions. Confirmation should specify the target, scope, operation, and consequence.\"},{\"condition\":\"destructive.confirm/ambiguity\",\"directive\":\"If ambiguity remains, ask a clarifying question before proceeding.\",\"holds\":\"undecidable\",\"quote\":\"If ambiguity remains, ask a focused clarifying question.\"}]}",
+            "type": "output_text"
+          }
+        ],
+        "id": "msg_076f360596eae7ac016a9cc541fd6887d08898c4dcabbed676",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      }
+    ],
+    "parallel_tool_calls": true,
+    "presence_penalty": 0.0,
+    "previous_response_id": null,
+    "prompt_cache_key": null,
+    "prompt_cache_retention": "in_memory",
+    "reasoning": {
+      "context": "current_turn",
+      "effort": "minimal",
+      "mode": "standard",
+      "summary": null
+    },
+    "safety_identifier": null,
+    "service_tier": "default",
+    "status": "completed",
+    "store": false,
+    "temperature": 1.0,
+    "text": {
+      "format": {
+        "description": null,
+        "name": "policy_reading",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "resolutions": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "condition": {
+                    "description": "The id of the listed condition this resolution answers.",
+                    "type": "string"
+                  },
+                  "directive": {
+                    "description": "One imperative sentence for the assistant that answers the request; empty when not applicable.",
+                    "type": "string"
+                  },
+                  "holds": {
+                    "description": "Whether the request's own words meet the condition as the policy states it.",
+                    "enum": [
+                      "yes",
+                      "no",
+                      "undecidable",
+                      "not-applicable"
+                    ],
+                    "type": "string"
+                  },
+                  "quote": {
+                    "description": "The request's words that decide it, verbatim; empty when nothing in the request bears on it.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "condition",
+                  "holds",
+                  "quote",
+                  "directive"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "resolutions"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "json_schema"
+      },
+      "verbosity": "medium"
+    },
+    "tool_choice": "auto",
+    "tool_usage": {
+      "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "total_tokens": 0
+      },
+      "web_search": {
+        "num_requests": 0
+      }
+    },
+    "tools": [],
+    "top_logprobs": 0,
+    "top_p": 1.0,
+    "truncation": "disabled",
+    "usage": {
+      "input_tokens": 4342,
+      "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 4096
+      },
+      "output_tokens": 775,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 5117
+    },
+    "user": null
+  },
+  "durationMs": 4159.742415882647,
+  "headers": {
+    "access-control-expose-headers": "X-Request-ID, CF-Ray, CF-Ray",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a369c8785d0dc0be-LAX",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Sun, 06 Sep 2026 01:43:32 GMT",
+    "openai-organization": "ben-mouqlz",
+    "openai-processing-ms": "3310",
+    "openai-project": "proj_6YFWNh4NzlKW1TydNdZL4ly2",
+    "openai-version": "2020-10-01",
+    "server": "cloudflare",
+    "set-cookie": "__cf_bm=A7cp4NUYtVExpFHfSpDMH9jajBPsCQH4QK1ePnLgme4-1788659009.3404834-1.0.1.1-vn6ykPKlYt12ipb1UVnL09vW.cXLoCKC7RWQ.0q2dPnixGDwkqCTDQd_iW2kg9V62gG1u1RXvjRcp4MTcq7x0qy0hj0p3eGyNQSgmzVSWObsNKz9vK5QoJiVKceWZWD_; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Sun, 06 Sep 2026 02:13:32 GMT",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "x-content-type-options": "nosniff",
+    "x-ratelimit-limit-requests": "500",
+    "x-ratelimit-limit-tokens": "200000",
+    "x-ratelimit-remaining-requests": "499",
+    "x-ratelimit-remaining-tokens": "198398",
+    "x-ratelimit-reset-requests": "120ms",
+    "x-ratelimit-reset-tokens": "480ms",
+    "x-request-id": "req_398903342733424ab89e93d33c129c40"
+  },
+  "key": "can5-004",
+  "receivedAt": "2026-09-06T01:43:33.395217+00:00",
+  "statusCode": 200
+}

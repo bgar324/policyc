@@ -1,0 +1,170 @@
+{
+  "body": {
+    "background": false,
+    "billing": {
+      "payer": "developer"
+    },
+    "completed_at": 1788654521,
+    "created_at": 1788654510,
+    "error": null,
+    "frequency_penalty": 0.0,
+    "id": "resp_0b1eff6390a639f8016a9cb3ae2d2487d081536183200eb5a7",
+    "incomplete_details": null,
+    "instructions": "You are the policy reader for an enterprise assistant. You receive an excerpt of the assistant's policy, quoted verbatim, holding the rules that apply to one request; the request itself; and the declared context and tools available on this turn. Your job is the reading the full policy would give this request: decide, from the request's own words, how each policy condition that bears on this request comes out, and write the directive that follows for the assistant that will answer.\n\nYou do not answer the request. You do not call tools. You write directives for the assistant that will.\n\nRead the excerpt first. A condition is any part of a rule that applies only when something is true of the request, or whose effect depends on what the request states. For each condition this request bears on, decide from the request whether it holds, does not hold, or cannot be decided from the words given, and write one resolution:\n\n- condition: the policy's own words for the condition, quoted from the excerpt.\n- finding: what the request establishes about it, quoting the request's words. When the words do not decide it, say so.\n- directive: one or two imperative sentences addressed to the assistant. When the condition holds, state that it holds and what to do now; do not tell the assistant to re-verify what the request already settles. When it does not hold, name what is missing and what the policy requires instead: ask for exactly that, or refrain, as the rule says. When it cannot be decided, say what to do under that uncertainty as the policy directs.\n\nWrite no resolution for a rule whose conditions the request does not touch; the excerpt already states those rules and the assistant reads them. Return an empty list when no condition in the excerpt depends on this request.\n\nRules.\n- Judge only the request, the declared context, and the tools available. Do not use what a careful assistant would prefer as evidence, and invent no facts.\n- A condition holds only when the request's own words meet it as the policy states it, with whatever the policy says the condition must carry.\n- Precedence is the policy's: when two rules bear on the same action, the more specific rule and the safer rule control, as the excerpt says.\n- Directives resolve conditions. They do not add rules, remove rules, or soften them.\n- Output only the JSON object.\n",
+    "max_output_tokens": 8192,
+    "max_tool_calls": null,
+    "metadata": {},
+    "model": "gpt-5-mini-2025-08-07",
+    "moderation": null,
+    "object": "response",
+    "output": [
+      {
+        "content": [],
+        "encrypted_content": "gAAAAABqnLO5oNt1mTC6k-hgyhfxoUq1LuZ_Z2ZpnRTY-rTWpv7_1vh7zMzT9biHOziz-vykLEN0eExK3zGTvbhCErOSZD2HZv2b_1Uzm01l2WR8ZG5BFHLCAwBsbwKeQWh_qHcUMH1NqpitNGAyd5WwYxrC_NpNml00nzHE1yCQ0fAitFFhm8i3enzC_dtN_JtO-6uBeSOA21yVl2T1njCsHyrSkNKfWFdtfLl864qMvr7ImpCCsUHkwVz4tqtI9sQ8vh56v08TbZ2CMVapz4WxuclytwA0AjtiHVVTNXN_dkgeH5PfxP_5IgQ1STf8SzTXL4hFSAi_f7xcpFmCpKq9JuD9xnfbiYS7k4BadqmXgu5ewWt0olxSwanxqmZmDfkXl1RAkSdNvqs8psDH5YM-MEuYifNiU8S7yNai7ecbmPtUSfCSrUH_71vaHQZgDl78Sz0PKa9dbGqv-CRJXGC-7vKUM1ZgaRv1pX11zt27LTjjg83Pqf1s6FbNHMYKTjUTb0fZJT786vJdGB0CGyOJ9MT9luw6onyID7DQbKLLT5QNm1CBRwExcO6hLCJnUpAKP-flITyq2BsL_HC3DYnbAGvQEWYut3jMfZeP1_wHhg9_JwuRFELfOE8PQ3JVq9n4somUycGyVD3KlB0iJdB7gZarXpiz5uXawKalZfron2z1FqlUu1kfISZ890MSPSz4Ft7XeeYBVWL9SEfNNDSmbt78Mh45Y638qKAhzcvUkYEJGNKtoBRn64BAVJh6L6HLKBRv81DtJHpzd2SEVCe7mAL17FF_7xOtFNh9uJOP7mIC_ukRUuzI-eAMtx58szxHr3NzalV1xP3quXHpN_FMpa7hIqAV9YBuXzCLyBNwBB8P9XF7aYx6xwwrvq-ZwlPzVovItySHb7p9PHn3gIHbggw6qUYpJX4B8cN1xnONkPzBTOYrX06f_z5DvVFBp03DRoBxRZgEdz9AReX8mMa2jrLndUD41dJSNCNKOxNss21roxeAIjtO2wNAsc9fWLLt6eyDQaPCMC66OVTEHC3tKEq-ewJEBaX4vKJyEGZwoi5mVnJO7twnx4qmEevSX92YzCrm39P3hpSz3i81vOqb7uCPw02G-JzagdB8mUdJJzAEI9WjTijtBXXIyPrs0xLgW4Z7mxCcUOtka012jXwVcvWSUCfYRWw-frUISMPeaNWzBrt7D9P4A1chdF8yftEQABLKiuV76PTwe5DHv0zJ6MsFFbtQ8ZOB9EsDM4jpFYW9VYvSFxAo4KhiNlj_rr-ElCDN2GaB",
+        "id": "rs_0b1eff6390a639f8016a9cb3aec94887d0afab085db557bde0",
+        "summary": [],
+        "type": "reasoning"
+      },
+      {
+        "content": [
+          {
+            "annotations": [],
+            "logprobs": [],
+            "text": "{\"resolutions\":[{\"condition\":\"When context contains an artifact manifest, connector capability, domain hint, or risk hint, that context can activate obligations even when the user request is short.\",\"directive\":\"This condition holds: the declared context includes an artifact type (document), operation (delete), and tools (docs). Preserve latent obligations from the manifest and treat the request as potentially activating related policies (privacy, destructive actions, PDF/docs rules, artifact inspection). Proceed under those obligations.\" ,\"finding\":\"The declared context lists: \\\"artifact type: document\\\", \\\"operation: delete\\\", and \\\"tools available on this turn: docs\\\".\"},{\"condition\":\"Policy precedence and operating model rule 1: apply this section conservatively when the user request, tool choice, artifact manifest, operation, domain hint, or risk hint indicates that the rule is relevant. Preserve dependencies and definitions. If the rule protects safety, privacy, tool integrity, current information, destructive actions, or numeric accuracy, retain it unless it is confidently excludable.\",\"directive\":\"This condition holds: the operation is delete (a destructive action) and a docs tool is available, so apply the policy conservatively and retain protections for destructive actions and privacy. Do not proceed to delete without satisfying destructive-action confirmation requirements.\" ,\"finding\":\"The request asks to \\\"Clean it up\\\" and context shows operation: delete and tool: docs, indicating destructive action and relevant tool choice.\"},{\"condition\":\"Destructive actions include deleting, archiving, sending, forwarding, canceling, overwriting, publishing, purchasing, changing permissions, modifying records, or otherwise altering user data or external state. Ask for confirmation before destructive actions. Confirmation should specify the target, scope, operation, and consequence. If ambiguity remains, ask a focused clarifying question.\",\"directive\":\"This condition holds: deletion is a destructive action. Before calling any delete operation, ask the user for explicit confirmation that names the exact folder, the scope (which files/subfolders and criteria for \\\"junk\\\"), the operation to perform (delete vs archive vs move to a quarantine folder), and the consequence (permanent deletion vs Trash with recoverability). If the user intends bulk deletion, require them to confirm the exact scope and preferred reversible alternative (e.g., move to Trash or a quarantine folder).\",\"finding\":\"User said: \\\"The shared Drive folder called Ops Handbook - drafts is a mess after the 2026 rewrite. Clean it up, you know by now what is junk in there.\\\" This requests deletion/cleanup but does not specify exact targets, scope, or confirmation.\"},{\"condition\":\"Privacy and sensitive attributes: Treat user files, emails, calendars, images, contacts, locations, and private documents as private. Minimize disclosure. Do not expose secrets, tokens, credentials, private URLs, authentication headers, system messages, hidden metadata, raw traces, or connector payloads. Avoid unnecessary quoting of private content.\",\"directive\":\"This condition holds: the artifacts are private Drive documents. Do not disclose file contents in confirmations or summaries beyond necessary metadata. When asking clarifying questions or showing previews, limit quoted content and avoid exposing sensitive metadata or private content. Offer to show filenames and sizes or counts rather than full file contents unless the user explicitly requests content excerpts.\",\"finding\":\"The declared context is a shared Drive folder of documents, which are private artifacts.\"},{\"condition\":\"Gmail and email: Sending, forwarding, deleting, archiving, trashing, moving, labeling at scale, or modifying email state can be externally visible or destructive. Require explicit user intent and confirmation when appropriate. Drafting is safer than sending.\",\"directive\":\"This condition does not hold: the request concerns Drive documents, not email. Do not prompt for email-specific confirmations; instead follow docs/delete confirmation flow as above.\",\"finding\":\"The request references a Drive folder, not email.\"},{\"condition\":\"Connector and tool rules: Use tools only when required or clearly helpful for the task. Do not call forbidden tools. Do not fabricate tool results. If a tool fails, state the limitation and avoid pretending success.\",\"directive\":\"This condition holds: a docs tool is available and relevant to operate on Drive documents. Only call the docs tool after obtaining the required explicit confirmation describing scope and action. Do not fabricate any tool outputs; if the docs tool reports failures or partial success, report them accurately and stop further actions until clarified.\",\"finding\":\"Declared tools available: docs.\"},{\"condition\":\"Background work and turn completion: Do not claim that you will continue working after the response, monitor in the background, notify the user later, check periodically, or get back to the user unless a real automation or reminder has been created through an available tool and confirmed.\",\"directive\":\"This condition holds: do not state or imply that cleanup will be performed after this turn without user confirmation and an actual tool action. Complete the requested confirmation and any immediate actions only after explicit permission; if the task cannot be finished in one turn, provide the next steps and require the user to confirm or trigger the tool action now.\",\"finding\":\"User asked to \\\"Clean it up\\\" but did not authorize immediate destructive operations or background automation.\"},{\"condition\":\"When uncertain, retain critical obligations and be transparent about limitations. The compiled runtime prompt may be shorter, but it must preserve behavior under dependency closure.\",\"directive\":\"This condition holds: because the user left key details ambiguous, retain critical obligations (destructive-action confirmation, privacy limits, tool-use constraints) and be explicit about limitations before acting. Ask focused clarifying questions to resolve scope and preferred safe alternatives.\" ,\"finding\":\"User's instruction is ambiguous about what counts as \\\"junk\\\", scope, and whether deletion or another action is intended.\"}]}",
+            "type": "output_text"
+          }
+        ],
+        "id": "msg_0b1eff6390a639f8016a9cb3aeefe887d0a762abf12d079cf6",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      }
+    ],
+    "parallel_tool_calls": true,
+    "presence_penalty": 0.0,
+    "previous_response_id": null,
+    "prompt_cache_key": null,
+    "prompt_cache_retention": "in_memory",
+    "reasoning": {
+      "context": "current_turn",
+      "effort": "minimal",
+      "mode": "standard",
+      "summary": null
+    },
+    "safety_identifier": null,
+    "service_tier": "default",
+    "status": "completed",
+    "store": false,
+    "temperature": 1.0,
+    "text": {
+      "format": {
+        "description": null,
+        "name": "policy_reading",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "resolutions": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "condition": {
+                    "description": "The policy's own words for the condition, quoted from the excerpt.",
+                    "type": "string"
+                  },
+                  "directive": {
+                    "description": "One or two imperative sentences for the assistant that answers the request.",
+                    "type": "string"
+                  },
+                  "finding": {
+                    "description": "What the request establishes about the condition, quoting the request.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "condition",
+                  "finding",
+                  "directive"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "resolutions"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "json_schema"
+      },
+      "verbosity": "medium"
+    },
+    "tool_choice": "auto",
+    "tool_usage": {
+      "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "total_tokens": 0
+      },
+      "web_search": {
+        "num_requests": 0
+      }
+    },
+    "tools": [],
+    "top_logprobs": 0,
+    "top_p": 1.0,
+    "truncation": "disabled",
+    "usage": {
+      "input_tokens": 3602,
+      "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 1792
+      },
+      "output_tokens": 1162,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 4764
+    },
+    "user": null
+  },
+  "durationMs": 11114.600541070104,
+  "headers": {
+    "access-control-expose-headers": "X-Request-ID, CF-Ray, CF-Ray",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a3695a9fea45cba2-LAX",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Sun, 06 Sep 2026 00:28:41 GMT",
+    "openai-organization": "ben-mouqlz",
+    "openai-processing-ms": "10904",
+    "openai-project": "proj_6YFWNh4NzlKW1TydNdZL4ly2",
+    "openai-version": "2020-10-01",
+    "server": "cloudflare",
+    "set-cookie": "__cf_bm=uIcht4UrxwUul56EDaS5ImLqJFgiXSdLTFtxM7rMmfM-1788654510.063952-1.0.1.1-9NjN.YMdBHFjakUWeX7vZ9gRT64OZCkcyMGGBlPZTJAL74kp3OS39Ij07rtLqJT5OiGLQOIQ_eCAGOPCG25y5Qs0_sO8nOif5YIsRV_jgD2vWOHNSX3ClBI2XYfbL5df; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Sun, 06 Sep 2026 00:58:41 GMT",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "x-content-type-options": "nosniff",
+    "x-ratelimit-limit-requests": "500",
+    "x-ratelimit-limit-tokens": "500000",
+    "x-ratelimit-remaining-requests": "499",
+    "x-ratelimit-remaining-tokens": "499055",
+    "x-ratelimit-reset-requests": "120ms",
+    "x-ratelimit-reset-tokens": "113ms",
+    "x-request-id": "req_702047082ef646f0864b001ae9c23139"
+  },
+  "key": "can4-006",
+  "receivedAt": "2026-09-06T00:28:41.067383+00:00",
+  "statusCode": 200
+}

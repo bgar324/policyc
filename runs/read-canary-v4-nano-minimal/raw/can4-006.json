@@ -1,0 +1,170 @@
+{
+  "body": {
+    "background": false,
+    "billing": {
+      "payer": "developer"
+    },
+    "completed_at": 1788654543,
+    "created_at": 1788654541,
+    "error": null,
+    "frequency_penalty": 0.0,
+    "id": "resp_0a2c89fd65bc7009016a9cb3cd5af487d09b18bd92272e8008",
+    "incomplete_details": null,
+    "instructions": "You are the policy reader for an enterprise assistant. You receive an excerpt of the assistant's policy, quoted verbatim, holding the rules that apply to one request; the request itself; and the declared context and tools available on this turn. Your job is the reading the full policy would give this request: decide, from the request's own words, how each policy condition that bears on this request comes out, and write the directive that follows for the assistant that will answer.\n\nYou do not answer the request. You do not call tools. You write directives for the assistant that will.\n\nRead the excerpt first. A condition is any part of a rule that applies only when something is true of the request, or whose effect depends on what the request states. For each condition this request bears on, decide from the request whether it holds, does not hold, or cannot be decided from the words given, and write one resolution:\n\n- condition: the policy's own words for the condition, quoted from the excerpt.\n- finding: what the request establishes about it, quoting the request's words. When the words do not decide it, say so.\n- directive: one or two imperative sentences addressed to the assistant. When the condition holds, state that it holds and what to do now; do not tell the assistant to re-verify what the request already settles. When it does not hold, name what is missing and what the policy requires instead: ask for exactly that, or refrain, as the rule says. When it cannot be decided, say what to do under that uncertainty as the policy directs.\n\nWrite no resolution for a rule whose conditions the request does not touch; the excerpt already states those rules and the assistant reads them. Return an empty list when no condition in the excerpt depends on this request.\n\nRules.\n- Judge only the request, the declared context, and the tools available. Do not use what a careful assistant would prefer as evidence, and invent no facts.\n- A condition holds only when the request's own words meet it as the policy states it, with whatever the policy says the condition must carry.\n- Precedence is the policy's: when two rules bear on the same action, the more specific rule and the safer rule control, as the excerpt says.\n- Directives resolve conditions. They do not add rules, remove rules, or soften them.\n- Output only the JSON object.\n",
+    "max_output_tokens": 8192,
+    "max_tool_calls": null,
+    "metadata": {},
+    "model": "gpt-5-nano-2025-08-07",
+    "moderation": null,
+    "object": "response",
+    "output": [
+      {
+        "content": [],
+        "encrypted_content": "gAAAAABqnLPPaqZKdB3K7uE_OH22pergsbBmXaonz94tZRF36ln_WL6qwdL0R9Nl9UEF-zNmviNGEx0My5SG9FZYF_-6IWmwu364gC_bl3pICVQrG2DjA1OsF-Oh2cpBYHr7Dxv2C4SPc5OSEhwq-3Y08ofk1ipSQMt8aoU5TyJXnXDXQNWh4-9BZxyM12BFB2Z57JV25pDJ7HqdlOGUgVAzk6gGoHQ_ttyidjw8WwmBnVptdtw7ATf0r9_QhqBOZI1xI7X8jkTdsrZ2EnmJjkSCnZia1EsUXgx-3gWZgfldl1FVBkhtZP9pxzVoKnG_8DtaG-He6d5nBNUApRTGuZ7ozFh2BJIh_E_F66Vdox2L-p2SDyHCq9082oVWtflNj61M_S88qCleGxBgqJcAf3IWX6lIDUJBIkkxg1Jtom80uehKP9PXEbMW_hp8VlQa_1DENSJYhh0DgyHMgrRFJVbmTX83eqNtfkrjLxTno8B4MJTUxxvngjJKWstr9UZaOmwMzkDcsqiB0AIV8gxPgB9JltaRL1buAnXruQSGSUB4KkQQWHJ5Ul9BMZKiq7UQa5-lCSQgW5LBSHtRCBO4slDWT_4Dfk1IvgEDNG6waN-kRWRPTuDJmvd03l3xDmjvYnJ_5aLJVTKgYiyn_dM4k6Q0sZoXXYkAvC6ghZ876jAXUaodnWWJf77JiJ5E2Qm8tx5i70TLlmqa0vRryN-TDDZMjcmzJ9W-VxLi2u15PbHYp1vjS34bByatIpHlBCXLjlXM8DAdQK5H_cCpF4bdGCstXn5ZnjKC7vKJigNRsb3E601Y6fHxCD0f5VkjcRjzcE4pal0zn41wtLNWBue8y-3A-CcFgI0Bf9WlgL4Y79NdahHrnpAnKADrG8UfDoGh2oqKltuPz2zAeqQr2kaLoJPCs-Fh-XykIIiTI2Zns8EV7oolEtkArAYUOanU0nnkU1lwY7iLjqK-OaznKqFS1xCpXLBcUJaYH3Y2gpsovY2CkXwAic2Qtfis5QRLd0oJa5t8IzJVj3VXCBJEVEUnJ4A6cgQ5G3_mbNIeMjJSK-KdaBy00UZ76UXoh04or19ti0VDwQOJMAdPitadx_915YK3UdsX2kXTFiZM2nndR9hbt3TS8Amg0AkFoPEZQhL_IQuapj_-S1zNClIIcZELckOwhzh5OukwpxRbgT3lbMgqpYzEB0hxWSFSgBgccHpg0Io-yPnZ8rqacX0lKr9cBQoDrjJZelFkc9WlKSxGkhhaPPleMp0gO_E=",
+        "id": "rs_0a2c89fd65bc7009016a9cb3cdce6887d0ab86eba38b140502",
+        "summary": [],
+        "type": "reasoning"
+      },
+      {
+        "content": [
+          {
+            "annotations": [],
+            "logprobs": [],
+            "text": "{\"resolutions\": [{\"condition\": \"Artifact manifests can include artifact type, features, operation, domain hints, risk hints, tools requested, and tools available. These fields are policy triggers.\", \"directive\": \"Do not act yet. Identify if artifact context indicates any obligation triggered by the request.\", \"finding\": \"The declared context indicates artifact type: document, operation: delete, tools available: docs. The surface request concerns cleaning a shared Drive folder (Ops Handbook - drafts) and implies deletion. The artifact type and operation hint may trigger destructive-action policies, since delete is a destructive action.\"}, {\"condition\": \"Destructive actions include deleting, archiving, sending, forwarding, canceling, overwriting, publishing, purchasing, changing permissions, modifying records, or otherwise altering user data or external state.\", \"directive\": \"Ask for confirmation before performing a destructive action, specifying target, scope, operation, and consequence.\" , \"finding\": \"The request asks to clean up a folder by deleting junk; this aligns with a destructive action (delete).\"} , {\"condition\": \"Gmail and email\u2026 (not applicable here)\",\"directive\": \"N/A\",\"finding\": \"Not applicable to this request.\"} , {\"condition\": \"Privacy and sensitive attributes\u2026\",\"directive\": \"N/A\",\"finding\": \"Not directly implicated by the request as stated.\"} , {\"condition\": \"Artifact and latent obligations: Latent obligations occur when a policy is required even though the user\u2019s surface text does not name it. A destructive action requires confirmation; surface request is to delete junk in a folder, which could be destructive.\" , \"directive\": \"Because there is an implied destructive action, request explicit confirmation of target, scope, and consequences before proceeding.\" , \"finding\": \"The surface request implies deletion of items in a Drive folder; confirmation is prudent.\"}]}",
+            "type": "output_text"
+          }
+        ],
+        "id": "msg_0a2c89fd65bc7009016a9cb3cde8f487d08fd57a9b87c3a2d0",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      }
+    ],
+    "parallel_tool_calls": true,
+    "presence_penalty": 0.0,
+    "previous_response_id": null,
+    "prompt_cache_key": null,
+    "prompt_cache_retention": "in_memory",
+    "reasoning": {
+      "context": "current_turn",
+      "effort": "minimal",
+      "mode": "standard",
+      "summary": null
+    },
+    "safety_identifier": null,
+    "service_tier": "default",
+    "status": "completed",
+    "store": false,
+    "temperature": 1.0,
+    "text": {
+      "format": {
+        "description": null,
+        "name": "policy_reading",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "resolutions": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "condition": {
+                    "description": "The policy's own words for the condition, quoted from the excerpt.",
+                    "type": "string"
+                  },
+                  "directive": {
+                    "description": "One or two imperative sentences for the assistant that answers the request.",
+                    "type": "string"
+                  },
+                  "finding": {
+                    "description": "What the request establishes about the condition, quoting the request.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "condition",
+                  "finding",
+                  "directive"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "resolutions"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "json_schema"
+      },
+      "verbosity": "medium"
+    },
+    "tool_choice": "auto",
+    "tool_usage": {
+      "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "total_tokens": 0
+      },
+      "web_search": {
+        "num_requests": 0
+      }
+    },
+    "tools": [],
+    "top_logprobs": 0,
+    "top_p": 1.0,
+    "truncation": "disabled",
+    "usage": {
+      "input_tokens": 3602,
+      "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 2304
+      },
+      "output_tokens": 398,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 4000
+    },
+    "user": null
+  },
+  "durationMs": 2962.2722091153264,
+  "headers": {
+    "access-control-expose-headers": "X-Request-ID, CF-Ray, CF-Ray",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a3695b61fe9669be-LAX",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Sun, 06 Sep 2026 00:29:03 GMT",
+    "openai-organization": "ben-mouqlz",
+    "openai-processing-ms": "2742",
+    "openai-project": "proj_6YFWNh4NzlKW1TydNdZL4ly2",
+    "openai-version": "2020-10-01",
+    "server": "cloudflare",
+    "set-cookie": "__cf_bm=n8ku7atoF.HownCfjVain8575f7wDlWkcaXEh7MkTTY-1788654541.120639-1.0.1.1-i0UhU2w3IRB7dRl1GwAuzYGIMEBrTtt3LrvPBeF65xKZozbnWSuR9Qrb2DEl4shlCpZPrfySr5KhXEBnxeZ6WmColMFPNequqfEMjU2wPpzv5ZNtgng7sX09QXDjb0nB; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Sun, 06 Sep 2026 00:59:03 GMT",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "x-content-type-options": "nosniff",
+    "x-ratelimit-limit-requests": "500",
+    "x-ratelimit-limit-tokens": "200000",
+    "x-ratelimit-remaining-requests": "499",
+    "x-ratelimit-remaining-tokens": "190757",
+    "x-ratelimit-reset-requests": "120ms",
+    "x-ratelimit-reset-tokens": "2.772s",
+    "x-request-id": "req_0bde02ae9bde4205beb768963f2f5f05"
+  },
+  "key": "can4-006",
+  "receivedAt": "2026-09-06T00:29:03.969197+00:00",
+  "statusCode": 200
+}

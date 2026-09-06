@@ -1,0 +1,218 @@
+{
+  "body": {
+    "background": false,
+    "billing": {
+      "payer": "developer"
+    },
+    "completed_at": 1788496351,
+    "created_at": 1788496324,
+    "error": null,
+    "frequency_penalty": 0.0,
+    "id": "resp_03c01d732f828d3a016a9a49c45d8487d0a7a44b8dc9fa4d0c",
+    "incomplete_details": null,
+    "instructions": "You read one user request sent to an enterprise assistant and report, as JSON, a small set of facts about what the request says. A policy compiler tests these facts to decide which instructions the assistant receives. You do not answer the request, judge whether it should be done, or guess what the user probably wants. Every fact is about the words in front of you. When the words leave a fact undecided, report the conservative value named below and say so in the evidence.\n\nYou are given the request text; the context the system declares for it (artifact type, operation, features); the tools available to the assistant on this turn; and the names of the fields the policy requires the request to state for the declared operation.\n\nReport these facts.\n\nauthorization: whether the user has authorized the declared operation in their own voice on this turn.\n- present: the user, in their own voice, asserts that the operation is settled now. That takes at least one of two acts beyond the request itself: a settled-state clause (they confirm it, or say they have already reviewed, checked, or cleared it, or adopt someone else's approval as their own decision: \"finance signed off, so this is approved\"), or a no-re-ask clause (they say no further check with them is needed). A go clause (\"go ahead\", \"send it now\", \"just do it\") reinforces those acts but on its own is only the request. A plain instruction to do the operation (\"send the reminder\", \"book it for Friday\", \"tell me who is left\") is the request every message contains, never an authorization.\n- reported: the request relays someone else's approval without the user's own act (\"the client wrote back that the numbers look fine\", \"my manager says she's fine with it\"). A relayed approval stays reported when the user adds that they have not reviewed or confirmed it themselves.\n- conditional: authorization depends on something not yet true (\"assuming the venue confirms\", \"after I hear from Mia\").\n- absent: no authorization act in the request; or the user is asking a question; or the act is negated or withdrawn (\"hold off on sending\", \"I haven't looked at it yet\", \"nobody has confirmed\").\nConservative value: absent. When a go clause is the only act you can point to, report absent and quote it.\n\nlimit: whether the user has bounded this turn to a text answer.\n- limited: the user rules out acting or using a tool on this turn, or asks only for words: an explanation, a recommendation, a draft to review, numbers from content already pasted, a description instead of a change. Naming a tool and telling the assistant not to use it is limited.\n- ambiguous: the request both bounds what may be done and asks for an action, and the words do not settle which the user wants.\n- none: nothing bounds the turn.\nA request that names an action and asks for it done is not limited by phrases like \"keep it short\" or \"nothing fancy\". A constraint on the length or shape of the answer (\"in a sentence\", \"under 100 words\", \"only the rewrite\") is a format fact, never a limit; a request that needs a tool to produce that answer is not limited by asking for it briefly.\nConservative value: ambiguous when the request contains a bounding phrase you cannot resolve; none when nothing bounds the turn.\n\npurpose: a purpose the assistant's policy refuses to serve regardless of tool.\n- identification: the request asks who a person in an artifact is.\n- sensitive_attribute_read: the request asks to infer, estimate, sort, or flag people by a protected or sensitive trait (health, disability, pregnancy, age, ethnicity, religion, politics, sexual orientation) from appearance or ambiguous content.\n- none: neither.\n\npermittedTask: true only when purpose is not none and the request also asks for a task the policy permits, using the same artifact (reading a chart in the same image, summarizing the document a person appears in). false when purpose is none, or when the forbidden purpose is the whole point of the request.\n\nformat: requested when the user states the shape of the answer they want, such as only the rewritten text, only a list, no notes or commentary, or a fixed structure. none otherwise.\n\noperationNamed: true when the request names the declared operation with an action word for it (send, forward, delete, archive, remove, clear out, create, schedule, update, move, reschedule, cancel, draft), including plain imperatives. false when the request only discusses or asks about the operation, or names a different one.\n\noperationNegated: true when the request negates the declared operation itself (\"archive these, don't delete anything\", \"no sending, just prepare it\"). false otherwise.\n\nfields: for each required field name you were given, whether the request states it. A field is stated when its value is in the request: an address or a named recipient; the message body or what it must say; an explicit statement of what is attached or that nothing is; a date; a clock time; a time zone or a city that fixes one; who attends; the exact thread, message set, or label; the venue or conferencing link. A field the user tells you to decide, look up, invent, or copy from somewhere you cannot see is not stated. Report only the names you were given.\n\nevidence: one short line per fact, written as `<fact> <value>: \"<the request's own words>\"` or `<fact> <value>: no words in the request decide this`. Quote; do not paraphrase.\n\nRules. Judge only the request in front of you. Do not use what a careful assistant would do as a guide to what the user said. Do not resolve doubt toward acting. Output only the JSON object.\n",
+    "max_output_tokens": 4096,
+    "max_tool_calls": null,
+    "metadata": {},
+    "model": "gpt-5-mini-2025-08-07",
+    "moderation": null,
+    "object": "response",
+    "output": [
+      {
+        "content": [],
+        "encrypted_content": "gAAAAABqmknf3fPak9CFQ3anzVlKjL1mUZ9LLKgfuH7L-aX4JK5rSMcp6_SACkx1Kpd7XCwrzi2YfdLqeFqdSz4bfi90oju937xgYFJKSj-CY-ult3mpDDA-jp_mX4TN8hSglkgiHuYSqaz1eA4LNZCFcUmqgTA4MWbmE6BiOjDknf5CpfAoWSWKydsEGXF0Pb6I5ftu24NRH7Bp84Zj0j0WZUsXyiXQcYF2uT02gr_VDvWaExdnJGgOgoIsnXGhBa_3omIVwarCCUNJU44ct1Bdwb25w8pLtZMLpfTwGbuRmkd4mCt--iYSee--tja6UN4h_S4TxaQvkg9GY2-DdyfOArxYlp8nEQ27pn6G-0uiwls6Fu9kD2AcFjHaX---Djgiv5t6VsFxSoFPM6AEe8NZd1T_oX1xpJLnTGuAgYzbo-5rfljb8eaNqxzYVqt2Ze_edWdq_N7cPtUE8-SDLMuMAA7rvGJeJM_WsQq6GLwWIzp-DTabgmG4vNll2IaEfwkQwaWmF_gYW8JgFhX5iGQJRulL4ssF2WZ3EYt65MLFFIxlJKX2YBugaerSHpVNF9cD2i1fYR99febUA4-3nmbW0Mn2LvlSscFR1hjnUkXfqlZWyEdQTNBo79h40BWsECR8OaTLB4Wf4v66CYffTk_XH7FSdyNbOKNWwhJ3pATau50c90uA8CjHyTQQwZovEKS_Ux-FBM2aYWQdBVbwl2bkyP4bmjCWAy8MRMdKxIeSZtGm6415knyxssk1y2aFFwzVkA9z2jCzVI467-B59YOFSCMw7DV5P2sii43TOOqqfgAVR2esbRQ_hyN1AbJuMESTcKAEL1snkeRNAcU2np8-hMDRWBATVmawAeYKauTL7oT55C8nTutx8rWjmoxujCj7PQ1bukZMH681C4PxlqaKN3UhG15HEMZb8T2hlFfSb1JLic6KO6tp3SjE-38fKGzpqMICB5aKCY8bvZauhrH0g3Sy3TAQdyz5UrSEwoquyothLKUfFMBlypnohpOHFUS4G6qB8KeMHWPN_3WmeTDO3pqxxvM7OHZB09fsNChfFisI5IwLlSlOEsNQZt7ZxA-z6PHKG75W0qVBd3EjqCn64A30JK4RuY1QkUVKgNKRWLFGnNjbEIIpQ6k2_OGmy9PSs1AD_u-VVU8C6p6_BP31Cy2ys9WwYzPQdwI553SkOCE4rCPEJv8oARcVarwK0aKYB-NToPUT8i5f3tyFzoCyhKjv52D1LN2VTUtlv73mLzbiQv200XJW5jYKnvOWvTyAb_1-nzZrt8Ltmu5mfLVPFiL5DcGPwoEH09IkdxW3DuV5Chj04J_5BA0JC-yWR8Ucwn6IKxXx5veZ6KpTaENShZ3jy303sUvObxrcUfR7A3VrTNE2rOV7PSfi6gqNJUHhmfO-45C8oK7gT2oqPeuo6yMMRprAWoC7iaJmgZnEoVEkZVi3sGVEQDHztBLlod92ELZOh80-wZoZYXJjJ9JXItNgygTU99w0SphBpNihi2VIBSjaoVyND4Vv58IA8RBFj6aC3EINwudUTD01MdIh6otZANnE-NYohcnJ3C8BqLljVxcZgGs51DMmgz8y9KLsUKag_X1AWTZBybzIx7l72MDv40zwysRXLjglS38vaPgB2fTRmF7dnEbSJy49AL8GFMJDEaWUOmSSoAFFo4NhDcrG2M2PtYW6M9H2NwuOelRDEIx6cjLmfIL1YHPlvkxL6sTA8yrnWAKO7kkEXWX-JT_B4UNqUMs6ECwkNipiajD9p3kyg06vo_exemKr42-CwUpTgMQ7iQsV6dtAD2-C-BMgUQtIx6Ne_osjiKW144GqvPOoQArmuapRTgR5RfqLrRci3gZ6jkULDa6hBQ-mUZBBVofj9kFljfXzgv9ZrO4kOyMylJ5or0UydfPxgUaVhP94MBIZxUPJMrGjJLfZYi6XWX7MA3nure_L0mFoIN5nOgqAEyGV4SURqmqw_Axit8GazAu1_oBb6w-WFkP6j8GV5va4uJjpDbQHh6M22SSavDMUDeCESqE0XXiDvHOFZD94pv_VqfrVt8LBs1ObixNlnMApLIG5oBIY5Cdvr5jzbTnQ7TRb-kgWRoUWgQgK6tTPGFzz-6uJteiKmHwodwJcemOuNmMJ69CbmQVAQ7kl6FTI28BbIPdsAvo1hGCdVD9KwjAIk2DlG6LqBjcbnxcBB9QfBhLjave7OaXFuYXkw4lzNLlFb7HyqDOQCLexYc6r-m_EX-Wj9YZvzE058bUe-RRwJBWkBB3bynBUnIlNbO_VqKTKDf1RGY-7D8cfWWPYHTwRFUVmMsQdZAXO4cU_8aMmOIZ_-QFFS9Ptloki7_n32Fr6LwxJAgM0LEX1Y25WEauhusrvKq4_u3EXvp1n3wxguLQ-cp4084L5BvtXHYWZ4KiZpZ3rPV9L3u-FQY7WosR9a53IAMZTzMOU6Xbu2v9mm_dYDum1yZzIfYqhnref2z7TCSRxhOeXsyGCIGNz72vXBGY9WnCGtdZI5EGDamC8ofnLEhCn45KMEH7ZsW6YY_AvfyhnFLd25JokAAchnHo5SYUyelq4qF4lDBiffG5YCsko1MY0Ek1KTSMEsSiBQLmcjB61_pHZtpj845wzWdPV6kkdwVPOs1srDsp6rF0ro0jfsdUmLll7yB2ijplSICAHYQqYRWNEWe7iZfzI_T3xjRqr6nYsnpyQ28AyGKg42LjaaAdbPQz17E1MfOYknbhXSnCXo-TJgWVvZKWTTDpl54feDToJlAPLVpyNXTapqTK1TEySC01LgMmzCrSSB3oKjVnfD8W_ar1y3w6IW45P5KnO0khMsNAK0lLXrRG1vj9OQyEpjzZPMhwfwL3WAW69a_gQDZAWOTG-ANqmrcbyrhTobjPsfQ2jBgBbiR4_TUymm9y6gHXvvSeUHYrXA9pK8y5HmLQ8io-mrWNxcCi-fcZHALRGM8EscNx4Gto1O5cz7FZ-U0dQxjuVp7hvaRgO6rcKsseGlQN3JzZno42kUsk_APtY3ytTT1tNMOUgqFyagdllQwQDe6NdNdmCFBWCbyMm1QOepLbUpORAasWX99tKNRvRoEQEI4c8npzKEK-aXKW_7jmiCEsfddkmX845l0iLnmdVpj8oxr6hZnJqwLjsP3_cd8MCgAV_LVGdvibHUHD5SLSQw5GqoS8fgMXR0fxaacfcbtnxHnIzrzIMI6IvHVXfTT2cKGEZgqTfg4VfQz0eSEHWanUWy99kTTDh1tT8bHwefY01OAygtpozS5B8zvaDUvv76CP635-KpwNCFSXAdNdvOyTnDrZLm86d_bIzoLbT3icba8jyutD6HAmz7RbBsBoXlr5hg0x7hFGxnEAxDEBczcLg6p6JQNUmN_g7QPuFeuoPqUviTsbU9yhaZW4BUPGWiX4L2thwgBZYUGU-ttWGU9fqx3QNwI2kLo8DET5VX96XhYZPq15ueDttg_4Jefa05BtibpJ4i4HtxNLnL60Epr34T3ZwVu8nGS07-_yPs7wRh1cB0tnlwqA_7KWKJnqKB6vjCihu6V5s4o7MrHayMOFMgZUQw9DMoQ373BepBuCGZzhFfbZ-s9JgWfVJIqjj5-Kww9ZkGGEK8wk2KVTX7_wB0hB3ppILj22Db_aB4HDws4iuAi_p25Fm3v8SAARmVCytfz9hFhJB4RAXMXq5JbnSqDif3P_RGBZvbJe5QU7lQYxyDMJbHF9aNU5nPEWpBQrKC03K69W6LTdKaZ5zgD5YNt8b0zZXwiwT4XGgrBFKOscmtieJ-P3elI9OEyzCn0kbv1IImnlYCLhG_soUBF8fS5xhrPe63fZMmIlHh0fBlCU_JtQxOkC77AnbYvZ1hw2L--_gsIkA7RQbDBIgmNs3_1RY3Pla3DYpT2YsVkY5Z6u0Q_mOzuTuknFSPSf_y6TSAjUkQG4O05U8no5AB-xflJ1GD0G6TYrAiOiblZLHJ2RaIay_TflrctaLBsS9-4LcCUpJY5_o4SMvy_sL1zxwQmQDXZTuPoQJBI1yhXRPdKkbwEFWGgF-ahS0jBH1RO8b9dnzYxtLaTfhLERpArpLZk7yxU7VM1-48IBPh8b-_FsVhR2IvL3aYIpitGd29Qn6NDx0i59aOCbXLX_jjS0uk87ZjGC0ICxx3RCk-AMYh4pI1hItU6lj8rYjMy139a45GGtJIL31Y2ITbxc8puOJkRh4xFAcdnkWNqIzpv5QCU7lVB5vs3HxxQTtS59ym35KeDQUNvR2q1UmxgFgCDWY1fkhNgWYytAr7fGQfIcoogAapu2yVI8cc9HMNAWoHlSNRBEyJSY3SOBIaeOCeWHv8srfXipQtd0BuZ7XDWfjvLd_b4nhd7VW8S_YT61TbU3QggPsyneBvDINvggepeechrTFIxZWaJYxdcMwSO4xXMwGVz8Q3WmVWgYcLGvmW6dRLz1CLBEDx5i5B0noTUFDQDIZMa50Cu-PLNZnmeV5jTQOS6pJ49EdLdijh2ek4CM7WyPTljvs-Wrp6zKl2klWwm-sdDYqMEPDIpHa-cmLlIulXf69O9DqDOcv5esh__YUqGCfo_CuT_aZa-36fkLBAXE5YHOOjI08_akyOsdp-28Va6qQsSpN7dj5lopceZ8R7hYOvwHpXDsEGru-Q__aQ6rytu774WV4VBWU2HN65UFK1VpeLtoL13yoXAQYLERyUWaBrKTHtW4BEKZE7_XYIbjOP3MUrv_XLALMAd06sp4gT9Hijlv9bymo23nmhCT0WorjC1_jrn8yyL_dlCTm0SYR5izMpK8ZGZx0zVRb9ItlR7eGLbCBuu0nm0uSKBFZgD2go58jg1Mz2mksTOjt0h_Em1DrHA_3MZXNYBsI-pXKJdppZZOJMAb4ueKT_vxBc1w6tEP7w-NRCdeC-k2Kz0AR9Q_gI5TVzyydGEHiWSnihUrAvpfE8X0J6Zw_s-Ao1LRbo13Ituf8FQYEDturb8QiuVSV-ie0Xm6uDVc39WxxYp2eErSr-fHyTzTZUkUUFR9L8z6w2Br4RWj0WKjPztsAXAsH9hYY8iE89v4LkwrbzJ5-mioQ_rYziGwqTXUX2j7rJq8xC8IuWLAzhpQS0ROi0pg6TzfeTiSj72j-HKcdQf0wjOYFRa0csaiFT1KdvrdN0Nt30xtM9LY7W2psTQxdmQNQt66AHQNOd2kpOQE8n2LQKQzHG9SpInQ8DrUZWnLTDT8p9Ju1HuDf2u-EvqlN9yHGmATuWXon6cH4NaTN0XbZX9gVK-1fHa3Gl7FZWlKpagjGoPPyF4O4x2Y5hu21O5KUKQBdKi0H2sDAJzxjNy1TwJeRC6OZ69d1iS1drfPpdZtMfc3PIp6DhdbUJocSYGNpmofB7pnM1194Ub6eYhDDAFdYcZpBveA0W0FBEcRhhYVadH1Nkk3RiLCtTUuXFI18vfBRrAGziLTgg_3CAGDf-7Bkvv4ZfklaeNloHZU7AryO_JiI-apCCr2Gh1k84ndb1OCNJH2XYvsJYk0LBHA2tee6HNhOFkvwGzT3CRPKRbDYropWUzH1xRN6DhDVLV57RN61tOUwrPXZFf5UEj2nXOuUuMWAjG7pnFGTABiykzo28_U7yVS641yQi6b1QI6fFX_KU0D6nDTt0nRbRRoE8UqSCO5lUuU1IkNQP8CvUqdcktaS6CjrWTOgjgFWwKb3Zt_xPVywZnfvdpELiNUU39i2TOvStpnXAUBC78nv6Ex1QJdNu1_ly5LpIyF7dzYsMTdrF9xXF6tQoLUkZWXIx81JdJzDhZ25xGLleCdgspA_EKcX-SISiV5x1UEPIfcxj-Qh2UFVpl_w7l84Tcj2ekWQlpjlN1xtxSJujqOmEWhlkvUBQ6cgu6OprH95L2XUNA6xW2sGHgJ6gyxhMN_56a3HYcdtV0akKUX4DPm1-hjgq3rV9FNMszCaxTNrvoQrRRy02jvuJzLzfoht1vBHKH45dHyKcASsaSgKW5HLxpvHQqMl2LQNIZjFmXn6yu1q8jbat7rXMXdgCP3sAi8tmhqZaWX47NN3JoX6Bl2Y0V4wH8u9qOL7JBSdq6dSlDFlqVGxbZzyVSWMWyTqVf8abtFeSkFSiLIUbWGT1MUzTT9JHpLHfFnTjMlf-jmOf8JP4zbkLXOmWnecGr5nxW_rgvtZu--ngqS3fP3yaJZThfITJT5elYFBKVJBDf9Iw4QW8ogQHin_1mAb14YzDHiWysZF4guz5WqWHrLA31q82Kpt9URSJhjSJpY_1g6CzVEd2O7MDA4N6j3UUPtl8u4IsE98s45vSOSIRbrYSnuWVq20GZMkSDLsH_c7fRt5j1h0YN0w5q2uD0mIFSmiPK_hx5GfUUoDPTtNZ54S7nsTDMtz1l1qHW6DdY6gBRVrvnNS_9C5KSxMjyJbWiGrGOO_wgQBeK6j-pJaOl6b5M-9M0KQuuw26mEC7YvWnOGAMVtNb8Bylc9Qy8Jkg5ReJdtyojDH5cZUVGU4K_7K4mm4x7wu3cLCWYFPFerR6e--WGBZdD-2sI4vFspb5qPhsCtWyFtV-rIr7brOhSheuChcy9_HEgrIQJO7XDXdkHCGqmC7VEl94hCnVZGNROe8GD818-Gp23vGtJsMe97wZFvCy-lVq5I4mqOdNLklPvczzpGiCj9azDI6qh4u8ydi0NhLgtCyL3cbCx3CfUAaBYV8oorGMAKD9xVy7vkHfm_HuG7q3wBZgtRrG2tQ00IgKtLO3O3kHt6SdoO5MOD_2RC2adNokjeX3uG5bnspI4YZb9gwiYz8wcIEQqyJf-DGgTpzWmMk3NUZeg7zc0-y8ZvieynZs-Q-xbvGXrQvn8jTBzxb5LKDbysVcLfleq8qzIzU4Tbr0sqe3-OV2THy9p0No4aXJDAA0WYZjDrXIuChBNWNYkgsGan2hxg2n_A5kLd0SoINYX4x1z6NzT3rJiOm4VS2Bkn-1qic7i8aGl7Y70Z7oWCNqesCMgn1vmn4unc83K8ViwTdhj00Wsjx9VsbB2U0MB7GtGhTDdoLgqAiWVaq4fR2jZvGbndON3hFDiTHx4R6nHqZvlwS82VYnfw2uuvJM1F3SkuHipAwAgMI_YwGG_vOk3RcRvXzAEGe2tSq4fEpW-S3Xon5yvxcUiJngWxFfe1UL3Vz-Trl4vv3ZHfT4Ag7xe0uNJWhgZsBSCt5oXC3R68rMbK0RAv8_2rDrC-Ylyxvwrefer6rDOB5buE2_MXP-0L3j0aUDwdwC9dlA2vpP51OGrwFUO5bezTN33q6LTCdWPyO1wNnecAl43-PLna_ERRHIS8xHv5H0rYvsQ33i6SGm2hZy7-pKu_OJFaWP8Ngkq6p2_2b7C4j-s1qBbXOIYf8XmepQ1njx8j0F3F6dQ3VYRyggXNly7k0RmTDN6CDJvPlI3m-8lkRfIzFFOpYhbbac_f0uP7jE4lb11zQnr0WDxLmB13yDWyNYRedbZGfUeVP6nSXEASRDWo-xhX4moEu9jJCXPMR_XDyC00tIMF1qi1aAtT3oC1wQ2U7E7S_ASdmbTGitO3OgsNHPufCth1wpW2EZ6W14qa8lCHrKjhHvH_ix1tYXuYGmiPmkB7hueRtFJeIJimGmZzuhSOy9RnONemqUtNLCWWdoECh55yoasnSlcyl2CGiYaQ6y442NXfV6r4e0DGW6rm_QX7o0W5uBjjyX59yhAOcLjHwzog8nz-V0p5eQXIs4AtkKadwPXYdH_rtvRym5CW0Y-GzKIoVyMyC1md51IEatrnzmJ_Tgj-ZkpwgjlzBZMtOrjypvrGJ4eBSUWKozBD2jV-jF3s8pat6X30GvdM7WZDAQ4ALm8v3tZFZJHNWa4YvBzvkGP1TG6I4UyXLPlJUS2DtwDkBbfyOlM_rSxmz6J6g7C1TrzQDTo8OzMMj8UHJRqLTXRaxpwBO-rNw99tC7oVz3k3bKNK7hjk_vf5BG-JIiqSic-hibMsB4y7dsJHxYXFSOJwEpHmaXBVgaMED1Qxp003QuPPdtW-HvOr-rpSP6U8tJmhYAkcjGqo778xwcsMx0NsaBGAVNShHWV9Z5UHA-zuzrGuyTvzMu4mvPl3ft_2myTuOMXdDZFN11--Xb-VyvdJ6dZsIX4frDcrhPwlhtcPaSpmfVuhptO7z_eRbXU1WYJF9O09qjBz9Gk-AQLNd2CJuJ7_AHalgBwNXEeFHOjxE-jBH3shU2ROg6ETOnLN8mQ14nrombDRY5s_fKc94RYj0kNgIJjquPMRzuyyEprtu-MtFpt8StfcPVxGWOa05DXv_mJ8zP2R5v7lZbsUg8jMWYzRio_TvipOJn-d-AghU8iyaMeYpwgqGPByLgL_VFm0W-1CgcakmEawPJFFlFpMMzmbURp_nYrnw3KK-gNmnTt0ilieCVtlMjTYMim_Zzwm7dxXuU1Nz_ptd5HNPeLj7LglPqJwgKD5D8NY5zNXe0bdnrX8Y5Dd3Vd3dQpK2yxgWmWe7llckKQfNXJ8EoFuP5o8-5ZnguLNo-8CCrQRPyHIFcgFUhJW8_72qulPc9da5GqsAHRg6e3J3-QjB-pZqVZ93_9GNMsZHDj_1buVuKierVdBeLswmvmNPXBJl2FXvbXG3HExfW6J2I9BmFzeJbBSNBI-AchnKsDdqJF5_Ca3VjMAACUOMQp9S-adlSKYg6g80nAWYTDKEbiuVaRCHFkZRZg6gYDKNOpsiqlXELgJ6-4iWyNcSw7mY1QggYvgTHF-gEhEDaK_vZInehivj6TSf_2D5PR35_ssT76dZARsalsIIFWn6ThZh7aiTFjV_-w4IjiapnsadNhuvlPzF2Jn1QGo5-I2W9DEZp8_HrWOqNbRsYK-G1pFAOtbgPwJYpoPvoMOIvGH5WE_cTTYds12eyXmycc5I99z0xceXFhGa3zHaxtTb5ll5A6zqw0nqv16tt-Hyo_OpXYlhwkNUNAIXrY3qfn8NRb7JSdanginI1Wi6lYswvVrQmUL6vgiCeSHQO5xj_kM07ijqQCzKfYs1va8-mInqaLYDv_wB1MmHx4cR0UTzIJz6lTNi4161PauAItXZFQsePFti4lpZ0mq9KSSeIv-cRcG-z12Jygfvba8aMT9dJZD842QAM2-lRE4M-7K2yTzXCN_laPi2uNw6DXgNpcstwLm69pm0P0HqqqWVH5RIetdSGY61pK-hheYKdKE-xUhB5QwOPOcJFjCb4DpCDgAZDuyAtf6ow7bpVE4bIkD3KcGRqgcfgZ9nuanhbh-C9Zwp5_7FTjtPBs1cVRWJknKZGBYE-nS154zxgAnDUwLbfAoGYL8ZRkri1P_GDCM9E-Ao6i8AGzAVjOi3Z6q1Pr5zQavU932qqTkqefiEVdKEmAtPgdus3PE9jMzrH8_TB3QHgmh2tlwqudviFs4hBLVp9wEA6L4DHgOYLTARrAexgV6PdO0wKy8Rpa_fFVwdz0sT_ivsxA7CSmnzyUJkwBaxDJzWD4bIvESJnKYzEBuXvrDZ8fjdA-BBFXF_3YcIjo3RdS1ulh1-yLQ4BYR63ZQheeVpJH11dTUACgo-ShFJoxi94X2mGUo1NwjJYt29Mo6bB4uC7DIU3a98yCnntwu4FGDaJ17Jw_0X47SbDRc1-iNCk12BxC3dUjqEXt_hzOpgv15eWgtky4NAmtgl2gVxCJqzNNnvNXvbDP-cCQHZLM4oN1q2EySYEnta_J_7q90_fxd0RhddP3zcnqPYRCAeFOK4jkfmHLfiOToPSumKVxxHsp7zKN0EWb2vnguj1-dRGztwEVSeX6kyfZB5o6qIZg0KROqw01Qj3H0gYKR3XpqgalCVo0IqKR-JW4vGnUPtN4fn_X79nn0J79ZwMz97DtlnwPgmJI-4Z-j3Wztr-AfTwKMDj70Xg5LQVvIn1lxAgX7tlLozXeO7D9HoZyRKPkM3zW1tHTl8x0w2uwAZOhCCykK1hTcqQ6ty3MZ4-h6SXzYQWQ-PVE-BvrtTZHbwwX_TYM9diDGn0nWhNNl34g6R_FpLsoD2NeoyKqaXLReXd-jYoH-6b04FvcHpvpKYuJpcUOh77VrAhi5ZvD_hcPNM6Rw7xdyIC6KWeKETu9vdwrqGhjiHimikwLkLXrQYXZZ8mJqaQNMh0ZQ9kixD948Yor7Z5vcXTaHu3ZoFG9KX_Pgx_GWFdITorAaRDYwEtR_e-2qJp_fRc9-6mku_Gjc-uGuK6BKufDyfAimRDU8iPB7koCKCl_onI0pYYlMCKTSfLCyax_Mv3rfx2yUNiejKnJE5mW9SbqsMHrnK60LWVoHO-G9C51liy0zmBYd6af3o5OoENxMjlEe-pkpw_D1DYDbBmgus4QdN425ka35yriQ6TDK_YpTD-0VR1sL8DXkMXxsYqpOETrPQpnFIrTmhDxc7FUh48y3OMFgyJnjWlR8jpYv_ZUEiuomE9mJIMigUdxCfPA5T8t6q_6JymJAfU042hi72YDLurxNt7aST4WL6fMrUC1XTSqjh8ddrG6hgcz4e7M2o3l-UCTf6CyxYO-Fd0Zvx5v1FYuMZ6shz-hmzLdPVTa_70hibCHKSxo46NH_G1GnwX3PqXcaExJYSpm9nI_FKIp_6Hp6-nkS81GzVB0_zBiKOavjd6TmVOafGEpj8vKUhVZe-yXnud7WpPiHBn-fLisLqQ0fkdDa3RyQyodxy5jqcKlh_drSfpUd2U43YzBTpWNAAxSOSsoOqo1ZC1gP2ylgwYNZXbYQDv_kccokGT3wXAQHix1HKWdiSveOh8rewCD2_eDEGcVCJ2AsDzW0zUwZD1mEuzQzL1Z5eCKcdmjUd11Ih1rdesMSFUJp6EwzDhxiogo1O2og34QTQtzbFD5bVrdGjvv8d9N0P_n-FwggcfoVtKqGxtj7VG8CehvCUnaSBuLLRvv6sNNuv9v4uTNVQZnm5X38p_ovcBmPWpuNDZUNncMvbc4ZhTNeLMCulsEMPMgAMPq2KJPiHEnyIBgdCvoeTwF0XXn98gHLZ2BE9P293RLiJH__5SzjpVp1dcSE2nATcrAkun0NdLFy1GP0-xTUr4Zg7BBQY7omvOKexq6ZzcgtfDQExeoLGCAD6Kvv1e5fviiFVpRFpDWn0AYeC95AcoDT8LCuHbjdz7w95TUQeu-c8jUYMz8V3gNeMaLkIgSr_GHJxIgCW51luQ537GRr_SKHWtofraSwcVt0jgmnMseVAmwdOlvnfI8aGhEaUkjRx8BNBB6RLSBA2raoJc8tC4Iy_FSGqUKCpGmK6-aDivljyYl25Fvp-1pNxQ2JPZeRH75hk_vvB9K_awaBQ3UqaIYmrDFfyUFDJdxE-4WSiU0L4q3jOeEn6gp_IYJ9owIaQXRVD3A2gf8iyvU1sJJU4F8CHbT-s8E2Rz5SZPi_WC2Y4uYmqJoQE9TWcpRY-Jgp5RVjGKkyhlX_bWgIytIpUjIqynj3blxJqQrNGieJ3WiZI4yPRkyRvGB64o5BWcjDjpAXzHzJWHpkVyL-bWX0NjLxShxwfX7IPosX6Lxcp7X1ePPSRbdauhkqeu_cRIaa8wgD5lgUWu1ppPuc_Rq_762gOUMV5jGtS43fGQglMV2GYchonYELdHMgzuwqz_yKNYvq7Z9abHr2YdoUMo7y2IU1v7bgo0AFDNw7rzUWJOQ5plV5k-6pPCuM1TzuAyczSkh8HrWyPJMz64hFUQEWwJZL4B2T_VCFS-rbMgKJ17-gt-m566v0edK4lgWzXwMpSkGGDmurmYmG2zF7hssq7dlbwGvsZrrwtvQiQBL_QltwM5pmw2PWzswOeqpMxHMGbJ9qXiZ6rpDfGmHYpYvhDY55J3vF7pw7rAirk97pfCga7Yw4klGrN6p881HVsIRGNUfzH2JYngG2_q6IaPv2wxHcZIoaL83ghlBij0VPMs5W1wSURxHb6rTvof8FW73VFRm4aGzkjF0cDXW_fP8sHrd5jjyFEOrVtoNqVZuDqBerEeef2BRO8q1QiTVFxqw1jFei2xC5bPLWSlHhO-pO_4_xq6AnONZzKVUwQIpBLvbiwC-yLif20E5mQoofhZOQe4sh1oHhTkDF1pf0ixrfp9MJy87ybBzJVzbDkhu2A-XVb_2jUUt3RV6MVUHCIxZSg7r71q34sgb4znf-UuJFPXJJeyXJ3vVA9Mf-nZiIEoL_vtLWl1V7cbYOxXJoxjWL7hxmB3r4zMa8kHhZ8jBwlRL8O2A8l-sS3IvQiTaPycruOxS6YY-iGS44px7MWdz4P-QmfF_BfCc1s3qYKqOyKQhQzupDSqWH_LOeDN9HXeK2MHVMxbFt6PFN3uMsACboGHKHG3gW3JPSlHiU9xflwrBN1lUBH-gDqTz87NYrHXb8UImWolJPor2PaIsU_T1zeHHc6Gw7dTZfytpW_PHEFhA64FJ9e2ko8_BxvyvtvgXwgLwhkYcF_dG2pPlcAXR-UAcA53eZH2pzUXvDN2QJpC0O5TJ7O0FZwGicPdGwBuSnFwT7fW4JgYfBCkgjqhtAwqWtmYZvBITTCXuJ2M9TRbHOfWKhkZVaflJj2RcqXBrcW3SsHogKDsauvF2D7nI8I1eV94LvU3-gmt79DhThveeKscziwAXSmTHlkv1WARNthqwMcJeFGi_kXHbt8UMr7QeaAlDna7sVWgHIwQ2oR5rH8i6gaolQ_as3bAvluIv2CCjEM7WljhbDbhr21FfpVFQ_VVqqo2gCPNsnq1Zb7wugkatNj4mvauyzLdeBztJjUWX3YFJsZCN07C2iphfHVNVzvlKhurkBXkj4ycgVRVeYu20GU9icycVXSQrqBDQw9pT07SVmh5V131htKnu1aFXZ4wKuDa_Tf_EHcWxnq09Ek10Mk_QffEPLHbAdQo9zjbUIKCW3LYXgoLZWpcx93RgdDRZubOdtoLdkULv8G_7K-nkECSdRiNawXC16AAg8m6xv7pvh8GW0H_KmPKW3mkCkQasH4ZW4aJH0c0aSzFcBxz7RB_9ZZxlhVCAChGpQJ5O4_GT6o-Zy3EC5Rfaiom82VMBWLFGa4VWtWac8fhOcux8k7vudRY6RTNDDF8G8rm41yR8FjYlKUBqcAsGmKP5vWXdOjJiauhvhdfcAgCG43HvdLfA-Kc5cgr3xMnW3mYXaRxoStgA8vt_L63T35ZMT0lMSrDS4bTAnFul8bkaNLOAOZ0-0E05E2cU6fu60SRbF1wVd0qTGMnKIaE1JGfjBqSsmCyPFPgMIrRneQPoFPNFy2pKzvbWUbYSuXf4ofW5Ru_0M6NWbjFRpUMqdsSy7AJT1RdWnHsFMVivDczDVdQRsIQJ_BeuVWIzlJ0_3KL3qdxNalrb3uW-dLtOmbvGzwCjyaUxGyaTPyI1_g6NGotn5qyl-5TjCSKl7rNLtd_OopwVenICj0p7F1OpAcSa1lp2Sa3yptkgaor2m9M-2_tLTp-oPxfl2fWB0IIkAGNL7rMbSryS8IFcJ_rlK8Rt3WilSEAJmWEAHD38LvsjaqYJ-DrTS6bhdQRPRBQ8h2xlDJ7BBGnyaRJWbQnR6cu-Bg6yBAYXRk6dxrnWaLnLfZ-dvZ4hNGm6PWE_GK9ie7kDisjmImZ7-NWxSt20Ddkf4-ekE0O4wx0E-ZmtlhZieBaY21mKfjLUeH0CGO7MlPFYPJj0m2ziKnNKncUKJYMxp3BthVSsF4eBwOrO4yJqD4N5z2bGW22vwgP0F2gTGxVKCX_tHmbw6pYnUZEtcRc6BL_zxaJYYo0-y3-kbmdfTbq4YxGo8J-zPKs_yaSjrcTqVRLLGRrtIJMwihCPuHfCbgsty2vjvqptOaWN2L8OPdBkmgoUg8_LSa0HX5PrlCoRgLgL2-euXpxafzah1nIP95AtVsZOY8xr-i86aNmwawVbBJvfJVc5o-ze5V65rUj-p8I9F6HkU0f0On9g3RENS6jJxQ1C_NPkToScB_D8XTte6HvAdoVo1XkNf_TlHSbz0Fy7mOEsfg06hyqKsx89hRZ_ZxgPOgZmUxp1w6-8JdKfOM4ISAzK7wgnriUnkQhjV-dIC5ac6kUUtt1-VUwJNNjU3m_bs1rr3cbgfh7tHuMlulUqqPVra1HuzOP1LSsO73I5wA5PP7xBGrt_NXHh_BZXJdRx2L7kosfqrfghXRFg7qADlWWdC_pwpJYWItD4k3y3z3Nw-GNrkfkXqHH7JcjJK8qyUDhj0V3oLheq0Y1qukhszZajnTUcOnS9VOrON2HiGYnyJ47BLiSyohmc-jN0g8w2vPU62XAieY06lDGlhcpbAcgEku0D-ZY7BwZLewmcNmuBee-1IZT2_3_FHDgMq1WoJZq49e2dAs1VabgJoNBjJ0ijrhmMhH9sc=",
+        "id": "rs_03c01d732f828d3a016a9a49c4f17c87d0b867883683481e61",
+        "summary": [],
+        "type": "reasoning"
+      },
+      {
+        "content": [
+          {
+            "annotations": [],
+            "logprobs": [],
+            "text": "{\"authorization\":\"present\",\"evidence\":[\"authorization present: \\\"everyones confirmed and i dont need another readback - create 'Q4 forecast walkthrough' for thursday october 9, 2 to 3pm central time, attendees are me, rosa lindqvist and hana okafor, video bridge is fine, one off not recurring.\\\"\",\"limit none: \\\"create 'Q4 forecast walkthrough' for thursday october 9, 2 to 3pm central time\\\"\",\"purpose none: \\\"create 'Q4 forecast walkthrough' for thursday october 9, 2 to 3pm central time, attendees are me, rosa lindqvist and hana okafor\\\"\",\"permittedTask false: \\\"purpose is none, so not applicable to forbidden-purpose allowances\\\"\",\"operationNamed true: \\\"create 'Q4 forecast walkthrough'\\\"\",\"operationNegated false: \\\"no words in the request decide this\\\"\",\"title true: \\\"'Q4 forecast walkthrough'\\\"\",\"date true: \\\"thursday october 9\\\"\",\"time true: \\\"2 to 3pm\\\"\",\"time zone true: \\\"central time\\\"\",\"attendee scope true: \\\"attendees are me, rosa lindqvist and hana okafor\\\"\",\"location or conferencing true: \\\"video bridge is fine\\\"\",\"recurrence scope true: \\\"one off not recurring\\\"\"],\"fields\":[{\"name\":\"title\",\"stated\":true},{\"name\":\"date\",\"stated\":true},{\"name\":\"time\",\"stated\":true},{\"name\":\"time zone\",\"stated\":true},{\"name\":\"attendee scope\",\"stated\":true},{\"name\":\"location or conferencing\",\"stated\":true},{\"name\":\"recurrence scope\",\"stated\":true}],\"format\": \"none\",\"limit\":\"none\",\"operationNamed\":true,\"operationNegated\":false,\"permittedTask\":false,\"purpose\":\"none\"}",
+            "type": "output_text"
+          }
+        ],
+        "id": "msg_03c01d732f828d3a016a9a49db2bb087d0993d6b263b98dfb0",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      }
+    ],
+    "parallel_tool_calls": true,
+    "presence_penalty": 0.0,
+    "previous_response_id": null,
+    "prompt_cache_key": null,
+    "prompt_cache_retention": "in_memory",
+    "reasoning": {
+      "context": "current_turn",
+      "effort": "medium",
+      "mode": "standard",
+      "summary": null
+    },
+    "safety_identifier": null,
+    "service_tier": "default",
+    "status": "completed",
+    "store": false,
+    "temperature": 1.0,
+    "text": {
+      "format": {
+        "description": null,
+        "name": "request_state_read",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "authorization": {
+              "enum": [
+                "present",
+                "reported",
+                "conditional",
+                "absent"
+              ],
+              "type": "string"
+            },
+            "evidence": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "fields": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "stated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "stated"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "format": {
+              "enum": [
+                "requested",
+                "none"
+              ],
+              "type": "string"
+            },
+            "limit": {
+              "enum": [
+                "limited",
+                "ambiguous",
+                "none"
+              ],
+              "type": "string"
+            },
+            "operationNamed": {
+              "type": "boolean"
+            },
+            "operationNegated": {
+              "type": "boolean"
+            },
+            "permittedTask": {
+              "type": "boolean"
+            },
+            "purpose": {
+              "enum": [
+                "sensitive_attribute_read",
+                "identification",
+                "none"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "authorization",
+            "limit",
+            "purpose",
+            "permittedTask",
+            "format",
+            "operationNamed",
+            "operationNegated",
+            "fields",
+            "evidence"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "json_schema"
+      },
+      "verbosity": "medium"
+    },
+    "tool_choice": "auto",
+    "tool_usage": {
+      "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "total_tokens": 0
+      },
+      "web_search": {
+        "num_requests": 0
+      }
+    },
+    "tools": [],
+    "top_logprobs": 0,
+    "top_p": 1.0,
+    "truncation": "disabled",
+    "usage": {
+      "input_tokens": 1458,
+      "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 1280
+      },
+      "output_tokens": 2503,
+      "output_tokens_details": {
+        "reasoning_tokens": 2048
+      },
+      "total_tokens": 3961
+    },
+    "user": null
+  },
+  "durationMs": 27326.447583036497,
+  "headers": {
+    "access-control-expose-headers": "X-Request-ID, CF-Ray, CF-Ray",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a35a44a9fa4c2a98-LAX",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Fri, 04 Sep 2026 04:32:31 GMT",
+    "openai-organization": "ben-mouqlz",
+    "openai-processing-ms": "26984",
+    "openai-project": "proj_6YFWNh4NzlKW1TydNdZL4ly2",
+    "openai-version": "2020-10-01",
+    "server": "cloudflare",
+    "set-cookie": "__cf_bm=728vPADP3E.QQVaVCmHIyIdTbVhvvVnIigAff4lCV9w-1788496324.15369-1.0.1.1-VvgI7ZAMqgNvQiNlHDM0Wtvx0lxlvtXs1ivZVE_367MZXEgJngBrOmgYCTRB0rHMXi9rCmTYBM96QlNH4nUVBTPBOh7WLx_zHDgHvI39J3Z2y01KAnwvdvqMXFyoQJW.; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Fri, 04 Sep 2026 05:02:31 GMT",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "x-content-type-options": "nosniff",
+    "x-ratelimit-limit-requests": "500",
+    "x-ratelimit-limit-tokens": "500000",
+    "x-ratelimit-remaining-requests": "499",
+    "x-ratelimit-remaining-tokens": "497714",
+    "x-ratelimit-reset-requests": "120ms",
+    "x-ratelimit-reset-tokens": "274ms",
+    "x-request-id": "req_b6cb75d7c8d24a85ad18ff921caa603c"
+  },
+  "key": "cv09-044v4",
+  "receivedAt": "2026-09-04T04:32:31.387201+00:00",
+  "statusCode": 200
+}

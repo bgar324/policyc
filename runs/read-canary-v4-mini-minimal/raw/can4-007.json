@@ -1,0 +1,170 @@
+{
+  "body": {
+    "background": false,
+    "billing": {
+      "payer": "developer"
+    },
+    "completed_at": 1788654530,
+    "created_at": 1788654519,
+    "error": null,
+    "frequency_penalty": 0.0,
+    "id": "resp_04f601d8eb5bcd26016a9cb3b79a9887d0a449cce408752311",
+    "incomplete_details": null,
+    "instructions": "You are the policy reader for an enterprise assistant. You receive an excerpt of the assistant's policy, quoted verbatim, holding the rules that apply to one request; the request itself; and the declared context and tools available on this turn. Your job is the reading the full policy would give this request: decide, from the request's own words, how each policy condition that bears on this request comes out, and write the directive that follows for the assistant that will answer.\n\nYou do not answer the request. You do not call tools. You write directives for the assistant that will.\n\nRead the excerpt first. A condition is any part of a rule that applies only when something is true of the request, or whose effect depends on what the request states. For each condition this request bears on, decide from the request whether it holds, does not hold, or cannot be decided from the words given, and write one resolution:\n\n- condition: the policy's own words for the condition, quoted from the excerpt.\n- finding: what the request establishes about it, quoting the request's words. When the words do not decide it, say so.\n- directive: one or two imperative sentences addressed to the assistant. When the condition holds, state that it holds and what to do now; do not tell the assistant to re-verify what the request already settles. When it does not hold, name what is missing and what the policy requires instead: ask for exactly that, or refrain, as the rule says. When it cannot be decided, say what to do under that uncertainty as the policy directs.\n\nWrite no resolution for a rule whose conditions the request does not touch; the excerpt already states those rules and the assistant reads them. Return an empty list when no condition in the excerpt depends on this request.\n\nRules.\n- Judge only the request, the declared context, and the tools available. Do not use what a careful assistant would prefer as evidence, and invent no facts.\n- A condition holds only when the request's own words meet it as the policy states it, with whatever the policy says the condition must carry.\n- Precedence is the policy's: when two rules bear on the same action, the more specific rule and the safer rule control, as the excerpt says.\n- Directives resolve conditions. They do not add rules, remove rules, or soften them.\n- Output only the JSON object.\n",
+    "max_output_tokens": 8192,
+    "max_tool_calls": null,
+    "metadata": {},
+    "model": "gpt-5-mini-2025-08-07",
+    "moderation": null,
+    "object": "response",
+    "output": [
+      {
+        "content": [],
+        "encrypted_content": "gAAAAABqnLPCunNoVTRiLW4GJE9skwDpL0eVLczEznTIqJcsm3M6YaglgO04qeqcEY1MyvObgec4VI9Oh5_D-8slUe8-LvdXP6gEaBkfJzhY02WG_GAZ29DGr6tz26IBvla3YcTL2PNPV0K8YVtr9soz1Zy5AxGekFlzKRGsNyTd_UnBBknZ9DLRpjpEYKTKNXPy5YkP-aEfg6K73W-Zv3OYU0rhEN_IFpTNv6iOy8XP50SJJx0ervaEFJ2UMce-lKqOU693nbXXRmig4iSexykuJOh0shhSmP3C8DBR-MEDv4LtpG1HuXe4GEaqecpqfN0tBbY9_umz6fF588_RdtKkCBusaNBY33K3K_l_6NxKz4-NQOdiwEXYWg3B2gOMUj6E-f3tiL_GoY9hlAuOeNBqU3EJEMNy6ctmOKWNP239DXSXNXI8Ee8gxHutYGyfWmSWnPKczzGHSBfxY1ggWQ-hQpu-9qA8cWsRHqoOLZ8C3IQA4rDj1ZeEBXsu6YC1SHJywLftJbmF3Vxcg06VdUs20RlJEvx_uRwAB_NhS5TAFdg-u1phVVp5xxCyJsvwOivjXRDOsWsv3bBDQli6_UzAkRpRGfwvwK67OQZdCi-iC3EFJ9BhlDnQpCZT0CrKl3yX-2CUznBrlCWaW1CX2oNugFEYTOrMy9cZxR8HT5pvlPMnRVDNI3s0lHL9GnILz9FtID3yJYPD4HVfMbKwhe0kGfc2OJ0M4DNhHhwPehaDwaaYdooaWSv-56-1GzUInPVSJsS0WjphrJ5ZOYkJMJp3tnGHxylzUT4sqSqR8eHeON1Xu7j57rxquCjxqCzIeJMCkDZeIJgXFKf8HPfozJBC2qWEwTUhHPIrmvk1oVuakH8p0N_kGktHLiZthhUBR6kAeiLDelno2_7AstkaAL9RZSGuEIueqDr7IL3YH2D9HWdsPzo8nwR7lsmOyeHUZxeMQZzWMJYbH6t-JOEZYfajjRBmg7-ebC57suzyi4WhugFouPWdW7EuzUFi64E561qDpuOkFTkbbnxjsrSPrUzgV2sCoduzCskXZr19FqKMQQ9HB-LgxzRxNAhtbSN_TmXHmFxhjnsU9MHgk67GeLsPbR5gTOwC9KzLveXfIEGGS2Xb14jy9rFEPc1iILkIJ0GxXSW-jje6HN7Oyn1LI4Ahf-5S7ZAkFb_iJyOuHc6sBJKkhHB5hN3DCp7ko5SdWvhguuy8VrZwiZCDGD6f2BUJSSN6DzCFZDSS9pmRtNZeddvFn6jwQfobPbo9KyvRGPeRzo78kQ55",
+        "id": "rs_04f601d8eb5bcd26016a9cb3b819fc87d08415ba244e7bcdc5",
+        "summary": [],
+        "type": "reasoning"
+      },
+      {
+        "content": [
+          {
+            "annotations": [],
+            "logprobs": [],
+            "text": "{\"resolutions\":[{\"condition\":\"Calendar creation can invite others or block time, so it is externally visible and requires confirmation.\",\"directive\":\"This condition holds because the user requests creating a calendar event with attendees and a specific time: \\\"create it and let the invites go out\\\" and lists attendees. Proceed only after performing the required confirmations implied by the calendar rules: confirm the exact title, attendees, date, time, time zone, location, conferencing, and recurrence. Since the user already provided those details (title FY26 Offsite Prep; attendees: me, Dev Malhotra, Rachel Kim; Wednesday, April 15, 2026, 13:00\u201314:00 America/New_York; location Harbor room; single event with no repeat; standard Meet link), treat them as confirmed and proceed to create the event and send invites. Do not infer or change any attendee identity beyond what the user supplied, and minimize any additional disclosure when creating the event.\",\"finding\":\"The user said: \\\"title it FY26 Offsite Prep, Wednesday, April 15, 2026, 13:00 to 14:00 America/New_York, in the Harbor room, attendees me plus Dev Malhotra and Rachel Kim, put the standard Meet link on it, and it is a single event with no repeat. ... create it and let the invites go out\\\".\"},{\"condition\":\"Calendar deletion and cancellation are destructive actions. Calendar creation can invite others or block time, so it is externally visible and requires confirmation.\",\"directive\":\"This condition applies because creating the event is externally visible and affects others. The user has explicitly requested creation and invites: treat that as explicit intent and proceed without asking for additional confirmation beyond the details already supplied. If any of the provided attendee emails or identities are ambiguous in the calendar connector (e.g., \\\"me\\\" mapping or unresolved participant addresses), ask a focused clarification before creating the event specifying the exact email addresses or which account is \\\"me.\\\" Otherwise, create the event and send invites.\" ,\"finding\":\"The user explicitly: \\\"We landed on that slot on this morning's call, so create it and let the invites go out - the two of them seeing it turn up on their calendars is the whole idea.\\\"\"},{\"condition\":\"Gmail and email: Sending, forwarding, deleting, archiving, trashing, moving, labeling at scale, or modifying email state can be externally visible or destructive. Require explicit user intent and confirmation when appropriate.\",\"directive\":\"This condition does not directly hold for this request because the user asks to create calendar invites, not to modify email state. No extra confirmation beyond calendar creation/attendee confirmation is required under this rule. Proceed to create the calendar event and send standard invites as requested.\" ,\"finding\":\"The user asked to create a calendar event and \\\"let the invites go out,\\\" but did not ask to modify email state.\"},{\"condition\":\"Calendar content is private. Creating, updating, rescheduling, canceling, or deleting events changes external state and requires confirmation. Confirm title, attendees, date, time, time zone, location, conferencing, and recurrence.\",\"directive\":\"This condition holds. The user supplied all required fields (title, attendees, date, time, time zone, location, conferencing, recurrence). Use those exact values when creating the event. If the calendar tool requires explicit email addresses (instead of names or \\\"me\\\"), resolve \\\"me\\\" to the current authenticated user's calendar account and, if attendee names do not map to unique emails in the connector, ask for the exact email addresses before creating the event. Do not add or omit attendees, change recurrence, or alter visibility without permission.\" ,\"finding\":\"The user provided: \\\"title it FY26 Offsite Prep... attendees me plus Dev Malhotra and Rachel Kim... put the standard Meet link on it, and it is a single event with no repeat.\\\"\"},{\"condition\":\"Do not claim success for an action that has not been completed. Do not imply that a tool was used unless it actually was.\",\"directive\":\"This condition holds. After calling the calendar tool, report back the actual result from the tool. Do not state that the event was created or invites sent until the calendar tool confirms success; if the tool fails or returns partial results, report the exact failure and next steps.\" ,\"finding\":\"The user requested creation and invites; the available tools include calendar and spreadsheet_edit.\"},{\"condition\":\"Tool selection is policy-relevant. Use tools only when required or clearly helpful for the task. Do not call forbidden tools. If a tool fails, state the limitation and avoid pretending success.\",\"directive\":\"This condition holds. For the calendar creation use the calendar tool; for spreadsheet edits use the spreadsheet_edit tool. If either tool fails or returns errors (e.g., permission, ambiguous attendee mapping, sheet protection), report the specific error and do not claim the operation completed.\" ,\"finding\":\"Declared tools available: calendar, spreadsheet_edit.\"},{\"condition\":\"Spreadsheets and structured data: Spreadsheet work requires preserving structure. Inspect relevant sheets, columns, formulas, references, hidden fields, validation rules, and derived data before editing or summarizing. Do not overwrite formulas unless explicitly requested.\",\"directive\":\"This condition holds because the user requests changing many cells on a spreadsheet tab: \\\"in the Headcount Tracker spreadsheet, on the Q1 tab, put 42 in every cell of D2:D40.\\\" Before performing the edit, inspect the Q1 tab for formulas, protected ranges, data validation, or derived cells in D2:D40. If any cells contain formulas or protections, do not overwrite them without explicit confirmation; report which cells are formulas/protected and ask whether to overwrite them. If no formulas or protections exist, proceed to set D2:D40 to 42 using the spreadsheet_edit tool and report the exact changes made.\" ,\"finding\":\"The user wrote: \\\"in the Headcount Tracker spreadsheet, on the Q1 tab, put 42 in every cell of D2:D40.\\\"\"},{\"condition\":\"When context contains an artifact manifest, connector capability, domain hint, or risk hint, that context can activate obligations even when the user request is short.\",\"directive\":\"This condition holds because the declared context includes artifact_type: calendar_event and operation: create, and tools available; treat these manifest fields as activating calendar and spreadsheet artifact obligations. Use the calendar tool for the calendar event and the spreadsheet_edit tool for the spreadsheet change, and follow the calendar and spreadsheet-specific policy checks (confirmations, formula preservation, attendee identity resolution) before making state changes.\" ,\"finding\":\"Declared context lists artifact type and operation: \\\"artifact type: calendar_event, operation: create,\\\" and tools available.\"}]}",
+            "type": "output_text"
+          }
+        ],
+        "id": "msg_04f601d8eb5bcd26016a9cb3b845d087d08b68ed08a31f1ef9",
+        "role": "assistant",
+        "status": "completed",
+        "type": "message"
+      }
+    ],
+    "parallel_tool_calls": true,
+    "presence_penalty": 0.0,
+    "previous_response_id": null,
+    "prompt_cache_key": null,
+    "prompt_cache_retention": "in_memory",
+    "reasoning": {
+      "context": "current_turn",
+      "effort": "minimal",
+      "mode": "standard",
+      "summary": null
+    },
+    "safety_identifier": null,
+    "service_tier": "default",
+    "status": "completed",
+    "store": false,
+    "temperature": 1.0,
+    "text": {
+      "format": {
+        "description": null,
+        "name": "policy_reading",
+        "schema": {
+          "additionalProperties": false,
+          "properties": {
+            "resolutions": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "condition": {
+                    "description": "The policy's own words for the condition, quoted from the excerpt.",
+                    "type": "string"
+                  },
+                  "directive": {
+                    "description": "One or two imperative sentences for the assistant that answers the request.",
+                    "type": "string"
+                  },
+                  "finding": {
+                    "description": "What the request establishes about the condition, quoting the request.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "condition",
+                  "finding",
+                  "directive"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "resolutions"
+          ],
+          "type": "object"
+        },
+        "strict": true,
+        "type": "json_schema"
+      },
+      "verbosity": "medium"
+    },
+    "tool_choice": "auto",
+    "tool_usage": {
+      "image_gen": {
+        "input_tokens": 0,
+        "input_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "output_tokens": 0,
+        "output_tokens_details": {
+          "image_tokens": 0,
+          "text_tokens": 0
+        },
+        "total_tokens": 0
+      },
+      "web_search": {
+        "num_requests": 0
+      }
+    },
+    "tools": [],
+    "top_logprobs": 0,
+    "top_p": 1.0,
+    "truncation": "disabled",
+    "usage": {
+      "input_tokens": 3728,
+      "input_tokens_details": {
+        "cache_write_tokens": 0,
+        "cached_tokens": 2816
+      },
+      "output_tokens": 1372,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 5100
+    },
+    "user": null
+  },
+  "durationMs": 11368.56395797804,
+  "headers": {
+    "access-control-expose-headers": "X-Request-ID, CF-Ray, CF-Ray",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a3695adaf935f36b-LAX",
+    "connection": "keep-alive",
+    "content-encoding": "gzip",
+    "content-type": "application/json",
+    "date": "Sun, 06 Sep 2026 00:28:50 GMT",
+    "openai-organization": "ben-mouqlz",
+    "openai-processing-ms": "11167",
+    "openai-project": "proj_6YFWNh4NzlKW1TydNdZL4ly2",
+    "openai-version": "2020-10-01",
+    "server": "cloudflare",
+    "set-cookie": "__cf_bm=2YWkJptJPXNqpGTJLavymAB2nwzkKFx4OypG3yOEp.o-1788654519.5122712-1.0.1.1-NzF2qqFsrPORokkWXiaFEjeQlunfuDh7eTOqmqdIPQ6BXqQC_aWPX6m7JEUuQvn1WDYCzwOZhGh6ObIeN3V0gb4ljsKxb5Mmqg9csM8.JTMJf0wC8R.oCrqoB53tWrrS; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Sun, 06 Sep 2026 00:58:50 GMT",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "transfer-encoding": "chunked",
+    "x-content-type-options": "nosniff",
+    "x-ratelimit-limit-requests": "500",
+    "x-ratelimit-limit-tokens": "500000",
+    "x-ratelimit-remaining-requests": "499",
+    "x-ratelimit-remaining-tokens": "498845",
+    "x-ratelimit-reset-requests": "120ms",
+    "x-ratelimit-reset-tokens": "138ms",
+    "x-request-id": "req_729171d64dc346f198812f03fd8deb39"
+  },
+  "key": "can4-007",
+  "receivedAt": "2026-09-06T00:28:50.771030+00:00",
+  "statusCode": 200
+}
